@@ -5,10 +5,45 @@ import 'package:gridly/multitool/models/multitool_item.dart';
 class MultitoolProvider extends ChangeNotifier {
   final List<MultitoolItem> _items = const [
     MultitoolItem(
+      id: 'spadki',
+      title: 'Obliczanie spadku napięcia',
+      description: 'Obliczenia spadku napięcia DC/AC dla 1f i 3f.',
+      icon: Icons.trending_down,
+      category: 'Multitool',
+    ),
+    MultitoolItem(
       id: 'srednice',
-      title: 'Srednice',
-      description: 'Szybkie przeliczenia srednic i przekrojow.',
+      title: 'Dobór rur termokurczliwych',
+      description: 'Dobór rur termokurczliwych do kabli i przekrojów.',
       icon: Icons.straighten,
+      category: 'Multitool',
+    ),
+    MultitoolItem(
+      id: 'opisowki',
+      title: 'Generator znaczników opisowych',
+      description: 'Generator znaczników i etykiet opisowych.',
+      icon: Icons.label,
+      category: 'Multitool',
+    ),
+    MultitoolItem(
+      id: 'ekspert_kabli',
+      title: 'Ekspert kabli',
+      description: 'Weryfikator izolacji i zgodnosci CPR/PN.',
+      icon: Icons.verified_user,
+      category: 'Multitool',
+    ),
+    MultitoolItem(
+      id: 'osd_checker',
+      title: 'Przygotowanie do odbiorów OSD',
+      description: 'Przygotowanie i checklista do odbiorów przyłącza OSD.',
+      icon: Icons.rule_folder,
+      category: 'Multitool',
+    ),
+    MultitoolItem(
+      id: 'rcd_selector',
+      title: 'RCD',
+      description: 'Inteligentny dobór typu ochrony RCD.',
+      icon: Icons.check_circle,
       category: 'Multitool',
     ),
     MultitoolItem(
@@ -16,13 +51,6 @@ class MultitoolProvider extends ChangeNotifier {
       title: 'Pomiary',
       description: 'Zestaw narzedzi do szybkich pomiarow.',
       icon: Icons.speed,
-      category: 'Multitool',
-    ),
-    MultitoolItem(
-      id: 'kalkulatory',
-      title: 'Kalkulatory',
-      description: 'Podreczne kalkulatory elektryczne.',
-      icon: Icons.calculate,
       category: 'Multitool',
     ),
     MultitoolItem(
@@ -40,20 +68,6 @@ class MultitoolProvider extends ChangeNotifier {
       category: 'Multitool',
     ),
     MultitoolItem(
-      id: 'opisowki',
-      title: 'Opisowki',
-      description: 'Opisowe etykiety i szablony.',
-      icon: Icons.label,
-      category: 'Multitool',
-    ),
-    MultitoolItem(
-      id: 'spadki',
-      title: 'Spadki',
-      description: 'Analiza spadkow napiecia.',
-      icon: Icons.trending_down,
-      category: 'Multitool',
-    ),
-    MultitoolItem(
       id: 'zwarcie',
       title: 'Zwarcie',
       description: 'Obliczenia zwarciowe i weryfikacje.',
@@ -61,24 +75,10 @@ class MultitoolProvider extends ChangeNotifier {
       category: 'Multitool',
     ),
     MultitoolItem(
-      id: 'rcd',
-      title: 'RCD',
-      description: 'Testy i dobor ochrony roznicowopradowej.',
-      icon: Icons.shield,
-      category: 'Multitool',
-    ),
-    MultitoolItem(
-      id: 'rcd_selector',
-      title: 'Dobór RCD',
-      description: 'Inteligentny dobór typu ochrony RCD.',
-      icon: Icons.check_circle,
-      category: 'Multitool',
-    ),
-    MultitoolItem(
-      id: 'encyclopedia',
-      title: 'Encyklopedia',
-      description: 'Biblioteka symboli i parametrów elektrycznych.',
-      icon: Icons.book,
+      id: 'manager_projektu',
+      title: 'Manager Projektu',
+      description: 'Inteligentny asystent budowy z checklistą.',
+      icon: Icons.construction,
       category: 'Multitool',
     ),
   ];

@@ -13,7 +13,7 @@ void main() {
     WidgetTester tester,
   ) async {
     // Build the app and trigger a frame.
-    await tester.pumpWidget(const GridlyApp());
+    await tester.pumpWidget(const GridlyApp(firebaseEnabled: false));
 
     // Splash screen shows branding.
     expect(find.text('GRIDLY ELECTRICAL CHECKER'), findsOneWidget);

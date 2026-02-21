@@ -1,6 +1,16 @@
 enum CableMaterial { cu, al }
 
-enum CableType { ydy, yky, n2xh, nhxh, yaky }
+enum CableType {
+  ydy,
+  ydyp,
+  yky,
+  n2xh,
+  nhxh,
+  n2xcy,
+  ykxs,
+  yaky,
+  na2xy,
+}
 
 enum CoreType { re, sm }
 
@@ -30,15 +40,23 @@ class CableData {
   static String typeToString(CableType type) {
     switch (type) {
       case CableType.ydy:
-        return 'YDY';
+        return 'YDY (Cu, PVC)';
+      case CableType.ydyp:
+        return 'YDYp (płaski, Cu, PVC)';
       case CableType.yky:
-        return 'YKY';
+        return 'YKY (Cu, PVC, ziemny)';
       case CableType.n2xh:
-        return 'N2XH';
+        return 'N2XH (Cu, bezhalogenowy)';
       case CableType.nhxh:
-        return 'NHXH';
+        return 'NHXH (Cu, bezhalogenowy, CPR)';
+      case CableType.n2xcy:
+        return 'N2XCY (Cu, ekranowany)';
+      case CableType.ykxs:
+        return 'YKXS (Cu, XLPE/PVC)';
       case CableType.yaky:
-        return 'YAKY';
+        return 'YAKY (Al, PVC)';
+      case CableType.na2xy:
+        return 'NA2XY (Al, XLPE/PVC)';
     }
   }
 

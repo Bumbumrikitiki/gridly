@@ -14,6 +14,8 @@ class _SplashScreenState extends State<SplashScreen>
     with SingleTickerProviderStateMixin {
   late final AnimationController _controller;
   late final Animation<double> _fadeAnimation;
+  bool _showDisclaimer = false;
+  bool _isNavigating = false;
 
   @override
   void initState() {
@@ -41,35 +43,21 @@ class _SplashScreenState extends State<SplashScreen>
       return;
     }
 
-    final accepted = await _showStartupDisclaimer();
-    if (!mounted || !accepted) {
+    setState(() {
+      _showDisclaimer = true;
+    });
+  }
+
+  void _acceptDisclaimerAndContinue() {
+    if (_isNavigating) {
       return;
     }
 
+    setState(() {
+      _isNavigating = true;
+    });
+
     Navigator.of(context).pushReplacementNamed('/dashboard');
-  }
-
-  Future<bool> _showStartupDisclaimer() async {
-    final result = await showDialog<bool>(
-      context: context,
-      barrierDismissible: false,
-      builder: (context) {
-        return AlertDialog(
-          title: const Text('Informacja'),
-          content: const Text(
-            'Aplikacja prezentuje wyniki orientacyjne i informacyjne. Treści nie stanowią porady wykonawczej ani gwarancji zgodności.',
-          ),
-          actions: [
-            ElevatedButton(
-              onPressed: () => Navigator.of(context).pop(true),
-              child: const Text('Rozumiem'),
-            ),
-          ],
-        );
-      },
-    );
-
-    return result ?? false;
   }
 
   void _initializeMockData() {
@@ -171,24 +159,90 @@ class _SplashScreenState extends State<SplashScreen>
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+
     return Scaffold(
       body: SafeArea(
-        child: Center(
+        child: Padding(
+          padding: const EdgeInsets.all(16),
           child: FadeTransition(
             opacity: _fadeAnimation,
             child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
+              crossAxisAlignment: CrossAxisAlignment.center,
               children: [
+                const SizedBox(height: 12),
                 Text(
-                  'GRIDLY ELECTRICAL CHECKER',
-                  style: Theme.of(context).textTheme.displayMedium?.copyWith(
-                        color: Theme.of(context).colorScheme.primary,
-                        letterSpacing: 6,
-                        fontWeight: FontWeight.w700,
-                      ),
+                  'GRIDLY',
+                  textAlign: TextAlign.center,
+                  style: theme.textTheme.displayMedium?.copyWith(
+                    color: theme.colorScheme.primary,
+                    letterSpacing: 6,
+                    fontWeight: FontWeight.w700,
+                  ),
                 ),
-                const SizedBox(height: 32),
-                const SizedBox(width: 180, child: LinearProgressIndicator()),
+                const SizedBox(height: 6),
+                Text(
+                  'ELECTRICAL CHECKER',
+                  textAlign: TextAlign.center,
+                  style: theme.textTheme.titleLarge?.copyWith(
+                    color: theme.colorScheme.primary,
+                    letterSpacing: 3,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+                const SizedBox(height: 20),
+                Expanded(
+                  child: AnimatedSwitcher(
+                    duration: const Duration(milliseconds: 220),
+                    child: _showDisclaimer
+                        ? Align(
+                            alignment: Alignment.topCenter,
+                            child: ConstrainedBox(
+                              constraints: const BoxConstraints(maxWidth: 560),
+                              child: Card(
+                                key: const ValueKey('disclaimer_card'),
+                                child: Padding(
+                                  padding: const EdgeInsets.all(16),
+                                  child: Column(
+                                    mainAxisSize: MainAxisSize.min,
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    children: [
+                                      Text(
+                                        'Informacja',
+                                        style: theme.textTheme.titleMedium?.copyWith(
+                                          fontWeight: FontWeight.w700,
+                                        ),
+                                      ),
+                                      const SizedBox(height: 10),
+                                      Text(
+                                        'Aplikacja prezentuje wyniki orientacyjne i informacyjne. Treści nie stanowią porady wykonawczej ani gwarancji zgodności.',
+                                        style: theme.textTheme.bodyMedium,
+                                      ),
+                                      const SizedBox(height: 14),
+                                      SizedBox(
+                                        width: double.infinity,
+                                        child: ElevatedButton(
+                                          onPressed: _isNavigating
+                                              ? null
+                                              : _acceptDisclaimerAndContinue,
+                                          child: const Text('Rozumiem'),
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ),
+                            ),
+                          )
+                        : const Center(
+                            key: ValueKey('loading_indicator'),
+                            child: SizedBox(
+                              width: 220,
+                              child: LinearProgressIndicator(),
+                            ),
+                          ),
+                  ),
+                ),
               ],
             ),
           ),

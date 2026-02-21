@@ -11,7 +11,7 @@ class RcdSelectorScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Dobór Typu RCD'),
+        title: const Text('Analiza doboru RCD'),
         elevation: 0,
       ),
       body: Consumer<RcdSelectorProvider>(
@@ -32,6 +32,28 @@ class RcdSelectorScreen extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
+          Card(
+            child: Padding(
+              padding: const EdgeInsets.all(14),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Selekcja typu RCD — analiza techniczna',
+                    style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                          fontWeight: FontWeight.bold,
+                        ),
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    'Odpowiedz na pytania o charakter odbiorników, obecność konwersji energii i wymagania selektywności. Wynik ma charakter pomocniczy i wymaga potwierdzenia projektowego.',
+                    style: Theme.of(context).textTheme.bodyMedium,
+                  ),
+                ],
+              ),
+            ),
+          ),
+          const SizedBox(height: 16),
           // Progress indicator
           Padding(
             padding: const EdgeInsets.only(bottom: 24),
@@ -42,7 +64,7 @@ class RcdSelectorScreen extends StatelessWidget {
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
                     Text(
-                      'Quiz: Dobór RCD',
+                      'Kwestionariusz doboru',
                       style: Theme.of(context).textTheme.titleLarge?.copyWith(
                             fontWeight: FontWeight.bold,
                           ),
@@ -61,9 +83,11 @@ class RcdSelectorScreen extends StatelessWidget {
                         ? 0
                         : provider.questionProgress / provider.questions.length,
                     minHeight: 8,
-                    backgroundColor: Colors.grey[300],
+                    backgroundColor:
+                        Theme.of(context).colorScheme.surfaceContainerHighest,
                     valueColor: AlwaysStoppedAnimation<Color>(
-                        GridTheme.electricYellow),
+                      GridTheme.electricYellow,
+                    ),
                   ),
                 ),
               ],
@@ -91,28 +115,40 @@ class RcdSelectorScreen extends StatelessWidget {
             );
           }),
           const SizedBox(height: 24),
+          if (!provider.allAnswered)
+            Padding(
+              padding: const EdgeInsets.only(bottom: 10),
+              child: Text(
+                'Brak odpowiedzi: ${provider.unansweredCount}. Kliknięcie wygeneruje wynik, a brakujące odpowiedzi zostaną przyjęte jako „Nie”.',
+                style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                      color: Theme.of(context).colorScheme.onSurfaceVariant,
+                    ),
+              ),
+            ),
           // Submit button
-          if (provider.allAnswered)
-            SizedBox(
-              width: double.infinity,
-              child: ElevatedButton(
-                onPressed: () {
-                  provider.calculateRecommendation();
-                },
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: GridTheme.electricYellow,
-                  foregroundColor: GridTheme.deepNavy,
-                  padding: const EdgeInsets.symmetric(vertical: 16),
-                ),
-                child: const Text(
-                  'Oblicz zalecenie',
-                  style: TextStyle(
-                    fontWeight: FontWeight.bold,
-                    fontSize: 16,
-                  ),
+          SizedBox(
+            width: double.infinity,
+            child: ElevatedButton(
+              onPressed: () {
+                if (!provider.allAnswered) {
+                  provider.fillMissingAnswersWithDefault(defaultValue: false);
+                }
+                provider.calculateRecommendation();
+              },
+              style: ElevatedButton.styleFrom(
+                backgroundColor: GridTheme.electricYellow,
+                foregroundColor: GridTheme.deepNavy,
+                padding: const EdgeInsets.symmetric(vertical: 16),
+              ),
+              child: const Text(
+                'Generuj rekomendację',
+                style: TextStyle(
+                  fontWeight: FontWeight.bold,
+                  fontSize: 16,
                 ),
               ),
             ),
+          ),
         ],
       ),
     );
@@ -126,11 +162,16 @@ class RcdSelectorScreen extends StatelessWidget {
     bool? answer,
     Function(bool) onAnswer,
   ) {
+    final colorScheme = Theme.of(context).colorScheme;
+    final cardColor = isAnswered
+        ? (answer == true
+            ? colorScheme.primaryContainer
+            : colorScheme.tertiaryContainer)
+        : colorScheme.surface;
+
     return Card(
       elevation: 1,
-      color: isAnswered
-          ? (answer! ? Colors.green[50] : Colors.blue[50])
-          : Colors.white,
+      color: cardColor,
       child: Padding(
         padding: const EdgeInsets.all(16),
         child: Column(
@@ -171,7 +212,7 @@ class RcdSelectorScreen extends StatelessWidget {
                       Text(
                         question.description,
                         style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                              color: Colors.grey[600],
+                              color: colorScheme.onSurfaceVariant,
                               fontStyle: FontStyle.italic,
                             ),
                       ),
@@ -181,9 +222,26 @@ class RcdSelectorScreen extends StatelessWidget {
                 if (isAnswered)
                   Icon(
                     answer! ? Icons.check_circle : Icons.cancel,
-                    color: answer ? Colors.green : Colors.blue,
+                    color: answer == true
+                        ? colorScheme.primary
+                        : colorScheme.tertiary,
                   ),
               ],
+            ),
+            const SizedBox(height: 8),
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.all(10),
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(8),
+                color: colorScheme.surfaceContainerHighest,
+              ),
+              child: Text(
+                'Wpływ na dobór: ${question.impact}',
+                style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                      color: colorScheme.onSurface,
+                    ),
+              ),
             ),
             const SizedBox(height: 12),
             Row(
@@ -193,10 +251,12 @@ class RcdSelectorScreen extends StatelessWidget {
                     onPressed: () => onAnswer(true),
                     style: ElevatedButton.styleFrom(
                       backgroundColor: answer == true
-                          ? Colors.green
-                          : Colors.grey[300],
+                          ? colorScheme.primary
+                          : colorScheme.surfaceContainerHighest,
                       foregroundColor:
-                          answer == true ? Colors.white : Colors.black,
+                          answer == true
+                              ? colorScheme.onPrimary
+                              : colorScheme.onSurface,
                     ),
                     child: const Text('Tak'),
                   ),
@@ -207,10 +267,12 @@ class RcdSelectorScreen extends StatelessWidget {
                     onPressed: () => onAnswer(false),
                     style: ElevatedButton.styleFrom(
                       backgroundColor: answer == false
-                          ? Colors.blue[600]
-                          : Colors.grey[300],
+                          ? colorScheme.tertiary
+                          : colorScheme.surfaceContainerHighest,
                       foregroundColor:
-                          answer == false ? Colors.white : Colors.black,
+                          answer == false
+                              ? colorScheme.onTertiary
+                              : colorScheme.onSurface,
                     ),
                     child: const Text('Nie'),
                   ),
@@ -241,7 +303,7 @@ class RcdSelectorScreen extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  'Zalecany Typ RCD',
+                  'Rekomendowany wariant RCD',
                   style: Theme.of(context).textTheme.bodySmall?.copyWith(
                         color: GridTheme.deepNavy,
                         fontWeight: FontWeight.bold,
@@ -269,7 +331,7 @@ class RcdSelectorScreen extends StatelessWidget {
 
           // Details
           Text(
-            'Szczegóły',
+            'Uzasadnienie doboru',
             style: Theme.of(context).textTheme.titleMedium?.copyWith(
                   fontWeight: FontWeight.bold,
                 ),
@@ -283,9 +345,41 @@ class RcdSelectorScreen extends StatelessWidget {
           Text(
             result.details,
             style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                  color: Colors.grey[700],
+                  color: Theme.of(context).colorScheme.onSurfaceVariant,
                   fontStyle: FontStyle.italic,
                 ),
+          ),
+          const SizedBox(height: 16),
+          Card(
+            child: Padding(
+              padding: const EdgeInsets.all(12),
+              child: Text(
+                result.standardsNote,
+                style: Theme.of(context).textTheme.bodySmall,
+              ),
+            ),
+          ),
+          const SizedBox(height: 12),
+          Card(
+            child: Padding(
+              padding: const EdgeInsets.all(12),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Padding(
+                    padding: EdgeInsets.only(top: 2),
+                    child: Icon(Icons.gavel_outlined, size: 18),
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      'Odpowiedzialność prawna: moduł ma charakter informacyjno-edukacyjny i nie zastępuje projektu ani opinii osoby z uprawnieniami. Ostateczny dobór RCD, zgodność z normami i odpowiedzialność za skutki zastosowania rozwiązań spoczywa na projektancie, kierowniku robót lub wykonawcy zgodnie z zakresem ich uprawnień.',
+                      style: Theme.of(context).textTheme.bodySmall,
+                    ),
+                  ),
+                ],
+              ),
+            ),
           ),
           const SizedBox(height: 24),
 
@@ -340,6 +434,31 @@ class RcdSelectorScreen extends StatelessWidget {
           _buildSpecificationTable(context, result),
           const SizedBox(height: 24),
 
+          Text(
+            'Checklista weryfikacyjna',
+            style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                  fontWeight: FontWeight.bold,
+                ),
+          ),
+          const SizedBox(height: 10),
+          ...result.verificationChecklist.map(
+            (item) => Padding(
+              padding: const EdgeInsets.only(bottom: 8),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Padding(
+                    padding: EdgeInsets.only(top: 2),
+                    child: Icon(Icons.check_circle_outline, size: 18),
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(child: Text(item)),
+                ],
+              ),
+            ),
+          ),
+          const SizedBox(height: 24),
+
           // Reset button
           SizedBox(
             width: double.infinity,
@@ -348,7 +467,9 @@ class RcdSelectorScreen extends StatelessWidget {
                 context.read<RcdSelectorProvider>().resetAnswers();
               },
               style: ElevatedButton.styleFrom(
-                backgroundColor: Colors.grey[400],
+                backgroundColor:
+                    Theme.of(context).colorScheme.surfaceContainerHighest,
+                foregroundColor: Theme.of(context).colorScheme.onSurface,
               ),
               child: const Text('Zacznij od nowa'),
             ),

@@ -1,0 +1,8 @@
+# Copy this file to: android/key.properties
+# Then fill it with paths/passwords for your RELEASE keystore.
+# Do not commit android/key.properties to git.
+
+storePassword=REPLACE_WITH_STORE_PASSWORD
+keyPassword=REPLACE_WITH_KEY_PASSWORD
+keyAlias=REPLACE_WITH_KEY_ALIAS
+storeFile=REPLACE_WITH_ABSOLUTE_PATH_TO_YOUR_RELEASE_KEYSTORE

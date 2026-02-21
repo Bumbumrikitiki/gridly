@@ -8,6 +8,7 @@ import 'package:gridly/services/grid_provider.dart';
 import 'package:gridly/services/technical_label_guard.dart';
 import 'package:gridly/theme/grid_theme.dart';
 import 'package:gridly/widgets/circuit_line_edit_dialog.dart';
+import 'package:gridly/widgets/main_mobile_nav_bar.dart';
 
 class ConstructionPowerScreen extends StatefulWidget {
   const ConstructionPowerScreen({super.key});
@@ -22,6 +23,12 @@ class _ConstructionPowerScreenState extends State<ConstructionPowerScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final viewportWidth = MediaQuery.sizeOf(context).width;
+    final isMobile = viewportWidth < 600;
+    final contentPadding = viewportWidth < 380
+        ? 12.0
+        : (isMobile ? 14.0 : 16.0);
+
     return Scaffold(
       appBar: AppBar(
         title: Consumer<GridProvider>(
@@ -34,7 +41,7 @@ class _ConstructionPowerScreenState extends State<ConstructionPowerScreen> {
               crossAxisAlignment: CrossAxisAlignment.start,
               mainAxisSize: MainAxisSize.min,
               children: [
-                const Text('Struktura rozdzielnic'),
+                const Text('Struktura rozdzielnic zasilania budowlanego'),
                 Text(
                   'Budowa: $buildingName',
                   style: Theme.of(context).textTheme.bodySmall,
@@ -56,6 +63,9 @@ class _ConstructionPowerScreenState extends State<ConstructionPowerScreen> {
           ),
         ],
       ),
+      bottomNavigationBar: isMobile
+          ? const MainMobileNavBar(currentRoute: '/construction-power')
+          : null,
       body: Consumer<GridProvider>(
         builder: (context, provider, _) {
           final allNodes = provider.nodes;
@@ -94,7 +104,7 @@ class _ConstructionPowerScreenState extends State<ConstructionPowerScreen> {
 
           return SingleChildScrollView(
             child: Padding(
-              padding: const EdgeInsets.all(16),
+              padding: EdgeInsets.all(contentPadding),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
@@ -387,7 +397,7 @@ class _ConstructionPowerScreenState extends State<ConstructionPowerScreen> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text(
-              'Struktura rozdzielnic',
+              'Struktura rozdzielnic zasilania budowlanego',
               style: Theme.of(context).textTheme.titleMedium,
             ),
             const SizedBox(height: 8),

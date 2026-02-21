@@ -1,10 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart';
 import 'package:provider/provider.dart';
+import 'package:gridly/services/app_settings_provider.dart';
+import 'package:gridly/services/auth_provider.dart';
 import 'package:gridly/services/monetization_provider.dart';
 import 'package:gridly/widgets/pdf_report_dialog.dart';
 import 'package:gridly/widgets/export_project_dialog.dart';
 import 'package:gridly/widgets/ad_banner_placeholder.dart';
+import 'package:gridly/widgets/main_mobile_nav_bar.dart';
 import 'package:gridly/theme/grid_theme.dart';
 
 class DashboardScreen extends StatelessWidget {
@@ -19,6 +22,11 @@ class DashboardScreen extends StatelessWidget {
         title: const Text('Gridly Electrical Checker'),
         elevation: 0,
         actions: [
+          IconButton(
+            icon: const Icon(Icons.manage_accounts),
+            tooltip: 'Profil i ustawienia',
+            onPressed: () => Navigator.pushNamed(context, '/profile'),
+          ),
           if (kDebugMode)
             IconButton(
               icon: const Icon(Icons.tune),
@@ -27,27 +35,17 @@ class DashboardScreen extends StatelessWidget {
             ),
         ],
       ),
+      bottomNavigationBar: isMobile
+          ? const MainMobileNavBar(currentRoute: '/dashboard')
+          : null,
       body: SingleChildScrollView(
         child: Padding(
           padding: EdgeInsets.all(isMobile ? 12.0 : 20.0),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // Welcome section
-              Text(
-                'Witaj w Gridly Electrical Checker',
-                style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                      fontWeight: FontWeight.bold,
-                    ),
-              ),
-              const SizedBox(height: 8),
-              Text(
-                'Narzędzie do analizy i projektowania instalacji elektrycznych',
-                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                      color: Colors.grey[600],
-                    ),
-              ),
-              const SizedBox(height: 20),
+              _buildAccountSummary(context),
+              const SizedBox(height: 12),
 
               // Main features section
               _buildSectionHeader(context, 'Główne funkcje', '⚡'),
@@ -82,6 +80,58 @@ class DashboardScreen extends StatelessWidget {
           ),
         ),
       ),
+    );
+  }
+
+  Widget _buildAccountSummary(BuildContext context) {
+    return Consumer2<AuthProvider, MonetizationProvider>(
+      builder: (context, auth, monetization, _) {
+        return Card(
+          child: Padding(
+            padding: const EdgeInsets.all(12),
+            child: Row(
+              children: [
+                Icon(
+                  auth.isSignedIn ? Icons.verified_user : Icons.person_outline,
+                  size: 20,
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        auth.isSignedIn
+                            ? 'Konto: ${auth.displayName}'
+                            : 'Konto: niezalogowano',
+                        style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                      const SizedBox(height: 2),
+                      Text(
+                        'Plan: ${monetization.isPro ? 'PRO aktywny' : 'FREE'}',
+                        style: Theme.of(context).textTheme.bodySmall,
+                      ),
+                    ],
+                  ),
+                ),
+                TextButton.icon(
+                  onPressed: () => Navigator.pushNamed(context, '/profile'),
+                  icon: const Icon(Icons.open_in_new, size: 16),
+                  label: const Text('Profil'),
+                ),
+                if (!monetization.isPro)
+                  TextButton.icon(
+                    onPressed: () => Navigator.pushNamed(context, '/paywall'),
+                    icon: const Icon(Icons.workspace_premium, size: 16),
+                    label: const Text('PRO'),
+                  ),
+              ],
+            ),
+          ),
+        );
+      },
     );
   }
 
@@ -136,13 +186,13 @@ class DashboardScreen extends StatelessWidget {
       children: [
         _buildDashboardButton(
           context,
-          'Struktura rozdzielnic',
+          'Struktura rozdzielnic zasilania budowlanego',
           Icons.account_tree,
           () => Navigator.pushNamed(context, '/construction-power'),
         ),
         _buildDashboardButton(
           context,
-          'Ocena orientacyjna obwodu',
+          'Analiza obwodu elektrycznego',
           Icons.assessment,
           () => Navigator.pushNamed(context, '/audit'),
         ),
@@ -158,14 +208,14 @@ class DashboardScreen extends StatelessWidget {
 
   Widget _buildMultitoolGrid(BuildContext context, bool isMobile) {
     final multitoolItems = [
-      ('srednice', 'Średnice', Icons.straighten, false),
+      ('spadki', 'Spadek napięcia', Icons.trending_down, false),
+      ('srednice', 'Dobór rur termokurczliwych', Icons.straighten, false),
+      ('opisowki', 'Generator znaczników opisowych', Icons.label, true),
+      ('osd_checker', 'Przygotowanie do odbiorów OSD', Icons.rule_folder, false),
       ('pomiary', 'Pomiary', Icons.speed, false),
-      ('kalkulatory', 'Kalkulatory', Icons.calculate, false),
-      ('spadki', 'Spadki U', Icons.trending_down, false),
       ('zwarcie', 'Zwarcie', Icons.flash_on, false),
-      ('rcd_selector', 'Dobór RCD', Icons.check_circle, false),
-      ('encyclopedia', 'Encyklopedia', Icons.book, true),
-      ('opisowki', 'Opisówki', Icons.label, true),
+      ('rcd_selector', 'RCD', Icons.check_circle, false),
+      ('uziemienie', 'Projekt Uziemienia', Icons.electrical_services, false),
     ];
 
     return GridView.count(
@@ -196,8 +246,8 @@ class DashboardScreen extends StatelessWidget {
     String routeId,
     {required bool isPremium}
   ) {
-    return Consumer<MonetizationProvider>(
-      builder: (context, monetization, _) {
+    return Consumer2<MonetizationProvider, AppSettingsProvider>(
+      builder: (context, monetization, settings, _) {
         final isLocked = isPremium && !monetization.isPro;
 
         return Material(
@@ -206,6 +256,9 @@ class DashboardScreen extends StatelessWidget {
             onTap: () {
               if (isLocked) {
                 _showProRequiredSnackBar(context);
+                if (settings.autoOpenPaywallForLockedFeatures) {
+                  Navigator.pushNamed(context, '/paywall');
+                }
                 return;
               }
 
@@ -321,8 +374,8 @@ class DashboardScreen extends StatelessWidget {
   }
 
   Widget _buildExportButtons(BuildContext context, bool isMobile) {
-    return Consumer<MonetizationProvider>(
-      builder: (context, monetization, _) {
+    return Consumer2<MonetizationProvider, AppSettingsProvider>(
+      builder: (context, monetization, settings, _) {
         final isPro = monetization.isPro;
 
         return Row(
@@ -345,6 +398,9 @@ class DashboardScreen extends StatelessWidget {
                 onPressed: () {
                   if (!isPro) {
                     _showProRequiredSnackBar(context);
+                    if (settings.autoOpenPaywallForLockedFeatures) {
+                      Navigator.pushNamed(context, '/paywall');
+                    }
                     return;
                   }
 

@@ -6,6 +6,7 @@ import 'package:gridly/models/grid_models.dart';
 import 'package:gridly/multitool/calculators/logic/engineering_calculators.dart';
 import 'package:gridly/services/monetization_provider.dart';
 import 'package:gridly/services/pdf_service.dart';
+import 'package:gridly/widgets/main_mobile_nav_bar.dart';
 
 enum CableWires { four, five }
 
@@ -170,10 +171,20 @@ class _CircuitAssessmentScreenState extends State<CircuitAssessmentScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final viewportWidth = MediaQuery.sizeOf(context).width;
+    final isMobile = viewportWidth < 600;
+    final contentPadding = viewportWidth < 380
+        ? 12.0
+        : (isMobile ? 16.0 : 20.0);
+
     return Scaffold(
-      appBar: AppBar(title: const Text('Ocena orientacyjna obwodu')),
+      appBar: AppBar(title: const Text('Analiza obwodu elektrycznego')),
+      bottomNavigationBar: isMobile
+          ? const MainMobileNavBar(currentRoute: '/audit')
+          : null,
       body: SingleChildScrollView(
-        padding: const EdgeInsets.all(20),
+        keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
+        padding: EdgeInsets.all(contentPadding),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -255,13 +266,13 @@ class _CircuitAssessmentScreenState extends State<CircuitAssessmentScreen> {
     await showDialog<void>(
       context: context,
       builder: (dialogContext) {
+        final viewport = MediaQuery.sizeOf(dialogContext);
         return AlertDialog(
+          insetPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 24),
           title: const Text('Wynik weryfikacji'),
           content: SizedBox(
-            width: 720,
-            child: SingleChildScrollView(
-              child: _buildResult(),
-            ),
+            width: math.min(720, viewport.width * 0.92),
+            child: _buildResult(),
           ),
           actions: [
             TextButton(
@@ -1051,6 +1062,8 @@ class _CircuitAssessmentScreenState extends State<CircuitAssessmentScreen> {
   }
 
   Widget _buildResult() {
+    final viewportHeight = MediaQuery.sizeOf(context).height;
+    final resultMaxHeight = math.min(560.0, viewportHeight * 0.72);
     final color = _isPartialResult
       ? Colors.orangeAccent
       : (_isAllowed ? Colors.greenAccent : Colors.redAccent);
@@ -1064,16 +1077,19 @@ class _CircuitAssessmentScreenState extends State<CircuitAssessmentScreen> {
       : (_isAllowed ? Icons.circle : Icons.warning);
 
     return ConstrainedBox(
-      constraints: const BoxConstraints(minHeight: 80),
+      constraints: BoxConstraints(minHeight: 80, maxHeight: resultMaxHeight),
       child: Container(
-        padding: const EdgeInsets.all(20),
         decoration: BoxDecoration(
           color: color.withValues(alpha: 0.15),
           borderRadius: BorderRadius.circular(12),
           border: Border.all(color: color, width: 2),
         ),
-        child: Column(
-          children: [
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(10),
+          child: SingleChildScrollView(
+            padding: const EdgeInsets.all(20),
+            child: Column(
+              children: [
             Icon(icon, color: color, size: 48),
             if (text != null) ...[
               const SizedBox(height: 12),
@@ -1253,7 +1269,9 @@ class _CircuitAssessmentScreenState extends State<CircuitAssessmentScreen> {
                 ],
               ],
             ],
-          ],
+              ],
+            ),
+          ),
         ),
       ),
     );
@@ -1792,6 +1810,7 @@ class _CircuitAssessmentScreenState extends State<CircuitAssessmentScreen> {
       context: context,
       builder: (context) {
         return AlertDialog(
+          insetPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 24),
           title: const Text('Potwierdzenie'),
           content: Text(
             'Potwierdź uruchomienie: $actionLabel. Wyniki mają charakter orientacyjny i informacyjny i nie stanowią porady wykonawczej ani gotowego projektu.',
@@ -1818,6 +1837,7 @@ class _CircuitAssessmentScreenState extends State<CircuitAssessmentScreen> {
       context: context,
       builder: (context) {
         return AlertDialog(
+          insetPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 24),
           title: Row(
             children: [
               const Icon(Icons.info_outline, color: Colors.orangeAccent),

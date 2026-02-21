@@ -2,7 +2,10 @@ import 'package:gridly/multitool/cable_selector/models/cable_data.dart';
 
 class CableDataProvider {
   static final Map<CableMaterial, Map<CableType, Map<double, CableData>>>
-  _data = {
+  _data = _buildData();
+
+  static Map<CableMaterial, Map<CableType, Map<double, CableData>>> _buildData() {
+    final data = <CableMaterial, Map<CableType, Map<double, CableData>>>{
     CableMaterial.cu: {
       CableType.ydy: {
         1.5: CableData(
@@ -373,7 +376,74 @@ class CableDataProvider {
         ),
       },
     },
-  };
+    };
+
+    final cu = data[CableMaterial.cu]!;
+    cu[CableType.ydyp] = _deriveTypeData(
+      source: cu[CableType.ydy]!,
+      targetType: CableType.ydyp,
+      material: CableMaterial.cu,
+      outerDiameterDelta: -0.7,
+    );
+    cu[CableType.n2xh] = _deriveTypeData(
+      source: cu[CableType.yky]!,
+      targetType: CableType.n2xh,
+      material: CableMaterial.cu,
+      outerDiameterDelta: 0.8,
+    );
+    cu[CableType.nhxh] = _deriveTypeData(
+      source: cu[CableType.yky]!,
+      targetType: CableType.nhxh,
+      material: CableMaterial.cu,
+      outerDiameterDelta: 1.2,
+    );
+    cu[CableType.n2xcy] = _deriveTypeData(
+      source: cu[CableType.yky]!,
+      targetType: CableType.n2xcy,
+      material: CableMaterial.cu,
+      outerDiameterDelta: 1.8,
+    );
+    cu[CableType.ykxs] = _deriveTypeData(
+      source: cu[CableType.yky]!,
+      targetType: CableType.ykxs,
+      material: CableMaterial.cu,
+      outerDiameterDelta: 0.6,
+    );
+
+    final al = data[CableMaterial.al]!;
+    al[CableType.na2xy] = _deriveTypeData(
+      source: al[CableType.yaky]!,
+      targetType: CableType.na2xy,
+      material: CableMaterial.al,
+      outerDiameterDelta: 0.8,
+    );
+
+    return data;
+  }
+
+  static Map<double, CableData> _deriveTypeData({
+    required Map<double, CableData> source,
+    required CableType targetType,
+    required CableMaterial material,
+    required double outerDiameterDelta,
+  }) {
+    return source.map(
+      (crossSection, entry) => MapEntry(
+        crossSection,
+        CableData(
+          material: material,
+          type: targetType,
+          crossSection: crossSection,
+          coreType: entry.coreType,
+          outerDiameter: (entry.outerDiameter + outerDiameterDelta)
+              .clamp(1.0, 999.0)
+              .toDouble(),
+          heatShrinkSleeve: entry.heatShrinkSleeve,
+          heatShrinkLabel: entry.heatShrinkLabel,
+        ),
+      ),
+    );
+  }
 
   static CableData? getCableData(
     CableMaterial material,

@@ -8,45 +8,87 @@ class LabelPdfService {
   /// Konwersja mm na punkty PDF (1mm = 2.834 punktu)
   static const double mmToPoints = 2.834645669;
 
-  /// Generuje PDF z etykietą w skali 1:1
-  static Future<pw.Document> generateLabel(Label label) async {
+  /// Generuje PDF z etykietami w skali 1:1
+  static Future<pw.Document> generateLabels(
+    List<Label> labels, {
+    bool fillA4Page = false,
+    double safeMarginMm = 0,
+  }) async {
     final pdf = pw.Document();
 
-    // Oblicz wymiary w punktach PDF
-    final widthPoints = label.totalWidthMm * mmToPoints;
-    final heightPoints = label.height.heightMm * mmToPoints;
+    for (final label in labels) {
+      if (label.blocks.isEmpty) {
+        continue;
+      }
 
-    // Margines dla linii pomocniczych
-    final marginPoints = 5.0 * mmToPoints;
+      // Oblicz wymiary w punktach PDF
+      final widthPoints = label.totalWidthMm * mmToPoints;
+      final heightPoints = label.height.heightMm * mmToPoints;
 
-    // Stwórz customowy format strony z marginesami
-    final pageFormat = PdfPageFormat(
-      widthPoints + (marginPoints * 2),
-      heightPoints + (marginPoints * 2),
-      marginAll: marginPoints,
-    );
+      if (fillA4Page) {
+        final pageFormat = PdfPageFormat.a4.landscape;
+        final safeMarginPoints = safeMarginMm * mmToPoints;
+        final usableWidth = pageFormat.width - (safeMarginPoints * 2);
+        final usableHeight = pageFormat.height - (safeMarginPoints * 2);
 
-    pdf.addPage(
-      pw.Page(
-        pageFormat: pageFormat,
-        margin: pw.EdgeInsets.all(marginPoints),
-        build: (context) {
-          return pw.Stack(
-            children: [
-              // Linie pomocnicze do wycięcia
-              _buildCutLines(widthPoints, heightPoints),
+        pdf.addPage(
+          pw.Page(
+            pageFormat: pageFormat,
+            margin: pw.EdgeInsets.all(safeMarginPoints),
+            build: (context) {
+              final columns = (usableWidth / widthPoints).ceil().clamp(1, 1000);
+              final rows = (usableHeight / heightPoints).ceil().clamp(1, 1000);
 
-              // Główna etykieta
-              pw.Positioned(
-                left: 0,
-                top: 0,
-                child: _buildLabel(label, widthPoints, heightPoints),
-              ),
-            ],
-          );
-        },
-      ),
-    );
+              return pw.Stack(
+                children: [
+                  for (var row = 0; row < rows; row++)
+                    for (var col = 0; col < columns; col++)
+                      pw.Positioned(
+                        left: col * widthPoints,
+                        top: row * heightPoints,
+                        child: _buildLabel(label, widthPoints, heightPoints),
+                      ),
+                ],
+              );
+            },
+          ),
+        );
+
+        continue;
+      }
+
+      // Margines dla linii pomocniczych
+      final marginPoints = 5.0 * mmToPoints;
+
+      // Stwórz customowy format strony z marginesami
+      final pageFormat = PdfPageFormat(
+        widthPoints + (marginPoints * 2),
+        heightPoints + (marginPoints * 2),
+        marginAll: marginPoints,
+      );
+
+      pdf.addPage(
+        pw.Page(
+          pageFormat: pageFormat,
+          margin: pw.EdgeInsets.all(marginPoints),
+          build: (context) {
+            return pw.Stack(
+              children: [
+                // Linie pomocnicze do wycięcia
+                _buildCutLines(widthPoints, heightPoints),
+
+                // Główna etykieta
+                pw.Positioned(
+                  left: 0,
+                  top: 0,
+                  child: _buildLabel(label, widthPoints, heightPoints),
+                ),
+              ],
+            );
+          },
+        ),
+      );
+    }
 
     return pdf;
   }
@@ -160,6 +202,8 @@ class LabelPdfService {
     // Konwersja koloru Flutter na PdfColor
     final pdfColor = _convertColor(block.backgroundColor);
 
+    final textColor = _textColorForBackground(block.backgroundColor);
+
     return pw.Container(
       width: blockWidthPoints,
       height: heightPoints,
@@ -178,6 +222,7 @@ class LabelPdfService {
                   style: pw.TextStyle(
                     fontSize: _calculateFontSize(block, heightPoints),
                     fontWeight: pw.FontWeight.bold,
+                    color: textColor,
                   ),
                   textAlign: pw.TextAlign.center,
                 ),
@@ -187,6 +232,7 @@ class LabelPdfService {
                 style: pw.TextStyle(
                   fontSize: _calculateFontSize(block, heightPoints),
                   fontWeight: pw.FontWeight.bold,
+                  color: textColor,
                 ),
                 textAlign: pw.TextAlign.center,
                 maxLines: 2,
@@ -215,12 +261,29 @@ class LabelPdfService {
     return PdfColor(color.red / 255.0, color.green / 255.0, color.blue / 255.0);
   }
 
+  static PdfColor _textColorForBackground(material.Color background) {
+    return background.computeLuminance() > 0.5
+        ? PdfColors.black
+        : PdfColors.white;
+  }
+
   /// Generuje i wyświetla podgląd PDF
   static Future<void> showPreview(
     material.BuildContext context,
-    Label label,
-  ) async {
-    final pdf = await generateLabel(label);
+    List<Label> labels, {
+    bool fillA4Page = false,
+    double safeMarginMm = 0,
+  }) async {
+    final printableLabels = labels.where((label) => label.blocks.isNotEmpty).toList();
+    if (printableLabels.isEmpty) {
+      return;
+    }
+
+    final pdf = await generateLabels(
+      printableLabels,
+      fillA4Page: fillA4Page,
+      safeMarginMm: safeMarginMm,
+    );
 
     await material.Navigator.of(context).push(
       material.MaterialPageRoute(
@@ -229,8 +292,9 @@ class LabelPdfService {
           canChangePageFormat: false,
           canChangeOrientation: false,
           canDebug: false,
-          pdfFileName:
-              'etykieta_${label.totalWidthMm.toStringAsFixed(0)}mm.pdf',
+          pdfFileName: printableLabels.length == 1
+              ? 'etykieta.pdf'
+              : 'etykiety.pdf',
         ),
       ),
     );

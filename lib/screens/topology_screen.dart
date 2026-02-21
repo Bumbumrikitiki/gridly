@@ -8,6 +8,7 @@ import 'package:gridly/services/grid_provider.dart';
 import 'package:gridly/services/technical_label_guard.dart';
 import 'package:gridly/theme/grid_theme.dart';
 import 'package:gridly/widgets/circuit_line_edit_dialog.dart';
+import 'package:gridly/widgets/main_mobile_nav_bar.dart';
 
 class TopologyScreen extends StatefulWidget {
   const TopologyScreen({super.key});
@@ -22,6 +23,12 @@ class _TopologyScreenState extends State<TopologyScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final viewportWidth = MediaQuery.sizeOf(context).width;
+    final isMobile = viewportWidth < 600;
+    final contentPadding = viewportWidth < 380
+        ? 12.0
+        : (isMobile ? 14.0 : 16.0);
+
     return Scaffold(
       appBar: AppBar(
         title: Consumer<GridProvider>(
@@ -34,7 +41,7 @@ class _TopologyScreenState extends State<TopologyScreen> {
               crossAxisAlignment: CrossAxisAlignment.start,
               mainAxisSize: MainAxisSize.min,
               children: [
-                const Text('Struktura rozdzielnic'),
+                const Text('Struktura rozdzielnic zasilania budowlanego'),
                 Text(
                   'Budowa: $buildingName',
                   style: Theme.of(context).textTheme.bodySmall,
@@ -56,6 +63,9 @@ class _TopologyScreenState extends State<TopologyScreen> {
           ),
         ],
       ),
+      bottomNavigationBar: isMobile
+          ? const MainMobileNavBar(currentRoute: '/construction-power')
+          : null,
       body: Consumer<GridProvider>(
         builder: (context, provider, _) {
           final allNodes = provider.nodes;
@@ -94,7 +104,7 @@ class _TopologyScreenState extends State<TopologyScreen> {
 
           return SingleChildScrollView(
             child: Padding(
-              padding: const EdgeInsets.all(16),
+              padding: EdgeInsets.all(contentPadding),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
@@ -125,6 +135,7 @@ class _TopologyScreenState extends State<TopologyScreen> {
       context: context,
       builder: (dialogContext) {
         return AlertDialog(
+          insetPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 24),
           title: const Text('Nazwa budowy'),
           content: TextField(
             controller: controller,
@@ -387,7 +398,7 @@ class _TopologyScreenState extends State<TopologyScreen> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text(
-              'Struktura rozdzielnic',
+              'Struktura rozdzielnic zasilania budowlanego',
               style: Theme.of(context).textTheme.titleMedium,
             ),
             const SizedBox(height: 8),
@@ -792,76 +803,84 @@ class _TopologyScreenState extends State<TopologyScreen> {
         return StatefulBuilder(
           builder: (context, setDialogState) {
             return AlertDialog(
+              insetPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 24),
               title: Text('Kabel: ${parent.name} → ${child.name}'),
-              content: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  TextField(
-                    controller: lengthController,
-                    keyboardType: const TextInputType.numberWithOptions(
-                      decimal: true,
-                    ),
-                    decoration: const InputDecoration(
-                      labelText: 'Długość kabla (m)',
-                    ),
-                  ),
-                  const SizedBox(height: 10),
-                  TextField(
-                    controller: crossSectionController,
-                    keyboardType: const TextInputType.numberWithOptions(
-                      decimal: true,
-                    ),
-                    decoration: const InputDecoration(
-                      labelText: 'Przekrój kabla (mm²)',
-                    ),
-                  ),
-                  const SizedBox(height: 10),
-                  DropdownButtonFormField<ConductorMaterial>(
-                    initialValue: selectedMaterial,
-                    decoration: const InputDecoration(labelText: 'Materiał'),
-                    items: const [
-                      DropdownMenuItem(
-                        value: ConductorMaterial.cu,
-                        child: Text('Cu'),
+              content: ConstrainedBox(
+                constraints: BoxConstraints(
+                  maxHeight: MediaQuery.sizeOf(dialogContext).height * 0.62,
+                ),
+                child: SingleChildScrollView(
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      TextField(
+                        controller: lengthController,
+                        keyboardType: const TextInputType.numberWithOptions(
+                          decimal: true,
+                        ),
+                        decoration: const InputDecoration(
+                          labelText: 'Długość kabla (m)',
+                        ),
                       ),
-                      DropdownMenuItem(
-                        value: ConductorMaterial.al,
-                        child: Text('Al'),
+                      const SizedBox(height: 10),
+                      TextField(
+                        controller: crossSectionController,
+                        keyboardType: const TextInputType.numberWithOptions(
+                          decimal: true,
+                        ),
+                        decoration: const InputDecoration(
+                          labelText: 'Przekrój kabla (mm²)',
+                        ),
                       ),
+                      const SizedBox(height: 10),
+                      DropdownButtonFormField<ConductorMaterial>(
+                        initialValue: selectedMaterial,
+                        decoration: const InputDecoration(labelText: 'Materiał'),
+                        items: const [
+                          DropdownMenuItem(
+                            value: ConductorMaterial.cu,
+                            child: Text('Cu'),
+                          ),
+                          DropdownMenuItem(
+                            value: ConductorMaterial.al,
+                            child: Text('Al'),
+                          ),
+                        ],
+                        onChanged: (value) {
+                          if (value != null) {
+                            setDialogState(() {
+                              selectedMaterial = value;
+                            });
+                          }
+                        },
+                      ),
+                      const SizedBox(height: 10),
+                      DropdownButtonFormField<int>(
+                        initialValue: selectedCores,
+                        decoration: const InputDecoration(labelText: 'Liczba żył'),
+                        items: const [
+                          DropdownMenuItem(value: 4, child: Text('4-żyłowy')),
+                          DropdownMenuItem(value: 5, child: Text('5-żyłowy')),
+                        ],
+                        onChanged: (value) {
+                          if (value != null) {
+                            setDialogState(() {
+                              selectedCores = value;
+                            });
+                          }
+                        },
+                      ),
+                      if (forceFiveCore)
+                        Padding(
+                          padding: const EdgeInsets.only(top: 8),
+                          child: Text(
+                            'Za punktem podziału PEN dla linii 3-fazowych dostępna jest konfiguracja 5-żyłowa.',
+                            style: Theme.of(context).textTheme.bodySmall,
+                          ),
+                        ),
                     ],
-                    onChanged: (value) {
-                      if (value != null) {
-                        setDialogState(() {
-                          selectedMaterial = value;
-                        });
-                      }
-                    },
                   ),
-                  const SizedBox(height: 10),
-                  DropdownButtonFormField<int>(
-                    initialValue: selectedCores,
-                    decoration: const InputDecoration(labelText: 'Liczba żył'),
-                    items: const [
-                      DropdownMenuItem(value: 4, child: Text('4-żyłowy')),
-                      DropdownMenuItem(value: 5, child: Text('5-żyłowy')),
-                    ],
-                    onChanged: (value) {
-                      if (value != null) {
-                        setDialogState(() {
-                          selectedCores = value;
-                        });
-                      }
-                    },
-                  ),
-                  if (forceFiveCore)
-                    Padding(
-                      padding: const EdgeInsets.only(top: 8),
-                      child: Text(
-                        'Za punktem podziału PEN dla linii 3-fazowych dostępna jest konfiguracja 5-żyłowa.',
-                        style: Theme.of(context).textTheme.bodySmall,
-                      ),
-                    ),
-                ],
+                ),
               ),
               actions: [
                 TextButton(
@@ -1467,6 +1486,7 @@ class _TopologyScreenState extends State<TopologyScreen> {
       context: context,
       builder: (context) {
         return AlertDialog(
+          insetPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 24),
           title: const Text('Dodaj nowy element'),
           content: Column(
             mainAxisSize: MainAxisSize.min,
@@ -1593,6 +1613,7 @@ class _TopologyScreenState extends State<TopologyScreen> {
             final protectionSlots =
                 board?.protectionSlots ?? const <BoardProtectionSlot>[];
             return AlertDialog(
+              insetPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 24),
               title: Text('Edytuj: ${node.name}'),
               content: SizedBox(
                 width: double.maxFinite,
@@ -1923,6 +1944,7 @@ class _TopologyScreenState extends State<TopologyScreen> {
         return StatefulBuilder(
           builder: (context, setDialogState) {
             return AlertDialog(
+              insetPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 24),
               title: Text(
                 initialSlot == null
                     ? 'Dodaj aparaturę rozdzielnicy'
@@ -2213,9 +2235,10 @@ class _TopologyScreenState extends State<TopologyScreen> {
         return StatefulBuilder(
           builder: (context, setDialogState) {
             return AlertDialog(
+              insetPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 24),
               title: Text('Wyposażenie: ${board.name}'),
               content: SizedBox(
-                width: 380,
+                width: min(380, MediaQuery.sizeOf(dialogContext).width * 0.9),
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
                   children: [
@@ -2318,6 +2341,7 @@ class _TopologyScreenState extends State<TopologyScreen> {
       context: context,
       builder: (context) {
         return AlertDialog(
+          insetPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 24),
           title: const Text('Zamień węzeł'),
           content:
               const Text('Funkcja zamiany węzła - implementacja w toku...'),
@@ -2337,6 +2361,7 @@ class _TopologyScreenState extends State<TopologyScreen> {
       context: context,
       builder: (context) {
         return AlertDialog(
+          insetPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 24),
           title: const Text('Usuń węzeł?'),
           content: Text(
             'Czy na pewno chcesz usunąć węzeł "${node.name}"? '
@@ -2371,6 +2396,7 @@ class _TopologyScreenState extends State<TopologyScreen> {
       context: context,
       builder: (context) {
         return AlertDialog(
+          insetPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 24),
           title: const Text('Informacja'),
           content: const Text(
             'Po zmianie zasilania wcześniejsze wyniki weryfikacji pętli zwarcia mogą być nieaktualne.',

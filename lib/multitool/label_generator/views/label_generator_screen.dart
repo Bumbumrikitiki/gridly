@@ -11,13 +11,17 @@ class LabelGeneratorScreen extends StatelessWidget {
   static const Color _amber = Color(0xFFF7B500);
   static const Color _cardNavy = Color(0xFF243B53);
 
+  void _showInfo(BuildContext context, String message) {
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(message)));
+  }
+
   @override
   Widget build(BuildContext context) {
     return ChangeNotifierProvider(
       create: (_) => LabelProvider(),
       child: Scaffold(
         appBar: AppBar(
-          title: const Text('Generator Etykiet'),
+          title: const Text('Generator znaczników opisowych'),
           actions: [
             Consumer<LabelProvider>(
               builder: (context, provider, _) {
@@ -73,11 +77,83 @@ class LabelGeneratorScreen extends StatelessWidget {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text(
-                'Ustawienia etykiety',
-                style: Theme.of(
-                  context,
-                ).textTheme.titleMedium?.copyWith(color: Colors.white),
+              Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      'Ustawienia etykiety',
+                      style: Theme.of(
+                        context,
+                      ).textTheme.titleMedium?.copyWith(color: Colors.white),
+                    ),
+                  ),
+                  IconButton(
+                    onPressed: provider.toggleSettingsCollapsed,
+                    tooltip: provider.isSettingsCollapsed ? 'Rozwiń' : 'Zwiń',
+                    icon: Icon(
+                      provider.isSettingsCollapsed
+                          ? Icons.keyboard_arrow_down
+                          : Icons.keyboard_arrow_up,
+                      color: Colors.white,
+                    ),
+                  ),
+                ],
+              ),
+              if (!provider.isSettingsCollapsed) ...[
+              const SizedBox(height: 12),
+              Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                crossAxisAlignment: WrapCrossAlignment.center,
+                children: [
+                  OutlinedButton.icon(
+                    onPressed: provider.currentPageIndex > 0
+                        ? provider.previousPage
+                        : null,
+                    icon: const Icon(Icons.chevron_left),
+                    label: const Text('Poprzednia'),
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: Colors.white,
+                      side: const BorderSide(color: Colors.white30),
+                    ),
+                  ),
+                  Text(
+                    'Strona ${provider.currentPageIndex + 1}/${LabelProvider.maxPages}',
+                    style: Theme.of(
+                      context,
+                    ).textTheme.bodyMedium?.copyWith(color: Colors.white),
+                  ),
+                  OutlinedButton.icon(
+                    onPressed: provider.currentPageIndex < provider.pagesCount - 1
+                        ? provider.nextPage
+                        : null,
+                    icon: const Icon(Icons.chevron_right),
+                    label: const Text('Następna'),
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: Colors.white,
+                      side: const BorderSide(color: Colors.white30),
+                    ),
+                  ),
+                  ElevatedButton.icon(
+                    onPressed: provider.canAddPage
+                        ? () {
+                            final created = provider.addPage();
+                            if (!created) {
+                              _showInfo(
+                                context,
+                                'Maksymalnie ${LabelProvider.maxPages} stron.',
+                              );
+                            }
+                          }
+                        : null,
+                    icon: const Icon(Icons.note_add_outlined),
+                    label: const Text('Nowa strona'),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: _amber,
+                      foregroundColor: _deepNavy,
+                    ),
+                  ),
+                ],
               ),
               const SizedBox(height: 12),
               Row(
@@ -111,11 +187,92 @@ class LabelGeneratorScreen extends StatelessWidget {
               ),
               const SizedBox(height: 8),
               Text(
-                'Szerokość: ${provider.label.totalWidthMm.toStringAsFixed(1)} mm',
+                'Szerokość: ${provider.label.totalWidthMm.toStringAsFixed(1)} / ${LabelProvider.maxLabelLengthMm.toStringAsFixed(0)} mm',
                 style: Theme.of(
                   context,
                 ).textTheme.bodyMedium?.copyWith(color: Colors.white70),
               ),
+              const SizedBox(height: 6),
+              Text(
+                'Limit długości paska = dłuższy bok A4 (297 mm)',
+                style: Theme.of(
+                  context,
+                ).textTheme.bodySmall?.copyWith(color: Colors.white60),
+              ),
+              const SizedBox(height: 12),
+              Wrap(
+                crossAxisAlignment: WrapCrossAlignment.center,
+                spacing: 8,
+                runSpacing: 8,
+                children: [
+                  Text(
+                    'Widok paska:',
+                    style: Theme.of(
+                      context,
+                    ).textTheme.bodyMedium?.copyWith(color: Colors.white70),
+                  ),
+                  ChoiceChip(
+                    label: const Text('Poziomo'),
+                    selected: !provider.isPreviewVertical,
+                    onSelected: (selected) {
+                      if (selected) {
+                        provider.setPreviewVertical(false);
+                      }
+                    },
+                    selectedColor: _amber,
+                    labelStyle: TextStyle(
+                      color: !provider.isPreviewVertical
+                          ? _deepNavy
+                          : Colors.white,
+                    ),
+                  ),
+                  ChoiceChip(
+                    label: const Text('Pionowo'),
+                    selected: provider.isPreviewVertical,
+                    onSelected: (selected) {
+                      if (selected) {
+                        provider.setPreviewVertical(true);
+                      }
+                    },
+                    selectedColor: _amber,
+                    labelStyle: TextStyle(
+                      color: provider.isPreviewVertical
+                          ? _deepNavy
+                          : Colors.white,
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 8),
+              SwitchListTile.adaptive(
+                contentPadding: EdgeInsets.zero,
+                activeColor: _amber,
+                value: provider.fillA4Page,
+                onChanged: provider.setFillA4Page,
+                title: const Text(
+                  'Wypełnij całą stronę A4',
+                  style: TextStyle(color: Colors.white),
+                ),
+                subtitle: const Text(
+                  'Powiel pasek na całym arkuszu bez przerw',
+                  style: TextStyle(color: Colors.white70),
+                ),
+              ),
+              SwitchListTile.adaptive(
+                contentPadding: EdgeInsets.zero,
+                activeColor: _amber,
+                value: provider.useSafePrintMargin,
+                onChanged: provider.setUseSafePrintMargin,
+                title: Text(
+                  'Bezpieczny margines drukarki (${LabelProvider.safePrintMarginMm.toStringAsFixed(0)} mm)',
+                  style: const TextStyle(color: Colors.white),
+                ),
+                subtitle: const Text(
+                  'Zmniejsza ryzyko ucinania przy braku druku bez marginesów',
+                  style: TextStyle(color: Colors.white70),
+                ),
+              ),
+              ],
             ],
           ),
         );
@@ -144,46 +301,60 @@ class LabelGeneratorScreen extends StatelessWidget {
           );
         }
 
-        return SingleChildScrollView(
-          scrollDirection: Axis.horizontal,
+        return ListView(
           padding: const EdgeInsets.all(24),
-          child: SingleChildScrollView(
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                // Informacja o skali
-                Text(
-                  'Podgląd (skala 1:1 w mm)',
-                  style: Theme.of(
-                    context,
-                  ).textTheme.bodySmall?.copyWith(color: Colors.white54),
-                ),
-                const SizedBox(height: 16),
-
-                // Etykieta
-                _buildPreviewLabel(provider.label),
-
-                const SizedBox(height: 24),
-
-                // Lista bloków do edycji
-                ...provider.label.blocks.map((block) {
-                  return _buildBlockEditor(context, provider, block);
-                }),
-              ],
+          children: [
+            Text(
+              'Podgląd (skala 1:1 w mm)',
+              textAlign: TextAlign.center,
+              style: Theme.of(
+                context,
+              ).textTheme.bodySmall?.copyWith(color: Colors.white54),
             ),
-          ),
+            const SizedBox(height: 16),
+            SingleChildScrollView(
+              scrollDirection: Axis.horizontal,
+              child: SingleChildScrollView(
+                child: provider.isPreviewVertical
+                    ? RotatedBox(
+                        quarterTurns: 3,
+                        child: _buildPreviewLabel(
+                          provider.label,
+                          provider.selectedBlockId,
+                          onSelect: provider.selectBlock,
+                        ),
+                      )
+                    : _buildPreviewLabel(
+                        provider.label,
+                        provider.selectedBlockId,
+                        onSelect: provider.selectBlock,
+                      ),
+              ),
+            ),
+            const SizedBox(height: 24),
+            _buildSharedTextEditor(context, provider),
+            const SizedBox(height: 12),
+            ...provider.label.blocks.map((block) {
+              return _buildBlockEditor(context, provider, block);
+            }),
+          ],
         );
       },
     );
   }
 
-  Widget _buildPreviewLabel(Label label) {
+  Widget _buildPreviewLabel(
+    Label label,
+    String? selectedBlockId, {
+    required ValueChanged<String> onSelect,
+  }) {
     // Skala wyświetlania: 1mm w rzeczywistości = 2 piksele na ekranie
     const scale = 2.0;
+    const borderCompensation = 4.0;
 
     return Container(
-      width: label.totalWidthMm * scale,
-      height: label.height.heightMm * scale,
+      width: (label.totalWidthMm * scale) + borderCompensation,
+      height: (label.height.heightMm * scale) + borderCompensation,
       decoration: BoxDecoration(
         color: Colors.white,
         border: Border.all(color: Colors.black, width: 2),
@@ -192,39 +363,57 @@ class LabelGeneratorScreen extends StatelessWidget {
         ],
       ),
       child: Row(
-        children: label.blocks.map((block) {
-          return Container(
-            width: block.widthMm * scale,
-            height: label.height.heightMm * scale,
-            decoration: BoxDecoration(
-              color: block.backgroundColor,
-              border: Border(
-                right: BorderSide(color: Colors.black54, width: 1),
+        children: label.blocks.asMap().entries.map((entry) {
+          final block = entry.value;
+          final isLast = entry.key == label.blocks.length - 1;
+          final isSelected = block.id == selectedBlockId;
+
+          return InkWell(
+            onTap: () => onSelect(block.id),
+            child: Container(
+              width: block.widthMm * scale,
+              height: label.height.heightMm * scale,
+              decoration: BoxDecoration(
+                color: block.backgroundColor,
+                border: isSelected
+                    ? Border.all(color: _amber, width: 2)
+                    : Border(
+                        right: isLast
+                            ? BorderSide.none
+                            : BorderSide(color: Colors.black54, width: 1),
+                      ),
               ),
-            ),
-            child: Center(
-              child: block.isVerticalText
-                  ? RotatedBox(
-                      quarterTurns: 3,
-                      child: Text(
+              child: Center(
+                child: block.isVerticalText
+                    ? RotatedBox(
+                        quarterTurns: 3,
+                        child: Text(
+                          block.text,
+                          style: TextStyle(
+                            fontSize: 10,
+                            fontWeight: FontWeight.bold,
+                            color: block.backgroundColor.computeLuminance() >
+                                    0.5
+                                ? Colors.black
+                                : Colors.white,
+                          ),
+                          textAlign: TextAlign.center,
+                        ),
+                      )
+                    : Text(
                         block.text,
                         style: TextStyle(
                           fontSize: 10,
                           fontWeight: FontWeight.bold,
+                          color: block.backgroundColor.computeLuminance() > 0.5
+                              ? Colors.black
+                              : Colors.white,
                         ),
                         textAlign: TextAlign.center,
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
                       ),
-                    )
-                  : Text(
-                      block.text,
-                      style: TextStyle(
-                        fontSize: 10,
-                        fontWeight: FontWeight.bold,
-                      ),
-                      textAlign: TextAlign.center,
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
-                    ),
+              ),
             ),
           );
         }).toList(),
@@ -238,85 +427,187 @@ class LabelGeneratorScreen extends StatelessWidget {
     LabelBlock block,
   ) {
     final index = provider.label.blocks.indexOf(block);
+    final isSelected = provider.selectedBlockId == block.id;
+
+    return GestureDetector(
+      onTap: () => provider.selectBlock(block.id),
+      behavior: HitTestBehavior.opaque,
+      child: Container(
+        margin: const EdgeInsets.only(bottom: 12),
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+        decoration: BoxDecoration(
+          color: _cardNavy,
+          borderRadius: BorderRadius.circular(8),
+          border: Border.all(
+            color: isSelected ? _amber : _amber.withOpacity(0.3),
+            width: isSelected ? 2 : 1,
+          ),
+        ),
+        child: Row(
+          children: [
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Blok ${index + 1}',
+                    style: TextStyle(color: _amber, fontWeight: FontWeight.bold),
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    'Szerokość: ${block.width.label}',
+                    style: const TextStyle(color: Colors.white70, fontSize: 12),
+                  ),
+                ],
+              ),
+            ),
+            if (isSelected)
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                decoration: BoxDecoration(
+                  color: _amber,
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: const Text(
+                  'AKTYWNY',
+                  style: TextStyle(
+                    color: _deepNavy,
+                    fontSize: 10,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildSharedTextEditor(BuildContext context, LabelProvider provider) {
+    final selected = provider.selectedBlock;
+    final isEnabled = selected != null;
+    final text = selected?.text ?? '';
+    final selectedId = provider.selectedBlockId;
+    final selectedIndex = selected == null
+        ? -1
+        : provider.label.blocks.indexWhere((block) => block.id == selected.id);
 
     return Container(
-      margin: const EdgeInsets.only(bottom: 12),
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
         color: _cardNavy,
         borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: _amber.withOpacity(0.3)),
+        border: Border.all(color: _amber.withOpacity(0.35)),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
+          Text(
+            isEnabled
+                ? 'Edycja: Blok ${selectedIndex + 1}'
+                : 'Edycja tekstu: wybierz blok',
+            style: Theme.of(
+              context,
+            ).textTheme.bodyMedium?.copyWith(color: Colors.white),
+          ),
+          const SizedBox(height: 8),
           Row(
             children: [
-              Text(
-                'Blok ${index + 1}',
-                style: TextStyle(color: _amber, fontWeight: FontWeight.bold),
+              Expanded(
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 8),
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(8),
+                    border: Border.all(color: Colors.white24),
+                    color: _deepNavy.withOpacity(0.35),
+                  ),
+                  child: DropdownButtonHideUnderline(
+                    child: DropdownButton<ModuleWidth>(
+                      value: selected?.width,
+                      isExpanded: true,
+                      hint: const Text('Szerokość modułu'),
+                      dropdownColor: _cardNavy,
+                      iconEnabledColor: _amber,
+                      style: const TextStyle(color: Colors.white),
+                      items: ModuleWidth.values.map((width) {
+                        return DropdownMenuItem(
+                          value: width,
+                          child: Text(width.label),
+                        );
+                      }).toList(),
+                      onChanged: isEnabled
+                          ? (width) {
+                              if (width == null || selectedId == null) return;
+                              final updated = provider.updateBlockWidth(
+                                selectedId,
+                                width,
+                              );
+                              if (!updated) {
+                                _showInfo(
+                                  context,
+                                  'Nie można przekroczyć ${LabelProvider.maxLabelLengthMm.toStringAsFixed(0)} mm (dłuższy bok A4).',
+                                );
+                              }
+                            }
+                          : null,
+                    ),
+                  ),
+                ),
               ),
               const SizedBox(width: 8),
-              DropdownButton<ModuleWidth>(
-                value: block.width,
-                dropdownColor: _cardNavy,
-                style: TextStyle(color: Colors.white),
-                items: ModuleWidth.values.map((width) {
-                  return DropdownMenuItem(
-                    value: width,
-                    child: Text(width.label),
-                  );
-                }).toList(),
-                onChanged: (width) {
-                  if (width != null) {
-                    provider.updateBlockWidth(block.id, width);
-                  }
-                },
-              ),
-              const Spacer(),
               IconButton(
-                icon: Icon(Icons.arrow_upward, size: 20),
-                color: index > 0 ? Colors.white70 : Colors.white24,
-                onPressed: index > 0
-                    ? () => provider.moveBlockLeft(block.id)
-                    : null,
-                tooltip: 'W lewo',
-              ),
-              IconButton(
-                icon: Icon(Icons.arrow_downward, size: 20),
-                color: index < provider.label.blocks.length - 1
+                icon: const Icon(Icons.arrow_upward, size: 20),
+                color: isEnabled && selectedIndex > 0
                     ? Colors.white70
                     : Colors.white24,
-                onPressed: index < provider.label.blocks.length - 1
-                    ? () => provider.moveBlockRight(block.id)
+                onPressed: isEnabled && selectedIndex > 0
+                    ? () => provider.moveBlockUpAt(selectedIndex)
                     : null,
-                tooltip: 'W prawo',
+                tooltip: 'Przesuń wyżej',
               ),
               IconButton(
-                icon: Icon(Icons.delete, size: 20),
-                color: Colors.redAccent,
-                onPressed: () => provider.removeBlock(block.id),
-                tooltip: 'Usuń',
+                icon: const Icon(Icons.arrow_downward, size: 20),
+                color: isEnabled && selectedIndex < provider.label.blocks.length - 1
+                    ? Colors.white70
+                    : Colors.white24,
+                onPressed: isEnabled && selectedIndex < provider.label.blocks.length - 1
+                    ? () => provider.moveBlockDownAt(selectedIndex)
+                    : null,
+                tooltip: 'Przesuń niżej',
+              ),
+              TextButton(
+                onPressed: isEnabled && selectedId != null
+                    ? () => provider.removeBlock(selectedId)
+                    : null,
+                child: const Text('Usuń pole'),
               ),
             ],
           ),
           const SizedBox(height: 8),
-          TextField(
-            controller: TextEditingController(text: block.text)
-              ..selection = TextSelection.collapsed(offset: block.text.length),
-            style: TextStyle(color: Colors.white),
+          TextFormField(
+            key: ValueKey(selectedId ?? 'none'),
+            enabled: isEnabled,
+            initialValue: text,
+            style: const TextStyle(color: Colors.white),
             decoration: InputDecoration(
-              labelText: 'Tekst',
-              labelStyle: TextStyle(color: Colors.white70),
-              border: OutlineInputBorder(),
-              enabledBorder: OutlineInputBorder(
+              labelText: 'Tekst pola',
+              hintText: 'Kliknij blok i wpisz tekst',
+              labelStyle: const TextStyle(color: Colors.white70),
+              hintStyle: const TextStyle(color: Colors.white38),
+              border: const OutlineInputBorder(),
+              enabledBorder: const OutlineInputBorder(
                 borderSide: BorderSide(color: Colors.white24),
               ),
               focusedBorder: OutlineInputBorder(
                 borderSide: BorderSide(color: _amber),
               ),
             ),
-            onChanged: (text) => provider.updateBlockText(block.id, text),
+            onChanged: (value) {
+              final selectedId = provider.selectedBlockId;
+              if (selectedId != null) {
+                provider.updateBlockText(selectedId, value);
+              }
+            },
           ),
           const SizedBox(height: 8),
           Wrap(
@@ -326,42 +617,42 @@ class LabelGeneratorScreen extends StatelessWidget {
               _buildColorButton(
                 context,
                 provider,
-                block,
+                selected ?? LabelBlock(id: ''),
                 'Biały',
                 Colors.white,
               ),
               _buildColorButton(
                 context,
                 provider,
-                block,
+                selected ?? LabelBlock(id: ''),
                 'Żółty',
                 Colors.yellow.shade600,
               ),
               _buildColorButton(
                 context,
                 provider,
-                block,
+                selected ?? LabelBlock(id: ''),
                 'Niebieski',
                 Colors.blue.shade300,
               ),
               _buildColorButton(
                 context,
                 provider,
-                block,
+                selected ?? LabelBlock(id: ''),
                 'Zielony',
                 Colors.green.shade300,
               ),
               _buildColorButton(
                 context,
                 provider,
-                block,
+                selected ?? LabelBlock(id: ''),
                 'Czerwony',
                 Colors.red.shade300,
               ),
               _buildColorButton(
                 context,
                 provider,
-                block,
+                selected ?? LabelBlock(id: ''),
                 'Pomarańczowy',
                 Colors.orange.shade300,
               ),
@@ -369,15 +660,17 @@ class LabelGeneratorScreen extends StatelessWidget {
           ),
           const SizedBox(height: 8),
           CheckboxListTile(
-            title: Text(
+            contentPadding: EdgeInsets.zero,
+            dense: true,
+            title: const Text(
               'Tekst pionowy (90°)',
               style: TextStyle(color: Colors.white70, fontSize: 14),
             ),
-            value: block.isVerticalText,
-            onChanged: (_) => provider.toggleBlockTextOrientation(block.id),
+            value: selected?.isVerticalText ?? false,
+            onChanged: isEnabled && selectedId != null
+                ? (_) => provider.toggleBlockTextOrientation(selectedId)
+                : null,
             activeColor: _amber,
-            contentPadding: EdgeInsets.zero,
-            dense: true,
           ),
         ],
       ),
@@ -391,20 +684,36 @@ class LabelGeneratorScreen extends StatelessWidget {
     String label,
     Color color,
   ) {
+    if (block.id.isEmpty) {
+      return Opacity(
+        opacity: 0.4,
+        child: IgnorePointer(
+          child: _buildColorButtonContent(label, color, false),
+        ),
+      );
+    }
+
     final isSelected = block.backgroundColor == color;
 
     return InkWell(
       onTap: () => provider.updateBlockColor(block.id, color),
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-        decoration: BoxDecoration(
-          color: color,
-          border: Border.all(
-            color: isSelected ? _amber : Colors.black,
-            width: isSelected ? 3 : 1,
-          ),
-          borderRadius: BorderRadius.circular(4),
+      child: _buildColorButtonContent(label, color, isSelected),
+    );
+  }
+
+  Widget _buildColorButtonContent(String label, Color color, bool isSelected) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+      decoration: BoxDecoration(
+        color: color,
+        border: Border.all(
+          color: isSelected ? _amber : Colors.black,
+          width: isSelected ? 3 : 1,
         ),
+        borderRadius: BorderRadius.circular(4),
+      ),
+      child: Container(
+        padding: EdgeInsets.zero,
         child: Text(
           label,
           style: TextStyle(
@@ -441,7 +750,15 @@ class LabelGeneratorScreen extends StatelessWidget {
                 runSpacing: 8,
                 children: ModuleWidth.values.map((width) {
                   return ElevatedButton(
-                    onPressed: () => provider.addBlock(width),
+                    onPressed: () {
+                      final added = provider.addBlock(width);
+                      if (!added) {
+                        _showInfo(
+                          context,
+                          'Limit długości: ${LabelProvider.maxLabelLengthMm.toStringAsFixed(0)} mm (A4).',
+                        );
+                      }
+                    },
                     style: ElevatedButton.styleFrom(
                       backgroundColor: _amber,
                       foregroundColor: _deepNavy,
@@ -469,12 +786,16 @@ class LabelGeneratorScreen extends StatelessWidget {
           child: SafeArea(
             top: false,
             child: ElevatedButton.icon(
-              onPressed: provider.label.blocks.isEmpty
+              onPressed: !provider.hasAnyContent
                   ? null
                   : () async {
                       await LabelPdfService.showPreview(
                         context,
-                        provider.label,
+                        provider.labels,
+                        fillA4Page: provider.fillA4Page,
+                        safeMarginMm: provider.useSafePrintMargin
+                            ? LabelProvider.safePrintMarginMm
+                            : 0,
                       );
                     },
               icon: const Icon(Icons.print),

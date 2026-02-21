@@ -3,11 +3,19 @@ import 'package:provider/provider.dart';
 import 'package:gridly/multitool/logic/multitool_provider.dart';
 import 'package:gridly/multitool/models/multitool_item.dart';
 import 'package:gridly/multitool/cable_selector/views/cable_selector_screen.dart';
-import 'package:gridly/multitool/calculators/views/engineering_calculators_screen.dart';
 import 'package:gridly/multitool/label_generator/views/label_generator_screen.dart';
 import 'package:gridly/multitool/field_guide/views/field_guide_screen.dart';
+import 'package:gridly/multitool/voltage_drop/views/voltage_drop_calculator_screen.dart';
 import 'package:gridly/multitool/rcd_selector/views/rcd_selector_screen.dart';
-import 'package:gridly/multitool/encyclopedia/views/encyclopedia_screen.dart';
+import 'package:gridly/multitool/zwarcie/views/short_circuit_screen.dart';
+import 'package:gridly/multitool/osd_checker/views/osd_acceptance_checker_screen.dart';
+import 'package:gridly/multitool/ekspert_kabli/views/ekspert_kabli_screen.dart';
+import 'package:gridly/multitool/symbols/views/single_line_symbols_screen.dart';
+import 'package:gridly/multitool/uziemienie/views/grounding_screen.dart';
+import 'package:gridly/multitool/uziemienie/views/measurement_analyzer_screen.dart';
+import 'package:gridly/multitool/szyny_wyrownawcze/views/bonding_guide_screen.dart';
+import 'package:gridly/multitool/project_manager/views/project_manager_screen.dart';
+import 'package:gridly/widgets/main_mobile_nav_bar.dart';
 
 class MultitoolScreen extends StatelessWidget {
   const MultitoolScreen({super.key});
@@ -17,8 +25,13 @@ class MultitoolScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final isMobile = MediaQuery.sizeOf(context).width < 600;
+
     return Scaffold(
       appBar: AppBar(title: const Text('Multitool')),
+      bottomNavigationBar: isMobile
+          ? const MainMobileNavBar(currentRoute: '/multitool')
+          : null,
       floatingActionButton: Consumer<MultitoolProvider>(
         builder: (context, provider, _) {
           return FloatingActionButton(
@@ -96,11 +109,18 @@ class MultitoolScreen extends StatelessWidget {
                                     ),
                                   );
                                   break;
-                                case 'kalkulatory':
+                                case 'pomiary':
+                                  Navigator.of(context).push(
+                                    MaterialPageRoute(
+                                      builder: (_) => const FieldGuideScreen(),
+                                    ),
+                                  );
+                                  break;
+                                case 'symbole':
                                   Navigator.of(context).push(
                                     MaterialPageRoute(
                                       builder: (_) =>
-                                          const EngineeringCalculatorsScreen(),
+                                          const SingleLineSymbolsScreen(),
                                     ),
                                   );
                                   break;
@@ -116,7 +136,7 @@ class MultitoolScreen extends StatelessWidget {
                                   Navigator.of(context).push(
                                     MaterialPageRoute(
                                       builder: (_) =>
-                                          const FieldGuideScreen(),
+                                          const VoltageDropCalculatorScreen(),
                                     ),
                                   );
                                   break;
@@ -128,11 +148,84 @@ class MultitoolScreen extends StatelessWidget {
                                     ),
                                   );
                                   break;
-                                case 'encyclopedia':
+                                case 'zwarcie':
                                   Navigator.of(context).push(
                                     MaterialPageRoute(
                                       builder: (_) =>
-                                          const EncyclopediaScreen(),
+                                          const ShortCircuitScreen(),
+                                    ),
+                                  );
+                                  break;
+                                case 'osd_checker':
+                                  Navigator.of(context).push(
+                                    MaterialPageRoute(
+                                      builder: (_) =>
+                                          const OSDAcceptanceCheckerScreen(),
+                                    ),
+                                  );
+                                  break;
+                                case 'ekspert_kabli':
+                                  Navigator.of(context).push(
+                                    MaterialPageRoute(
+                                      builder: (_) =>
+                                          const EkspertKabliScreen(),
+                                    ),
+                                  );
+                                  break;
+                                case 'uziemienie':
+                                  showDialog(
+                                    context: context,
+                                    builder: (context) => AlertDialog(
+                                      title: const Text('Projekt Uziemienia'),
+                                      content: const Text(
+                                        'Wybierz funkcję:',
+                                      ),
+                                      actions: [
+                                        TextButton(
+                                          onPressed: () {
+                                            Navigator.pop(context);
+                                            Navigator.of(context).push(
+                                              MaterialPageRoute(
+                                                builder: (_) =>
+                                                    const GroundingScreen(),
+                                              ),
+                                            );
+                                          },
+                                          child: const Text('Kalkulator\nuziemienia'),
+                                        ),
+                                        TextButton(
+                                          onPressed: () {
+                                            Navigator.pop(context);
+                                            Navigator.of(context).push(
+                                              MaterialPageRoute(
+                                                builder: (_) =>
+                                                    const MeasurementAnalyzerScreen(),
+                                              ),
+                                            );
+                                          },
+                                          child: const Text('Analizator\npomiaru'),
+                                        ),
+                                        TextButton(
+                                          onPressed: () {
+                                            Navigator.pop(context);
+                                            Navigator.of(context).push(
+                                              MaterialPageRoute(
+                                                builder: (_) =>
+                                                    const BondingGuideScreen(),
+                                              ),
+                                            );
+                                          },
+                                          child: const Text('Szyny\nwyrównawcze'),
+                                        ),
+                                      ],
+                                    ),
+                                  );
+                                  break;
+                                case 'manager_projektu':
+                                  Navigator.of(context).push(
+                                    MaterialPageRoute(
+                                      builder: (_) =>
+                                          const ProjectManagerScreen(),
                                     ),
                                   );
                                   break;
