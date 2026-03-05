@@ -404,6 +404,8 @@ class _ProjectManagerScreenState extends State<ProjectManagerScreen>
       case 'Malowanie': return BuildingStage.malowanie;
       case 'Finalizacja': return BuildingStage.finalizacja;
       case 'Oddawanie': return BuildingStage.oddawanie;
+      case 'Instalacje OZE': return BuildingStage.ozeInstalacje;
+      case 'Infrastruktura EV': return BuildingStage.evInfrastruktura;
       default: return null;
     }
   }
@@ -1722,6 +1724,10 @@ class _ProjectManagerScreenState extends State<ProjectManagerScreen>
         return '🎨 Malowanie';
       case BuildingStage.finalizacja:
         return '✅ Finalizacja';
+      case BuildingStage.ozeInstalacje:
+        return '☀️ Instalacje OZE';
+      case BuildingStage.evInfrastruktura:
+        return '🔌 Infrastruktura EV';
       case BuildingStage.oddawanie:
         return '📋 Oddawanie';
     }

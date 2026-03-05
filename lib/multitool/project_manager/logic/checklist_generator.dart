@@ -94,6 +94,10 @@ class ProjectChecklistGenerator {
         return 'Malowanie, lakierowanie';
       case BuildingStage.finalizacja:
         return 'Drzwi finalne, meblościany';
+      case BuildingStage.ozeInstalacje:
+        return 'Instalacje OZE (PV, BESS)';
+      case BuildingStage.evInfrastruktura:
+        return 'Infrastruktura EV (ładowarki, DLM)';
       case BuildingStage.oddawanie:
         return 'Pomiary, dokumentacja, odbiór';
     }

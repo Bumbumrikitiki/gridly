@@ -8,6 +8,8 @@
 ///  │    │    │    └── Units (1..N mieszkań)
 ///  │    │    └── numberOfElevators (0..N)
 ///  │    ├── basementLevels (0..N)
+
+import 'renewable_energy_config.dart';
 ///  │    ├── hasGarage (bool)
 ///  │    └── hasParking (bool)
 
@@ -72,6 +74,7 @@ class AdvancedProjectConfiguration {
   final DateTime projectEndDate;
   final List<Building> buildings;
   final Set<dynamic> selectedSystems; // ElectricalSystemType
+  final RenewableEnergyConfig? renewableEnergyConfig;
   
   /// Twórcy mogą przechowywać dodatkowe dane
   final String notes;
@@ -84,6 +87,7 @@ class AdvancedProjectConfiguration {
     required this.projectEndDate,
     required this.buildings,
     required this.selectedSystems,
+    this.renewableEnergyConfig,
     this.notes = '',
     DateTime? createdAt,
   }) : createdAt = createdAt ?? DateTime.now();

@@ -640,6 +640,10 @@ class _UnitDetailScreenState extends State<UnitDetailScreen>
         return '✅ Finalizacja';
       case BuildingStage.oddawanie:
         return '📋 Oddawanie';
+      case BuildingStage.ozeInstalacje:
+        return '☀️ Instalacje OZE';
+      case BuildingStage.evInfrastruktura:
+        return '🔌 Infrastruktura EV';
     }
   }
 

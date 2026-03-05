@@ -3,6 +3,8 @@
 /// System automatycznie generuje harmonogram prac elektrycznych
 /// na podstawie typu budowy, zeitów budowy i wybranych systemów.
 
+import 'renewable_energy_config.dart';
+
 // ═══════════════════════════════════════════════════════════════════════════
 // TYPY I ENUMY PODSTAWOWE
 // ═══════════════════════════════════════════════════════════════════════════
@@ -133,6 +135,8 @@ enum BuildingStage {
   malowanie, // Faza 7: Malowanie, lakierowanie
   finalizacja, // Faza 8: Drzwi finalne, meblościany
   oddawanie, // Faza 9: Pomiary, dokumentacja, odbiór
+  ozeInstalacje, // Faza 10: Instalacje OZE (fotowoltaika, magazyny energii)
+  evInfrastruktura, // Faza 11: Infrastruktura ładowania pojazdów elektrycznych
 }
 
 enum TaskStatus {
@@ -176,6 +180,9 @@ class BuildingConfiguration {
   // Systemy elektryczne
   final Set<ElectricalSystemType> selectedSystems;
   
+  // OZE i Elektromobilność
+  final RenewableEnergyConfig? renewableEnergyConfig;
+  
   // Mieszkańcy/szacunkowa liczba lokali
   final int estimatedUnits; // Liczba mieszkań/biur
   final int estimatedStairCases; // Klatki schodowe
@@ -200,6 +207,7 @@ class BuildingConfiguration {
     required this.connectionType,
     required this.estimatedPowerDemand,
     required this.selectedSystems,
+    this.renewableEnergyConfig,
     required this.estimatedUnits,
     required this.estimatedStairCases,
     required this.stageDurations,
@@ -475,6 +483,8 @@ class BuildingTimingTemplates {
     BuildingStage.malowanie: 2,
     BuildingStage.finalizacja: 1,
     BuildingStage.oddawanie: 1,
+    BuildingStage.ozeInstalacje: 2,
+    BuildingStage.evInfrastruktura: 1,
   };
 
   static Map<BuildingStage, int> wielorodzinny34pietra() => {
@@ -488,6 +498,8 @@ class BuildingTimingTemplates {
     BuildingStage.malowanie: 4,
     BuildingStage.finalizacja: 2,
     BuildingStage.oddawanie: 1,
+    BuildingStage.ozeInstalacje: 3,
+    BuildingStage.evInfrastruktura: 2,
   };
 
   static Map<BuildingStage, int> wielorodzinnyWysoki() => {
@@ -501,6 +513,8 @@ class BuildingTimingTemplates {
     BuildingStage.malowanie: 6,
     BuildingStage.finalizacja: 3,
     BuildingStage.oddawanie: 2,
+    BuildingStage.ozeInstalacje: 4,
+    BuildingStage.evInfrastruktura: 2,
   };
 
   static Map<BuildingStage, int> biurowiec() => {
@@ -514,5 +528,7 @@ class BuildingTimingTemplates {
     BuildingStage.malowanie: 5,
     BuildingStage.finalizacja: 2,
     BuildingStage.oddawanie: 2,
+    BuildingStage.ozeInstalacje: 3,
+    BuildingStage.evInfrastruktura: 2,
   };
 }

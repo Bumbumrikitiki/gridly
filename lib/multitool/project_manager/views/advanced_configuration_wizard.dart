@@ -1,16 +1,18 @@
 /// Configuration wizard dla Project Managera
 /// 
-/// 6-krokowy wizard:
+/// 7-krokowy wizard:
 /// 1. Dane podstawowe (nazwa, adres, daty - opcjonalne)
 /// 2. Budynki i klatki
 /// 3. Garaże, parkingi, piętra podziemne
 /// 4. Dźwigi na klatkach
 /// 5. Mieszkania na piętrach
-/// 6. Systemy elektryczne + Preview
+/// 6. Systemy elektryczne
+/// 7. OZE i Elektromobilność
 
 import 'package:flutter/material.dart';
 import 'package:gridly/multitool/project_manager/models/building_hierarchy.dart';
 import 'package:gridly/multitool/project_manager/models/project_models.dart';
+import 'package:gridly/multitool/project_manager/models/renewable_energy_config.dart';
 
 class AdvancedConfigurationWizard extends StatefulWidget {
   final Function(AdvancedProjectConfiguration) onComplete;
@@ -40,6 +42,15 @@ class _AdvancedConfigurationWizardState
 
   Set<ElectricalSystemType> _selectedSystems = {};
 
+  // OZE i EV (Krok 7)
+  bool _pvInstalled = false;
+  double _pvPower = 0.0;
+  bool _bessInstalled = false;
+  double _bessCapacity = 0.0;
+  bool _evInstalled = false;
+  int _evChargingPoints = 0;
+  DlmSystemType _dlmSystem = DlmSystemType.none;
+
   @override
   void initState() {
     super.initState();
@@ -55,7 +66,7 @@ class _AdvancedConfigurationWizardState
   }
 
   void _nextStep() {
-    if (_currentStep < 5) {
+    if (_currentStep < 6) {
       setState(() => _currentStep++);
     } else {
       _finishConfiguration();
@@ -110,6 +121,46 @@ class _AdvancedConfigurationWizardState
       );
     }
 
+    // Stwórz konfigurację OZE/EV
+    RenewableEnergyConfig? renewableConfig;
+    if (_pvInstalled || _bessInstalled || _evInstalled) {
+      final pvConfig = _pvInstalled
+          ? PhotovoltaicConfiguration(
+              isInstalled: true,
+              peakPower: _pvPower,
+              systemSize: PhotovoltaicConfiguration.determineSizeFromPower(_pvPower),
+              requiresFireDeptApproval: _pvPower > 6.5,
+              requiresOsdNotification: _pvPower <= 50,
+            )
+          : const PhotovoltaicConfiguration();
+
+      final bessConfig = _bessInstalled
+          ? BatteryStorageConfiguration(
+              isInstalled: true,
+              capacity: _bessCapacity,
+              storageType: BatteryStorageConfiguration.determineTypeFromCapacity(_bessCapacity),
+              requiresCertification: _bessCapacity > 20,
+            )
+          : const BatteryStorageConfiguration();
+
+      final evConfig = _evInstalled
+          ? ElectricMobilityConfiguration(
+              isInstalled: true,
+              numberOfChargingPoints: _evChargingPoints,
+              stationType: ChargingStationType.wallbox,
+             dlmSystem: _dlmSystem,
+              requiresUdtInspection: false,
+              requiresDlm: _evChargingPoints > 5,
+            )
+          : const ElectricMobilityConfiguration();
+
+      renewableConfig = RenewableEnergyConfig(
+        photovoltaic: pvConfig,
+        batteryStorage: bessConfig,
+        electricMobility: evConfig,
+      );
+    }
+
     final config = AdvancedProjectConfiguration(
       projectName: projectName,
       address: address,
@@ -117,6 +168,7 @@ class _AdvancedConfigurationWizardState
       projectEndDate: _endDate!,
       buildings: buildings,
       selectedSystems: _selectedSystems,
+      renewableEnergyConfig: renewableConfig,
     );
 
     widget.onComplete(config);
@@ -133,7 +185,7 @@ class _AdvancedConfigurationWizardState
 
     return Scaffold(
       appBar: AppBar(
-        title: Text('Nowy projekt - Krok ${_currentStep + 1}/6'),
+        title: Text('Nowy projekt - Krok ${_currentStep + 1}/7'),
         backgroundColor: colors.primary,
         foregroundColor: colors.onPrimary,
       ),
@@ -141,7 +193,7 @@ class _AdvancedConfigurationWizardState
         children: [
           // Progress indicator
           LinearProgressIndicator(
-            value: (_currentStep + 1) / 6,
+            value: (_currentStep + 1) / 7,
             backgroundColor: colors.surfaceContainerHighest,
             valueColor: AlwaysStoppedAnimation<Color>(colors.primary),
           ),
@@ -183,9 +235,9 @@ class _AdvancedConfigurationWizardState
                   child: FilledButton.icon(
                     onPressed: _canProceed() ? _nextStep : null,
                     icon: Icon(
-                      _currentStep == 5 ? Icons.check : Icons.arrow_forward,
+                      _currentStep == 6 ? Icons.check : Icons.arrow_forward,
                     ),
-                    label: Text(_currentStep == 5 ? 'Utwórz projekt' : 'Dalej'),
+                    label: Text(_currentStep == 6 ? 'Utwórz projekt' : 'Dalej'),
                   ),
                 ),
               ],
@@ -210,6 +262,8 @@ class _AdvancedConfigurationWizardState
         return true; // Mieszkania mogą być 0
       case 5:
         return _selectedSystems.isNotEmpty;
+      case 6:
+        return true; // OZE/EV opcjonalne
       default:
         return false;
     }
@@ -229,6 +283,8 @@ class _AdvancedConfigurationWizardState
         return _buildStep5UnitsPerFloor();
       case 5:
         return _buildStep6SystemsAndPreview();
+      case 6:
+        return _buildStep7OzeAndEv();
       default:
         return const SizedBox();
     }
@@ -1095,6 +1151,339 @@ class _AdvancedConfigurationWizardState
       'gru'
     ];
     return '${date.day} ${months[date.month - 1]} ${date.year}';
+  }
+
+  // ═══════════════════════════════════════════════════════════════════════════
+  // KROK 7: OZE I ELEKTROMOBILNOŚĆ
+  // ═══════════════════════════════════════════════════════════════════════════
+  Widget _buildStep7OzeAndEv() {
+    final colors = Theme.of(context).colorScheme;
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          'OZE i Elektromobilność',
+          style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+                fontWeight: FontWeight.bold,
+              ),
+        ),
+        const SizedBox(height: 8),
+        Text(
+          'Czy projekt obejmuje instalacje OZE lub infrastrukturę ładowania pojazdów?',
+          style: Theme.of(context).textTheme.bodyMedium,
+        ),
+        const SizedBox(height: 24),
+
+        // FOTOWOLTAIKA (PV)
+        Card(
+          child: Padding(
+            padding: const EdgeInsets.all(16),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    Icon(Icons.wb_sunny, color: Colors.orange, size: 32),
+                    const SizedBox(width: 12),
+                    Text(
+                      'Instalacja Fotowoltaiczna (PV)',
+                      style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                            fontWeight: FontWeight.bold,
+                          ),
+                    ),
+                  ],
+                ),
+                const Divider(height: 24),
+                SwitchListTile(
+                  title: const Text('Zainstalowana'),
+                  subtitle: const Text('Czy projekt obejmuje panele fotowoltaiczne?'),
+                  value: _pvInstalled,
+                  onChanged: (value) {
+                    setState(() => _pvInstalled = value);
+                  },
+                ),
+                if (_pvInstalled) ...[
+                  const SizedBox(height: 16),
+                  Text('Moc szczytowa: ${_pvPower.toStringAsFixed(1)} kWp'),
+                  Slider(
+                    value: _pvPower,
+                    min: 0,
+                    max: 100,
+                    divisions: 40,
+                    label: '${_pvPower.toStringAsFixed(1)} kWp',
+                    onChanged: (value) {
+                      setState(() => _pvPower = value);
+                    },
+                  ),
+                  if (_pvPower > 6.5)
+                    Card(
+                      color: Colors.orange.shade100,
+                      child: Padding(
+                        padding: const EdgeInsets.all(12),
+                        child: Row(
+                          children: [
+                            Icon(Icons.warning, color: Colors.orange.shade900),
+                            const SizedBox(width: 12),
+                            Expanded(
+                              child: Text(
+                                'PV > 6.5 kWp: wymagane zgłoszenie do Państwowej Straży Pożarnej',
+                                style: TextStyle(
+                                  color: Colors.orange.shade900,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                ],
+              ],
+            ),
+          ),
+        ),
+        const SizedBox(height: 16),
+
+        // MAGAZYN ENERGII (BESS)
+        Card(
+          child: Padding(
+            padding: const EdgeInsets.all(16),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    Icon(Icons.battery_charging_full, color: Colors.green, size: 32),
+                    const SizedBox(width: 12),
+                    Text(
+                      'Magazyn Energii (BESS)',
+                      style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                            fontWeight: FontWeight.bold,
+                          ),
+                    ),
+                  ],
+                ),
+                const Divider(height: 24),
+                SwitchListTile(
+                  title: const Text('Zainstalowany'),
+                  subtitle: const Text('Czy projekt obejmuje magazyn energii (baterie)?'),
+                  value: _bessInstalled,
+                  onChanged: (value) {
+                    setState(() => _bessInstalled = value);
+                  },
+                ),
+                if (_bessInstalled) ...[
+                  const SizedBox(height: 16),
+                  Text('Pojemność: ${_bessCapacity.toStringAsFixed(1)} kWh'),
+                  Slider(
+                    value: _bessCapacity,
+                    min: 0,
+                    max: 150,
+                    divisions: 30,
+                    label: '${_bessCapacity.toStringAsFixed(1)} kWh',
+                    onChanged: (value) {
+                      setState(() => _bessCapacity = value);
+                    },
+                  ),
+                  if (_bessCapacity > 20)
+                    Card(
+                      color: Colors.blue.shade100,
+                      child: Padding(
+                        padding: const EdgeInsets.all(12),
+                        child: Row(
+                          children: [
+                            Icon(Icons.info, color: Colors.blue.shade900),
+                            const SizedBox(width: 12),
+                            Expanded(
+                              child: Text(
+                                'BESS > 20 kWh: wymagany certyfikat NC RfG',
+                                style: TextStyle(
+                                  color: Colors.blue.shade900,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                ],
+              ],
+            ),
+          ),
+        ),
+        const SizedBox(height: 16),
+
+        // ELEKTROMOBILNOŚĆ (EV)
+        Card(
+          child: Padding(
+            padding: const EdgeInsets.all(16),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    Icon(Icons.ev_station, color: Colors.blue, size: 32),
+                    const SizedBox(width: 12),
+                    Text(
+                      'Ładowarki EV',
+                      style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                            fontWeight: FontWeight.bold,
+                          ),
+                    ),
+                  ],
+                ),
+                const Divider(height: 24),
+                SwitchListTile(
+                  title: const Text('Zainstalowane'),
+                  subtitle: const Text('Czy projekt obejmuje stacje ładowania pojazdów?'),
+                  value: _evInstalled,
+                  onChanged: (value) {
+                    setState(() => _evInstalled = value);
+                  },
+                ),
+                if (_evInstalled) ...[
+                  const SizedBox(height: 16),
+                  Text('Liczba stanowisk ładowania: $_evChargingPoints'),
+                  Slider(
+                    value: _evChargingPoints.toDouble(),
+                    min: 0,
+                    max: 50,
+                    divisions: 50,
+                    label: '$_evChargingPoints',
+                    onChanged: (value) {
+                      setState(() => _evChargingPoints = value.toInt());
+                    },
+                  ),
+                  if (_evChargingPoints > 0) ...[
+                    const SizedBox(height: 16),
+                    Text(
+                      'System zarządzania mocą (DLM)',
+                      style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                            fontWeight: FontWeight.bold,
+                          ),
+                    ),
+                    const SizedBox(height: 8),
+                    SegmentedButton<DlmSystemType>(
+                      segments: const [
+                        ButtonSegment(
+                          value: DlmSystemType.none,
+                          label: Text('Brak'),
+                        ),
+                        ButtonSegment(
+                          value: DlmSystemType.passive,
+                          label: Text('Pasywny'),
+                        ),
+                        ButtonSegment(
+                          value: DlmSystemType.active,
+                          label: Text('Aktywny'),
+                        ),
+                      ],
+                      selected: {_dlmSystem},
+                      onSelectionChanged: (Set<DlmSystemType> selected) {
+                        setState(() => _dlmSystem = selected.first);
+                      },
+                    ),
+                  ],
+                  if (_evChargingPoints > 5)
+                    Card(
+                      color: Colors.red.shade100,
+                      child: Padding(
+                        padding: const EdgeInsets.all(12),
+                        child: Row(
+                          children: [
+                            Icon(Icons.error, color: Colors.red.shade900),
+                            const SizedBox(width: 12),
+                            Expanded(
+                              child: Text(
+                                '> 5 stanowisk EV: system DLM jest OBOWIĄZKOWY (zapobieganie awariom zasilania)',
+                                style: TextStyle(
+                                  color: Colors.red.shade900,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                ],
+              ],
+            ),
+          ),
+        ),
+
+        // Podsumowanie ostrzeżeń
+        if (_pvInstalled || _bessInstalled || _evInstalled) ...[
+          const SizedBox(height: 24),
+          Card(
+            color: colors.primaryContainer,
+            child: Padding(
+              padding: const EdgeInsets.all(16),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      Icon(Icons.info_outline, color: colors.primary),
+                      const SizedBox(width: 12),
+                      Text(
+                        'Wymagane dokumenty',
+                        style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                              fontWeight: FontWeight.bold,
+                            ),
+                      ),
+                    ],
+                  ),
+                  const Divider(height: 16),
+                  ..._getRequiredDocsPreview().map((doc) => Padding(
+                        padding: const EdgeInsets.symmetric(vertical: 4),
+                        child: Row(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            const Text('• ', style: TextStyle(fontSize: 16)),
+                            Expanded(child: Text(doc)),
+                          ],
+                        ),
+                      )),
+                ],
+              ),
+            ),
+          ),
+        ],
+      ],
+    );
+  }
+
+  List<String> _getRequiredDocsPreview() {
+    final docs = <String>[];
+    
+    if (_pvInstalled) {
+      docs.add('Schemat jednokreskowy instalacji PV');
+      if (_pvPower > 6.5) {
+        docs.add('Zgłoszenie do Państwowej Straży Pożarnej');
+      }
+      if (_pvPower <= 50) {
+        docs.add('Zgłoszenie mikroinstalacji do OSD');
+      }
+    }
+    
+    if (_bessInstalled) {
+      docs.add('Karta gwarancyjna magazynu energii');
+      if (_bessCapacity > 20) {
+        docs.add('Certyfikat NC RfG');
+      }
+    }
+    
+    if (_evInstalled) {
+      docs.add('Deklaracja zgodności stacji ładowania');
+      if (_evChargingPoints > 5) {
+        docs.add('Raport konfiguracji systemu DLM');
+      }
+    }
+    
+    return docs;
   }
 }
 

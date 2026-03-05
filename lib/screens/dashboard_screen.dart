@@ -53,17 +53,6 @@ class DashboardScreen extends StatelessWidget {
               _buildQuickButtonsGrid(context, isMobile),
               const SizedBox(height: 20),
 
-              // Multitool section
-              _buildSectionHeader(
-                context,
-                'Multitool',
-                '🔧',
-                showProBadge: true,
-              ),
-              const SizedBox(height: 8),
-              _buildMultitoolGrid(context, isMobile),
-              const SizedBox(height: 20),
-
               // Export section
               _buildSectionHeader(
                 context,
@@ -206,117 +195,7 @@ class DashboardScreen extends StatelessWidget {
     );
   }
 
-  Widget _buildMultitoolGrid(BuildContext context, bool isMobile) {
-    final multitoolItems = [
-      ('spadki', 'Spadek napięcia', Icons.trending_down, false),
-      ('srednice', 'Dobór rur termokurczliwych', Icons.straighten, false),
-      ('opisowki', 'Generator znaczników opisowych', Icons.label, true),
-      ('osd_checker', 'Przygotowanie do odbiorów OSD', Icons.rule_folder, false),
-      ('pomiary', 'Pomiary', Icons.speed, false),
-      ('zwarcie', 'Zwarcie', Icons.flash_on, false),
-      ('rcd_selector', 'RCD', Icons.check_circle, false),
-      ('uziemienie', 'Projekt Uziemienia', Icons.electrical_services, false),
-    ];
 
-    return GridView.count(
-      crossAxisCount: isMobile ? 2 : 4,
-      mainAxisSpacing: 8,
-      crossAxisSpacing: 8,
-      shrinkWrap: true,
-      physics: const NeverScrollableScrollPhysics(),
-      childAspectRatio: 1.0,
-      children: multitoolItems
-          .map(
-            (item) => _buildMultitoolTile(
-              context,
-              item.$2,
-              item.$3,
-              item.$1,
-              isPremium: item.$4,
-            ),
-          )
-          .toList(),
-    );
-  }
-
-  Widget _buildMultitoolTile(
-    BuildContext context,
-    String label,
-    IconData icon,
-    String routeId,
-    {required bool isPremium}
-  ) {
-    return Consumer2<MonetizationProvider, AppSettingsProvider>(
-      builder: (context, monetization, settings, _) {
-        final isLocked = isPremium && !monetization.isPro;
-
-        return Material(
-          color: Colors.transparent,
-          child: InkWell(
-            onTap: () {
-              if (isLocked) {
-                _showProRequiredSnackBar(context);
-                if (settings.autoOpenPaywallForLockedFeatures) {
-                  Navigator.pushNamed(context, '/paywall');
-                }
-                return;
-              }
-
-              _navigateToMultitoolFeature(context, routeId);
-            },
-            borderRadius: BorderRadius.circular(12),
-            child: Container(
-              decoration: BoxDecoration(
-                color: GridTheme.azureBlue,
-                borderRadius: BorderRadius.circular(12),
-                border: Border.all(
-                  color: Colors.grey[700]!,
-                  width: 1,
-                ),
-              ),
-              child: Stack(
-                children: [
-                  Center(
-                    child: Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        Icon(
-                          icon,
-                          color: GridTheme.electricYellow,
-                          size: 32,
-                        ),
-                        const SizedBox(height: 8),
-                        Text(
-                          label,
-                          textAlign: TextAlign.center,
-                          style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                                color: Colors.white,
-                                fontWeight: FontWeight.bold,
-                              ),
-                          maxLines: 2,
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                      ],
-                    ),
-                  ),
-                  if (isLocked)
-                    const Positioned(
-                      right: 8,
-                      top: 8,
-                      child: Icon(
-                        Icons.lock,
-                        size: 16,
-                        color: Colors.white,
-                      ),
-                    ),
-                ],
-              ),
-            ),
-          ),
-        );
-      },
-    );
-  }
 
   Widget _buildDashboardButton(
     BuildContext context,
@@ -432,12 +311,6 @@ class DashboardScreen extends StatelessWidget {
         content: Text('Ta funkcja jest dostępna w wersji PRO.'),
       ),
     );
-  }
-
-  void _navigateToMultitoolFeature(BuildContext context, String featureId) {
-    // This will be handled by the Multitool screen's navigation logic
-    // For now, we navigate to Multitool and will rely on state management
-    Navigator.pushNamed(context, '/multitool');
   }
 
   void _showMonetizationDebugSheet(BuildContext context) {

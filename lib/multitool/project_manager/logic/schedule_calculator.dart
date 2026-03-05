@@ -168,6 +168,10 @@ ZŁOŻONOŚĆ: ${assessComplexity(config)}
         return 'Malowanie, lakierowanie (po pierwszych instalacjach)';
       case BuildingStage.finalizacja:
         return 'Drzwi finalne, meblościany, ostatnie poprawki';
+      case BuildingStage.ozeInstalacje:
+        return 'Instalacje fotowoltaiczne (PV), magazyny energii (BESS)';
+      case BuildingStage.evInfrastruktura:
+        return 'Infrastruktura ładowania EV, punkty ładowania, DLM';
       case BuildingStage.oddawanie:
         return 'Pomiary, dokumentacja, certyfikaty, odbiór;';
     }
