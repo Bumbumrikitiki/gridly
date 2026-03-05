@@ -1500,7 +1500,7 @@ class _BuildingSetup {
 
   _BuildingSetup({
     this.numberOfFloors = 5,
-    this.basementLevels = 0,
+    this.basementLevels = 1,
     this.hasGarage = false,
     this.hasParking = false,
   }) : stairCases = [_StairCaseSetup(numberOfFloors: numberOfFloors)];

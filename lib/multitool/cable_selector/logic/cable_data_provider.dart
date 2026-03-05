@@ -17,25 +17,36 @@ class CableDataProvider {
     return {
       ..._buildYDY(),
       ..._buildYDYP(),
+      ..._buildOMY(),
       ..._buildYKY(),
-      ..._buildYKXS(),
       ..._buildN2XH(),
+      ..._buildHDGS(),
+      ..._buildHLGS(),
       ..._buildNHXH(),
-      ..._buildNTSCGEFLOXCY(),
-      ..._buildNSGAFOUGEFLOXCY(),
-      ..._buildN2XCY(),
-      ..._buildNYCY(),
-      ..._buildLFLEX(),
-      ..._buildKYCH(),
-      ..._buildJYY(),
-      ..._buildYQQW(),
+      ..._buildHTKSH(),
+      ..._buildUTP5E(),
+      ..._buildUTP6(),
+      ..._buildFUTP6(),
+      ..._buildSFTP7(),
+      ..._buildRG6(),
+      ..._buildRG11(),
+      ..._buildYTNKSY(),
+      ..._buildLIYY(),
+      ..._buildLIYCYEK(),
+      ..._buildYSLY(),
+      ..._buildBIT500CY(),
+      ..._buildH07RNF(),
+      ..._buildYHAKXS(),
+      ..._buildXHAKXS(),
+      ..._buildXRUHAKXS(),
+      ..._buildA2XSY(),
     };
   }
 
   static Map<CableType, Map<double, CableData>> _buildAluminumCables() {
     return {
       ..._buildYAKY(),
-      ..._buildNA2XY(),
+      ..._buildNA2XSY(),
     };
   }
 
@@ -207,38 +218,6 @@ class CableDataProvider {
     };
   }
 
-  // YKXS - Kabel z izolacją XLPE
-  static Map<CableType, Map<double, CableData>> _buildYKXS() {
-    return {
-      CableType.ykxs: {
-        16.0: CableData(
-          material: CableMaterial.cu,
-          type: CableType.ykxs,
-          crossSection: 16.0,
-          coreType: CoreType.re,
-          outerDiameter: 18.5,
-          heatShrinkSleeve: '30/10',
-          heatShrinkLabel: '15/5',
-          application: CableApplication.electrical,
-          maxVoltage: '0.6/1 kV',
-          temperatureRange: '-40°C do +90°C',
-        ),
-        25.0: CableData(
-          material: CableMaterial.cu,
-          type: CableType.ykxs,
-          crossSection: 25.0,
-          coreType: CoreType.sm,
-          outerDiameter: 22.5,
-          heatShrinkSleeve: '40/13',
-          heatShrinkLabel: '20/6',
-          application: CableApplication.electrical,
-          maxVoltage: '0.6/1 kV',
-          temperatureRange: '-40°C do +90°C',
-        ),
-      }
-    };
-  }
-
   // N2XH - Kabel bezhalogenowy (elektryczny, nie pożarowy!)
   static Map<CableType, Map<double, CableData>> _buildN2XH() {
     return {
@@ -278,318 +257,6 @@ class CableDataProvider {
           application: CableApplication.electrical,
           maxVoltage: '0.6/1 kV',
           temperatureRange: '-30°C do +90°C',
-        ),
-      }
-    };
-  }
-
-  // NHXH - Kabel pożarowy (B2ca)
-  static Map<CableType, Map<double, CableData>> _buildNHXH() {
-    return {
-      CableType.nhxh: {
-        1.5: CableData(
-          material: CableMaterial.cu,
-          type: CableType.nhxh,
-          crossSection: 1.5,
-          coreType: CoreType.re,
-          outerDiameter: 9.2,
-          heatShrinkSleeve: '12/4',
-          heatShrinkLabel: '4/1.5',
-          application: CableApplication.fireproof,
-          maxVoltage: '0.6/1 kV',
-          temperatureRange: '-30°C do +90°C',
-        ),
-        2.5: CableData(
-          material: CableMaterial.cu,
-          type: CableType.nhxh,
-          crossSection: 2.5,
-          coreType: CoreType.re,
-          outerDiameter: 10.5,
-          heatShrinkSleeve: '15/5',
-          heatShrinkLabel: '6/2',
-          application: CableApplication.fireproof,
-          maxVoltage: '0.6/1 kV',
-          temperatureRange: '-30°C do +90°C',
-        ),
-        4.0: CableData(
-          material: CableMaterial.cu,
-          type: CableType.nhxh,
-          crossSection: 4.0,
-          coreType: CoreType.re,
-          outerDiameter: 12.0,
-          heatShrinkSleeve: '18/6',
-          heatShrinkLabel: '8/2.5',
-          application: CableApplication.fireproof,
-          maxVoltage: '0.6/1 kV',
-          temperatureRange: '-30°C do +90°C',
-        ),
-      }
-    };
-  }
-
-  // NTSCGEFLOXCY - Kabel pożarowy ekranowany
-  static Map<CableType, Map<double, CableData>> _buildNTSCGEFLOXCY() {
-    return {
-      CableType.ntscgefloxcy: {
-        2.5: CableData(
-          material: CableMaterial.cu,
-          type: CableType.ntscgefloxcy,
-          crossSection: 2.5,
-          coreType: CoreType.re,
-          outerDiameter: 13.5,
-          heatShrinkSleeve: '20/7',
-          heatShrinkLabel: '8/2.5',
-          application: CableApplication.fireproof,
-          maxVoltage: '0.6/1 kV',
-          temperatureRange: '-40°C do +90°C',
-        ),
-        4.0: CableData(
-          material: CableMaterial.cu,
-          type: CableType.ntscgefloxcy,
-          crossSection: 4.0,
-          coreType: CoreType.re,
-          outerDiameter: 15.0,
-          heatShrinkSleeve: '25/8',
-          heatShrinkLabel: '10/3',
-          application: CableApplication.fireproof,
-          maxVoltage: '0.6/1 kV',
-          temperatureRange: '-40°C do +90°C',
-        ),
-      }
-    };
-  }
-
-  // NSGAFOUGEFLOXCY - Kabel pożarowy
-  static Map<CableType, Map<double, CableData>> _buildNSGAFOUGEFLOXCY() {
-    return {
-      CableType.nsgafougefloxcy: {
-        1.5: CableData(
-          material: CableMaterial.cu,
-          type: CableType.nsgafougefloxcy,
-          crossSection: 1.5,
-          coreType: CoreType.re,
-          outerDiameter: 10.5,
-          heatShrinkSleeve: '15/5',
-          heatShrinkLabel: '6/2',
-          application: CableApplication.fireproof,
-          maxVoltage: '0.6/1 kV',
-          temperatureRange: '-40°C do +90°C',
-        ),
-        2.5: CableData(
-          material: CableMaterial.cu,
-          type: CableType.nsgafougefloxcy,
-          crossSection: 2.5,
-          coreType: CoreType.re,
-          outerDiameter: 12.0,
-          heatShrinkSleeve: '18/6',
-          heatShrinkLabel: '8/2.5',
-          application: CableApplication.fireproof,
-          maxVoltage: '0.6/1 kV',
-          temperatureRange: '-40°C do +90°C',
-        ),
-      }
-    };
-  }
-
-  // N2XCY - Kabel ekranowany
-  static Map<CableType, Map<double, CableData>> _buildN2XCY() {
-    return {
-      CableType.n2xcy: {
-        1.5: CableData(
-          material: CableMaterial.cu,
-          type: CableType.n2xcy,
-          crossSection: 1.5,
-          coreType: CoreType.re,
-          outerDiameter: 10.0,
-          heatShrinkSleeve: '15/5',
-          heatShrinkLabel: '6/2',
-          application: CableApplication.industrial,
-          maxVoltage: '0.6/1 kV',
-          temperatureRange: '-40°C do +90°C',
-        ),
-        2.5: CableData(
-          material: CableMaterial.cu,
-          type: CableType.n2xcy,
-          crossSection: 2.5,
-          coreType: CoreType.re,
-          outerDiameter: 11.5,
-          heatShrinkSleeve: '18/6',
-          heatShrinkLabel: '8/2.5',
-          application: CableApplication.industrial,
-          maxVoltage: '0.6/1 kV',
-          temperatureRange: '-40°C do +90°C',
-        ),
-      }
-    };
-  }
-
-  // NYCY - Kabel ekranowany PVC
-  static Map<CableType, Map<double, CableData>> _buildNYCY() {
-    return {
-      CableType.nycy: {
-        1.5: CableData(
-          material: CableMaterial.cu,
-          type: CableType.nycy,
-          crossSection: 1.5,
-          coreType: CoreType.re,
-          outerDiameter: 9.5,
-          heatShrinkSleeve: '15/5',
-          heatShrinkLabel: '6/2',
-          application: CableApplication.industrial,
-          maxVoltage: '0.6/1 kV',
-          temperatureRange: '-30°C do +70°C',
-        ),
-        2.5: CableData(
-          material: CableMaterial.cu,
-          type: CableType.nycy,
-          crossSection: 2.5,
-          coreType: CoreType.re,
-          outerDiameter: 11.0,
-          heatShrinkSleeve: '18/6',
-          heatShrinkLabel: '8/2.5',
-          application: CableApplication.industrial,
-          maxVoltage: '0.6/1 kV',
-          temperatureRange: '-30°C do +70°C',
-        ),
-      }
-    };
-  }
-
-  // LFLEX - Kabel sterowniczy
-  static Map<CableType, Map<double, CableData>> _buildLFLEX() {
-    return {
-      CableType.lflex: {
-        0.75: CableData(
-          material: CableMaterial.cu,
-          type: CableType.lflex,
-          crossSection: 0.75,
-          coreType: CoreType.re,
-          outerDiameter: 7.5,
-          heatShrinkSleeve: '12/4',
-          heatShrinkLabel: '4/1.5',
-          application: CableApplication.control,
-          maxVoltage: '0.3/0.5 kV',
-          temperatureRange: '-5°C do +70°C',
-        ),
-        1.0: CableData(
-          material: CableMaterial.cu,
-          type: CableType.lflex,
-          crossSection: 1.0,
-          coreType: CoreType.re,
-          outerDiameter: 8.0,
-          heatShrinkSleeve: '12/4',
-          heatShrinkLabel: '4/1.5',
-          application: CableApplication.control,
-          maxVoltage: '0.3/0.5 kV',
-          temperatureRange: '-5°C do +70°C',
-        ),
-        1.5: CableData(
-          material: CableMaterial.cu,
-          type: CableType.lflex,
-          crossSection: 1.5,
-          coreType: CoreType.re,
-          outerDiameter: 8.5,
-          heatShrinkSleeve: '12/4',
-          heatShrinkLabel: '4/1.5',
-          application: CableApplication.control,
-          maxVoltage: '0.3/0.5 kV',
-          temperatureRange: '-5°C do +70°C',
-        ),
-      }
-    };
-  }
-
-  // KYCh - Skrętka
-  static Map<CableType, Map<double, CableData>> _buildKYCH() {
-    return {
-      CableType.kych: {
-        0.5: CableData(
-          material: CableMaterial.cu,
-          type: CableType.kych,
-          crossSection: 0.5,
-          coreType: CoreType.re,
-          outerDiameter: 6.0,
-          heatShrinkSleeve: '9/3',
-          heatShrinkLabel: '3/1',
-          application: CableApplication.telecom,
-          maxVoltage: '0.3 kV',
-          temperatureRange: '-10°C do +60°C',
-        ),
-        0.8: CableData(
-          material: CableMaterial.cu,
-          type: CableType.kych,
-          crossSection: 0.8,
-          coreType: CoreType.re,
-          outerDiameter: 7.0,
-          heatShrinkSleeve: '12/4',
-          heatShrinkLabel: '4/1.5',
-          application: CableApplication.telecom,
-          maxVoltage: '0.3 kV',
-          temperatureRange: '-10°C do +60°C',
-        ),
-      }
-    };
-  }
-
-  // JYY - Kabel teletechniczny
-  static Map<CableType, Map<double, CableData>> _buildJYY() {
-    return {
-      CableType.jyy: {
-        0.5: CableData(
-          material: CableMaterial.cu,
-          type: CableType.jyy,
-          crossSection: 0.5,
-          coreType: CoreType.re,
-          outerDiameter: 5.5,
-          heatShrinkSleeve: '9/3',
-          heatShrinkLabel: '3/1',
-          application: CableApplication.telecom,
-          maxVoltage: '0.25 kV',
-          temperatureRange: '-10°C do +50°C',
-        ),
-        0.8: CableData(
-          material: CableMaterial.cu,
-          type: CableType.jyy,
-          crossSection: 0.8,
-          coreType: CoreType.re,
-          outerDiameter: 6.5,
-          heatShrinkSleeve: '12/4',
-          heatShrinkLabel: '4/1.5',
-          application: CableApplication.telecom,
-          maxVoltage: '0.25 kV',
-          temperatureRange: '-10°C do +50°C',
-        ),
-      }
-    };
-  }
-
-  // YQQW - Kabel teletechniczny sygnalizacyjny
-  static Map<CableType, Map<double, CableData>> _buildYQQW() {
-    return {
-      CableType.yqqw: {
-        0.5: CableData(
-          material: CableMaterial.cu,
-          type: CableType.yqqw,
-          crossSection: 0.5,
-          coreType: CoreType.re,
-          outerDiameter: 6.0,
-          heatShrinkSleeve: '9/3',
-          heatShrinkLabel: '3/1',
-          application: CableApplication.telecom,
-          maxVoltage: '0.3 kV',
-          temperatureRange: '-15°C do +70°C',
-        ),
-        0.8: CableData(
-          material: CableMaterial.cu,
-          type: CableType.yqqw,
-          crossSection: 0.8,
-          coreType: CoreType.re,
-          outerDiameter: 7.0,
-          heatShrinkSleeve: '12/4',
-          heatShrinkLabel: '4/1.5',
-          application: CableApplication.telecom,
-          maxVoltage: '0.3 kV',
-          temperatureRange: '-15°C do +70°C',
         ),
       }
     };
@@ -639,47 +306,511 @@ class CableDataProvider {
     };
   }
 
-  // NA2XY - Kabel aluminiowy XLPE
-  static Map<CableType, Map<double, CableData>> _buildNA2XY() {
+  // NA2XSY - Kabel aluminiowy XLPE średnie napięcie
+  static Map<CableType, Map<double, CableData>> _buildNA2XSY() {
     return {
-      CableType.na2xy: {
-        16.0: CableData(
+      CableType.na2xsy: {
+        120.0: CableData(
           material: CableMaterial.al,
-          type: CableType.na2xy,
-          crossSection: 16.0,
+          type: CableType.na2xsy,
+          crossSection: 120.0,
           coreType: CoreType.sm,
-          outerDiameter: 18.5,
-          heatShrinkSleeve: '30/10',
-          heatShrinkLabel: '15/5',
+          outerDiameter: 48.0,
+          heatShrinkSleeve: '70/25',
+          heatShrinkLabel: '40/13',
           application: CableApplication.power,
-          maxVoltage: '0.6/1 kV',
+          maxVoltage: '18/30 kV',
           temperatureRange: '-40°C do +90°C',
-        ),
-        25.0: CableData(
-          material: CableMaterial.al,
-          type: CableType.na2xy,
-          crossSection: 25.0,
-          coreType: CoreType.sm,
-          outerDiameter: 22.5,
-          heatShrinkSleeve: '40/13',
-          heatShrinkLabel: '20/6',
-          application: CableApplication.power,
-          maxVoltage: '0.6/1 kV',
-          temperatureRange: '-40°C do +90°C',
-        ),
-        35.0: CableData(
-          material: CableMaterial.al,
-          type: CableType.na2xy,
-          crossSection: 35.0,
-          coreType: CoreType.sm,
-          outerDiameter: 25.5,
-          heatShrinkSleeve: '45/15',
-          heatShrinkLabel: '25/8',
-          application: CableApplication.power,
-          maxVoltage: '0.6/1 kV',
-          temperatureRange: '-40°C do +90°C',
+          wireConfiguration: WireConfiguration.single,
+          groupNumber: 6,
+          recommendedTubeStandard: HeatShrinkStandard.rgk,
         ),
       }
+    };
+  }
+
+  // OMY / OWY - Przewód warsztatowy
+  static Map<CableType, Map<double, CableData>> _buildOMY() {
+    return {
+      CableType.omy: {
+        1.5: CableData(
+          material: CableMaterial.cu,
+          type: CableType.omy,
+          crossSection: 1.5,
+          coreType: CoreType.re,
+          outerDiameter: 8.4,
+          heatShrinkSleeve: '12/4',
+          heatShrinkLabel: '4/1.5',
+          application: CableApplication.electrical,
+          maxVoltage: '450/750V',
+          temperatureRange: '-30°C do +70°C',
+          groupNumber: 1,
+        ),
+      },
+    };
+  }
+
+  // HDGS - Kabel pożarowy
+  static Map<CableType, Map<double, CableData>> _buildHDGS() {
+    return {
+      CableType.hdgs: {
+        1.0: CableData(
+          material: CableMaterial.cu,
+          type: CableType.hdgs,
+          crossSection: 1.0,
+          coreType: CoreType.re,
+          outerDiameter: 7.8,
+          heatShrinkSleeve: '12/4',
+          heatShrinkLabel: '4/1.5',
+          application: CableApplication.fireproof,
+          maxVoltage: '0.6/1 kV',
+          temperatureRange: '-40°C do +250°C',
+          groupNumber: 3,
+          recommendedTubeStandard: HeatShrinkStandard.rck,
+        ),
+        1.5: CableData(
+          material: CableMaterial.cu,
+          type: CableType.hdgs,
+          crossSection: 1.5,
+          coreType: CoreType.re,
+          outerDiameter: 8.4,
+          heatShrinkSleeve: '12/4',
+          heatShrinkLabel: '6/2',
+          application: CableApplication.fireproof,
+          maxVoltage: '0.6/1 kV',
+          temperatureRange: '-40°C do +250°C',
+          groupNumber: 3,
+          recommendedTubeStandard: HeatShrinkStandard.rck,
+        ),
+      },
+    };
+  }
+
+  // HLGS - Kabel pożarowy
+  static Map<CableType, Map<double, CableData>> _buildHLGS() {
+    return {
+      CableType.hlgs: {
+        1.5: CableData(
+          material: CableMaterial.cu,
+          type: CableType.hlgs,
+          crossSection: 1.5,
+          coreType: CoreType.re,
+          outerDiameter: 8.9,
+          heatShrinkSleeve: '12/4',
+          heatShrinkLabel: '6/2',
+          application: CableApplication.fireproof,
+          maxVoltage: '0.6/1 kV',
+          temperatureRange: '-40°C do +250°C',
+          groupNumber: 3,
+          recommendedTubeStandard: HeatShrinkStandard.rck,
+        ),
+      },
+    };
+  }
+
+  // NHXH E90 - Kabel pożarowy
+  static Map<CableType, Map<double, CableData>> _buildNHXH() {
+    return {
+      CableType.nhxh: {
+        1.5: CableData(
+          material: CableMaterial.cu,
+          type: CableType.nhxh,
+          crossSection: 1.5,
+          coreType: CoreType.re,
+          outerDiameter: 15.5,
+          heatShrinkSleeve: '24/8',
+          heatShrinkLabel: '8/3',
+          application: CableApplication.fireproof,
+          maxVoltage: '0.6/1 kV',
+          temperatureRange: '-40°C do +90°C',
+          wireConfiguration: WireConfiguration.threeWire,
+          groupNumber: 3,
+          recommendedTubeStandard: HeatShrinkStandard.rck,
+        ),
+      },
+    };
+  }
+
+  // HTKSH - Kabel pożarowy ekranowany
+  static Map<CableType, Map<double, CableData>> _buildHTKSH() {
+    return {
+      CableType.htksh: {
+        0.8: CableData(
+          material: CableMaterial.cu,
+          type: CableType.htksh,
+          crossSection: 0.8,
+          coreType: CoreType.re,
+          outerDiameter: 6.2,
+          heatShrinkSleeve: '9.5/4.8',
+          heatShrinkLabel: '4/1.5',
+          application: CableApplication.fireproof,
+          maxVoltage: '300V',
+          temperatureRange: '-40°C do +250°C',
+          groupNumber: 3,
+          recommendedTubeStandard: HeatShrinkStandard.rc,
+        ),
+      },
+    };
+  }
+
+  // U/UTP 5e - Kabel sieciowy
+  static Map<CableType, Map<double, CableData>> _buildUTP5E() {
+    return {
+      CableType.utp5e: {
+        24.0: CableData(
+          material: CableMaterial.cu,
+          type: CableType.utp5e,
+          crossSection: 24.0,
+          coreType: CoreType.re,
+          outerDiameter: 5.2,
+          heatShrinkSleeve: '6/2',
+          heatShrinkLabel: '3/1',
+          application: CableApplication.telecom,
+          maxVoltage: '300V',
+          temperatureRange: '-10°C do +60°C',
+          groupNumber: 4,
+          recommendedTubeStandard: HeatShrinkStandard.rck,
+        ),
+      },
+    };
+  }
+
+  // U/UTP 6 - Kabel sieciowy
+  static Map<CableType, Map<double, CableData>> _buildUTP6() {
+    return {
+      CableType.utp6: {
+        24.0: CableData(
+          material: CableMaterial.cu,
+          type: CableType.utp6,
+          crossSection: 24.0,
+          coreType: CoreType.re,
+          outerDiameter: 6.3,
+          heatShrinkSleeve: '9.5/4.8',
+          heatShrinkLabel: '4/1.5',
+          application: CableApplication.telecom,
+          maxVoltage: '300V',
+          temperatureRange: '-10°C do +60°C',
+          groupNumber: 4,
+          recommendedTubeStandard: HeatShrinkStandard.rck,
+        ),
+      },
+    };
+  }
+
+  // F/UTP 6 - Kabel sieciowy ekranowany
+  static Map<CableType, Map<double, CableData>> _buildFUTP6() {
+    return {
+      CableType.futp6: {
+        24.0: CableData(
+          material: CableMaterial.cu,
+          type: CableType.futp6,
+          crossSection: 24.0,
+          coreType: CoreType.re,
+          outerDiameter: 7.2,
+          heatShrinkSleeve: '12/4',
+          heatShrinkLabel: '6/2',
+          application: CableApplication.telecom,
+          maxVoltage: '300V',
+          temperatureRange: '-10°C do +60°C',
+          groupNumber: 4,
+          recommendedTubeStandard: HeatShrinkStandard.rck,
+        ),
+      },
+    };
+  }
+
+  // S/FTP 7 - Kabel sieciowy ekranowany podwójnie
+  static Map<CableType, Map<double, CableData>> _buildSFTP7() {
+    return {
+      CableType.sftp7: {
+        24.0: CableData(
+          material: CableMaterial.cu,
+          type: CableType.sftp7,
+          crossSection: 24.0,
+          coreType: CoreType.re,
+          outerDiameter: 7.8,
+          heatShrinkSleeve: '12/4',
+          heatShrinkLabel: '6/2',
+          application: CableApplication.telecom,
+          maxVoltage: '300V',
+          temperatureRange: '-10°C do +60°C',
+          groupNumber: 4,
+          recommendedTubeStandard: HeatShrinkStandard.rck,
+        ),
+      },
+    };
+  }
+
+  // RG6 - Kabel koaksjalny SAT
+  static Map<CableType, Map<double, CableData>> _buildRG6() {
+    return {
+      CableType.rg6: {
+        75.0: CableData(
+          material: CableMaterial.cu,
+          type: CableType.rg6,
+          crossSection: 75.0,
+          coreType: CoreType.sm,
+          outerDiameter: 6.8,
+          heatShrinkSleeve: '9.5/4.8',
+          heatShrinkLabel: '4/1.5',
+          application: CableApplication.telecom,
+          maxVoltage: '300V',
+          temperatureRange: '-40°C do +70°C',
+          groupNumber: 4,
+          recommendedTubeStandard: HeatShrinkStandard.rc,
+        ),
+      },
+    };
+  }
+
+  // RG11 - Kabel koaksjalny SAT
+  static Map<CableType, Map<double, CableData>> _buildRG11() {
+    return {
+      CableType.rg11: {
+        75.0: CableData(
+          material: CableMaterial.cu,
+          type: CableType.rg11,
+          crossSection: 75.0,
+          coreType: CoreType.sm,
+          outerDiameter: 10.3,
+          heatShrinkSleeve: '19.1/9.5',
+          heatShrinkLabel: '9.5/4.8',
+          application: CableApplication.telecom,
+          maxVoltage: '300V',
+          temperatureRange: '-40°C do +70°C',
+          groupNumber: 4,
+          recommendedTubeStandard: HeatShrinkStandard.rc,
+        ),
+      },
+    };
+  }
+
+  // YnTKSY - Kabel teletechniczny
+  static Map<CableType, Map<double, CableData>> _buildYTNKSY() {
+    return {
+      CableType.ytnksy: {
+        0.5: CableData(
+          material: CableMaterial.cu,
+          type: CableType.ytnksy,
+          crossSection: 0.5,
+          coreType: CoreType.re,
+          outerDiameter: 4.2,
+          heatShrinkSleeve: '6/2',
+          heatShrinkLabel: '3/1',
+          application: CableApplication.telecom,
+          maxVoltage: '300V',
+          temperatureRange: '-20°C do +70°C',
+          groupNumber: 4,
+          recommendedTubeStandard: HeatShrinkStandard.rc,
+        ),
+      },
+    };
+  }
+
+  // LiYY - Kabel sterowniczy
+  static Map<CableType, Map<double, CableData>> _buildLIYY() {
+    return {
+      CableType.liyy: {
+        0.5: CableData(
+          material: CableMaterial.cu,
+          type: CableType.liyy,
+          crossSection: 0.5,
+          coreType: CoreType.re,
+          outerDiameter: 4.8,
+          heatShrinkSleeve: '6/2',
+          heatShrinkLabel: '3/1',
+          application: CableApplication.control,
+          maxVoltage: '300/500V',
+          temperatureRange: '-20°C do +70°C',
+          wireConfiguration: WireConfiguration.twoWire,
+          groupNumber: 5,
+          recommendedTubeStandard: HeatShrinkStandard.rc,
+        ),
+      },
+    };
+  }
+
+  // LiYCY ekranowany - Kabel sterowniczy ekranowany
+  static Map<CableType, Map<double, CableData>> _buildLIYCYEK() {
+    return {
+      CableType.liycyekaprn: {
+        0.75: CableData(
+          material: CableMaterial.cu,
+          type: CableType.liycyekaprn,
+          crossSection: 0.75,
+          coreType: CoreType.re,
+          outerDiameter: 6.2,
+          heatShrinkSleeve: '9.5/4.8',
+          heatShrinkLabel: '4/1.5',
+          application: CableApplication.control,
+          maxVoltage: '300/500V',
+          temperatureRange: '-20°C do +70°C',
+          wireConfiguration: WireConfiguration.twoWire,
+          groupNumber: 5,
+          recommendedTubeStandard: HeatShrinkStandard.rck,
+        ),
+      },
+    };
+  }
+
+  // YSLY / JZ-500 - Kabel sterowniczy
+  static Map<CableType, Map<double, CableData>> _buildYSLY() {
+    return {
+      CableType.ysly: {
+        1.0: CableData(
+          material: CableMaterial.cu,
+          type: CableType.ysly,
+          crossSection: 1.0,
+          coreType: CoreType.re,
+          outerDiameter: 6.5,
+          heatShrinkSleeve: '9.5/4.8',
+          heatShrinkLabel: '4/1.5',
+          application: CableApplication.control,
+          maxVoltage: '300V',
+          temperatureRange: '-30°C do +70°C',
+          wireConfiguration: WireConfiguration.threeWire,
+          groupNumber: 5,
+          recommendedTubeStandard: HeatShrinkStandard.rck,
+        ),
+      },
+    };
+  }
+
+  // BiT 500 CY - Kabel sterowniczy ekranowany
+  static Map<CableType, Map<double, CableData>> _buildBIT500CY() {
+    return {
+      CableType.bit500cy: {
+        1.5: CableData(
+          material: CableMaterial.cu,
+          type: CableType.bit500cy,
+          crossSection: 1.5,
+          coreType: CoreType.re,
+          outerDiameter: 9.2,
+          heatShrinkSleeve: '12/4',
+          heatShrinkLabel: '6/2',
+          application: CableApplication.control,
+          maxVoltage: '300V',
+          temperatureRange: '-20°C do +70°C',
+          wireConfiguration: WireConfiguration.threeWire,
+          groupNumber: 5,
+          recommendedTubeStandard: HeatShrinkStandard.rck,
+        ),
+      },
+    };
+  }
+
+  // H07RN-F - Kabel gumowy OnPD
+  static Map<CableType, Map<double, CableData>> _buildH07RNF() {
+    return {
+      CableType.h07rnf: {
+        1.5: CableData(
+          material: CableMaterial.cu,
+          type: CableType.h07rnf,
+          crossSection: 1.5,
+          coreType: CoreType.re,
+          outerDiameter: 10.5,
+          heatShrinkSleeve: '19.1/9.5',
+          heatShrinkLabel: '9.5/4.8',
+          application: CableApplication.industrial,
+          maxVoltage: '450/750V',
+          temperatureRange: '-40°C do +70°C',
+          wireConfiguration: WireConfiguration.threeWire,
+          groupNumber: 5,
+          recommendedTubeStandard: HeatShrinkStandard.rck,
+        ),
+      },
+    };
+  }
+
+  // YHAKXS - Kabel średnie napięcie
+  static Map<CableType, Map<double, CableData>> _buildYHAKXS() {
+    return {
+      CableType.yhakxs: {
+        35.0: CableData(
+          material: CableMaterial.cu,
+          type: CableType.yhakxs,
+          crossSection: 35.0,
+          coreType: CoreType.sm,
+          outerDiameter: 26.0,
+          heatShrinkSleeve: '40/13',
+          heatShrinkLabel: '19.1/9.5',
+          application: CableApplication.power,
+          maxVoltage: '12/20 kV',
+          temperatureRange: '-40°C do +70°C',
+          wireConfiguration: WireConfiguration.single,
+          groupNumber: 6,
+          recommendedTubeStandard: HeatShrinkStandard.rgk,
+        ),
+      },
+    };
+  }
+
+  // XHAKXS - Kabel średnie napięcie
+  static Map<CableType, Map<double, CableData>> _buildXHAKXS() {
+    return {
+      CableType.xhakxs: {
+        120.0: CableData(
+          material: CableMaterial.cu,
+          type: CableType.xhakxs,
+          crossSection: 120.0,
+          coreType: CoreType.sm,
+          outerDiameter: 34.0,
+          heatShrinkSleeve: '55/15',
+          heatShrinkLabel: '24.0/8',
+          application: CableApplication.power,
+          maxVoltage: '12/20 kV',
+          temperatureRange: '-40°C do +70°C',
+          wireConfiguration: WireConfiguration.single,
+          groupNumber: 6,
+          recommendedTubeStandard: HeatShrinkStandard.rgk,
+        ),
+      },
+    };
+  }
+
+  // XRUHAKXS - Kabel średnie napięcie pancerz
+  static Map<CableType, Map<double, CableData>> _buildXRUHAKXS() {
+    return {
+      CableType.xruhakxs: {
+        120.0: CableData(
+          material: CableMaterial.cu,
+          type: CableType.xruhakxs,
+          crossSection: 120.0,
+          coreType: CoreType.sm,
+          outerDiameter: 38.0,
+          heatShrinkSleeve: '55/15',
+          heatShrinkLabel: '24.0/8',
+          application: CableApplication.power,
+          maxVoltage: '12/20 kV',
+          temperatureRange: '-40°C do +70°C',
+          wireConfiguration: WireConfiguration.single,
+          groupNumber: 6,
+          recommendedTubeStandard: HeatShrinkStandard.rgk,
+        ),
+      },
+    };
+  }
+
+  // A2XSY - Kabel średnie napięcie
+  static Map<CableType, Map<double, CableData>> _buildA2XSY() {
+    return {
+      CableType.a2xsy: {
+        120.0: CableData(
+          material: CableMaterial.cu,
+          type: CableType.a2xsy,
+          crossSection: 120.0,
+          coreType: CoreType.sm,
+          outerDiameter: 43.0,
+          heatShrinkSleeve: '55/15',
+          heatShrinkLabel: '24.0/8',
+          application: CableApplication.power,
+          maxVoltage: '18/30 kV',
+          temperatureRange: '-40°C do +70°C',
+          wireConfiguration: WireConfiguration.single,
+          groupNumber: 6,
+          recommendedTubeStandard: HeatShrinkStandard.rgk,
+        ),
+      },
     };
   }
 
@@ -740,6 +871,27 @@ class CableDataProvider {
       }
     }
     return types;
+  }
+
+  // Sugestia standardu rury na podstawie warunków pracy
+  static HeatShrinkStandard suggestTubeStandardForCondition(
+    WorkingCondition condition,
+  ) {
+    return CableData.suggestTubeStandard(condition);
+  }
+
+  // Pobierz sugerowane rury na podstawie średnicy kabla i warunku
+  static List<HeatShrinkTube> suggestTubesForCable(
+    double cableDiameter,
+    WorkingCondition condition,
+  ) {
+    final standard = CableData.suggestTubeStandard(condition);
+    return CableData.suggestTubesForCableDiameter(cableDiameter, standard);
+  }
+
+  // Pobierz dostępne warianty warunków pracy
+  static List<WorkingCondition> getAvailableWorkingConditions() {
+    return WorkingCondition.values;
   }
 
   // Oblicz rekomendowaną rurę 3:1 na podstawie średnicy kabla

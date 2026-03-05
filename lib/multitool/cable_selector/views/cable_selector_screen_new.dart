@@ -20,6 +20,7 @@ class _CableSelectorScreenState extends State<CableSelectorScreen>
   CableMaterial? _selectedMaterial;
   CableType? _selectedType;
   double? _selectedCrossSection;
+  WorkingCondition _selectedWorkingCondition = WorkingCondition.interior;
   CableData? _result;
 
   late AnimationController _animationController;
@@ -83,6 +84,13 @@ class _CableSelectorScreenState extends State<CableSelectorScreen>
           crossSection,
         );
       }
+    });
+    _animationController.forward(from: 0);
+  }
+
+  void _onWorkingConditionSelected(WorkingCondition condition) {
+    setState(() {
+      _selectedWorkingCondition = condition;
     });
     _animationController.forward(from: 0);
   }
@@ -424,6 +432,14 @@ class _CableSelectorScreenState extends State<CableSelectorScreen>
   Widget _buildResult() {
     if (_result == null) return const SizedBox.shrink();
 
+    final tubeStandard = CableDataProvider.suggestTubeStandardForCondition(
+      _selectedWorkingCondition,
+    );
+    final suggestedTubes = CableDataProvider.suggestTubesForCable(
+      _result!.outerDiameter,
+      _selectedWorkingCondition,
+    );
+
     return SlideTransition(
       position: Tween<Offset>(
         begin: const Offset(0, 0.1),
@@ -518,6 +534,32 @@ class _CableSelectorScreenState extends State<CableSelectorScreen>
                 ),
                 const Divider(height: 32, color: Colors.grey),
                 Text(
+                  'Warunki pracy',
+                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                        color: _amber,
+                        fontWeight: FontWeight.bold,
+                      ),
+                ),
+                const SizedBox(height: 12),
+                Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
+                  children: CableDataProvider.getAvailableWorkingConditions()
+                      .map(
+                        (condition) => _buildWorkingConditionChip(condition),
+                      )
+                      .toList(),
+                ),
+                const SizedBox(height: 16),
+                _buildResultRow(
+                  'Standard rury',
+                  HeatShrinkTube.standardToString(tubeStandard),
+                  Icons.rule,
+                ),
+                const SizedBox(height: 8),
+                _buildTubeStandardBadge(tubeStandard),
+                const SizedBox(height: 16),
+                Text(
                   'Rekomendowane rury',
                   style: Theme.of(context).textTheme.titleMedium?.copyWith(
                         color: _amber,
@@ -536,6 +578,45 @@ class _CableSelectorScreenState extends State<CableSelectorScreen>
                   _result!.heatShrinkLabel,
                   Icons.label,
                 ),
+                if (suggestedTubes.isNotEmpty) ...[
+                  const SizedBox(height: 16),
+                  Text(
+                    'Dopasowane średnice (z zapasem 20%)',
+                    style: TextStyle(
+                      color: Colors.grey[300],
+                      fontSize: 13,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  Wrap(
+                    spacing: 8,
+                    runSpacing: 8,
+                    children: suggestedTubes
+                        .take(4)
+                        .map(
+                          (tube) => Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 10,
+                              vertical: 6,
+                            ),
+                            decoration: BoxDecoration(
+                              color: _deepNavy,
+                              borderRadius: BorderRadius.circular(8),
+                              border: Border.all(color: Colors.grey[700]!),
+                            ),
+                            child: Text(
+                              tube.description,
+                              style: const TextStyle(
+                                color: Colors.white,
+                                fontSize: 12,
+                              ),
+                            ),
+                          ),
+                        )
+                        .toList(),
+                  ),
+                ],
               ],
             ),
           ),
@@ -567,6 +648,71 @@ class _CableSelectorScreenState extends State<CableSelectorScreen>
           ),
         ),
       ],
+    );
+  }
+
+  Widget _buildTubeStandardBadge(HeatShrinkStandard standard) {
+    final color = _getTubeStandardColor(standard);
+    final shortLabel = standard.name.toUpperCase();
+
+    return Align(
+      alignment: Alignment.centerLeft,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+        decoration: BoxDecoration(
+          color: color.withOpacity(0.18),
+          borderRadius: BorderRadius.circular(999),
+          border: Border.all(color: color, width: 1.4),
+        ),
+        child: Text(
+          shortLabel,
+          style: TextStyle(
+            color: color,
+            fontWeight: FontWeight.bold,
+            fontSize: 12,
+            letterSpacing: 0.5,
+          ),
+        ),
+      ),
+    );
+  }
+
+  Color _getTubeStandardColor(HeatShrinkStandard standard) {
+    switch (standard) {
+      case HeatShrinkStandard.rc:
+        return const Color(0xFF4FC3F7);
+      case HeatShrinkStandard.rck:
+        return _amber;
+      case HeatShrinkStandard.rgk:
+        return const Color(0xFFFF6B6B);
+    }
+  }
+
+  Widget _buildWorkingConditionChip(WorkingCondition condition) {
+    final isSelected = _selectedWorkingCondition == condition;
+    return InkWell(
+      onTap: () => _onWorkingConditionSelected(condition),
+      borderRadius: BorderRadius.circular(10),
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 180),
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+        decoration: BoxDecoration(
+          color: isSelected ? _electricBlue : _deepNavy,
+          borderRadius: BorderRadius.circular(10),
+          border: Border.all(
+            color: isSelected ? _amber : Colors.grey[700]!,
+            width: 1.5,
+          ),
+        ),
+        child: Text(
+          CableData.workingConditionToString(condition),
+          style: TextStyle(
+            color: Colors.white,
+            fontSize: 12,
+            fontWeight: isSelected ? FontWeight.bold : FontWeight.w500,
+          ),
+        ),
+      ),
     );
   }
 
