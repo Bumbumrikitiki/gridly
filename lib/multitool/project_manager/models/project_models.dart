@@ -64,6 +64,64 @@ enum ElectricalSystemType {
   itp, // Inne
 }
 
+/// Extension for ElectricalSystemType
+extension ElectricalSystemTypeExtension on ElectricalSystemType {
+  String get displayName {
+    switch (this) {
+      case ElectricalSystemType.oswietlenie:
+        return '💡 Oświetlenie';
+      case ElectricalSystemType.zasilanie:
+        return '🔌 Zasilanie (gniazda)';
+      case ElectricalSystemType.klimatyzacja:
+        return '❄️ Klimatyzacja';
+      case ElectricalSystemType.windaAscensor:
+        return '🛗 Winda';
+      case ElectricalSystemType.domofonowa:
+        return '📞 Domofon';
+      case ElectricalSystemType.telewizja:
+        return '📺 Telewizja';
+      case ElectricalSystemType.internet:
+        return '🌐 Internet/LAN';
+      case ElectricalSystemType.odgromowa:
+        return '⚡ Ochrona odgromowa';
+      case ElectricalSystemType.panelePV:
+        return '☀️ Panele słoneczne';
+      case ElectricalSystemType.ladownarki:
+        return '🔋 Ładowarki samochodowe';
+      case ElectricalSystemType.agregat:
+        return '⚙️ Agregat prądotwórczy';
+      case ElectricalSystemType.ppoz:
+        return '🚨 System ppoż';
+      case ElectricalSystemType.dso:
+        return '🔥 Detektory dymu';
+      case ElectricalSystemType.czujnikiRuchu:
+        return '👁️ Czujniki ruchu/alarm';
+      case ElectricalSystemType.podgrzewanePodjazdy:
+        return '🔥 Grzejniki podjazdów';
+      case ElectricalSystemType.ogrzewanieRur:
+        return '🔥 Grzejniki rur';
+      case ElectricalSystemType.cctv:
+        return '📹 CCTV/Monitoring';
+      case ElectricalSystemType.sswim:
+        return '📡 SSWIM';
+      case ElectricalSystemType.gaszeniGazem:
+        return '💨 Gaszenie gazem';
+      case ElectricalSystemType.ewakuacyjne:
+        return '🚪 Oprawy ewakuacyjne';
+      case ElectricalSystemType.smartHome:
+        return '🏠 Automatyka (smart home)';
+      case ElectricalSystemType.oddymianieKlatek:
+        return '💨 Oddymianie klatek';
+      case ElectricalSystemType.bms:
+        return '🖥️ BMS';
+      case ElectricalSystemType.wykrywaniWyciekow:
+        return '💧 Detektory wycieków';
+      case ElectricalSystemType.itp:
+        return '➕ Inne';
+    }
+  }
+}
+
 enum BuildingStage {
   przygotowanie, // Faza 0: Projekty, harmonogram, zamówienia
   fundamenty, // Faza 1: Fundamenty, dreny

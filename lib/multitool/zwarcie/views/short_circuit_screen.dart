@@ -115,6 +115,84 @@ class _ShortCircuitScreenState extends State<ShortCircuitScreen> {
             ),
             const SizedBox(height: 24),
 
+            // ═══════════════════════════════════════════════════════════════
+            // INFO CARD: Czynniki wpływające na prąd zwarcia
+            // ═══════════════════════════════════════════════════════════════
+            Card(
+              color: colors.surfaceContainer,
+              child: Padding(
+                padding: const EdgeInsets.all(16),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        Icon(Icons.lightbulb_outline, color: colors.primary, size: 24),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: Text(
+                            'Od czego zależy prąd zwarcia?',
+                            style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                                  fontWeight: FontWeight.bold,
+                                ),
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 12),
+                    _buildFactorItem(
+                      context,
+                      colors,
+                      '1. Isc sieci (źródła)',
+                      'Im wyższa charakterystyka zwarciowa źródła zasilania (dostawcy)',
+                      Icons.flash_on,
+                    ),
+                    const SizedBox(height: 8),
+                    _buildFactorItem(
+                      context,
+                      colors,
+                      '2. Długość kabla',
+                      'Im dłuższy kabel → wyższy opór → niższy Isc na końcu',
+                      Icons.straighten,
+                    ),
+                    const SizedBox(height: 8),
+                    _buildFactorItem(
+                      context,
+                      colors,
+                      '3. Przekrój kabla (mm²)',
+                      'Większy przekrój (mm²) → niższy opór → wyższy Isc',
+                      Icons.circle,
+                    ),
+                    const SizedBox(height: 8),
+                    _buildFactorItem(
+                      context,
+                      colors,
+                      '4. Materiał kabla',
+                      'Miedź (ρ=0,0178) ma lepszą przewodność niż aluminium',
+                      Icons.category,
+                    ),
+                    const SizedBox(height: 8),
+                    _buildFactorItem(
+                      context,
+                      colors,
+                      '5. Temperatura kabla',
+                      'Cieplejszy kabel → wyższy opór → niższy Isc w warunkach nominalnych',
+                      Icons.thermostat,
+                    ),
+                    const SizedBox(height: 8),
+                    _buildFactorItem(
+                      context,
+                      colors,
+                      '6. Napięcie sieci',
+                      'Isc = U / R (przy stałym R, niższe U → niższy Isc)',
+                      Icons.electrical_services,
+                    ),
+                  ],
+                ),
+              ),
+            ),
+            const SizedBox(height: 24),
+
             // Input section
             Text(
               'Parametry sieci i kabla',
@@ -643,6 +721,55 @@ class _ShortCircuitScreenState extends State<ShortCircuitScreen> {
               .toList(),
         ),
       ),
+    );
+  }
+
+  /// Buduje element dla jednego czynnika wpływającego na prąd zwarcia
+  Widget _buildFactorItem(
+    BuildContext context,
+    ColorScheme colors,
+    String title,
+    String description,
+    IconData icon,
+  ) {
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Container(
+          padding: const EdgeInsets.all(6),
+          decoration: BoxDecoration(
+            color: colors.primary.withOpacity(0.2),
+            shape: BoxShape.circle,
+          ),
+          child: Icon(
+            icon,
+            size: 16,
+            color: colors.primary,
+          ),
+        ),
+        const SizedBox(width: 10),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                title,
+                style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                      fontWeight: FontWeight.bold,
+                      color: colors.primary,
+                    ),
+              ),
+              const SizedBox(height: 2),
+              Text(
+                description,
+                style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                      color: colors.onSurfaceVariant,
+                    ),
+              ),
+            ],
+          ),
+        ),
+      ],
     );
   }
 }

@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:gridly/multitool/project_manager/models/project_models.dart';
+import 'package:gridly/multitool/project_manager/models/building_hierarchy.dart';
 import 'package:gridly/multitool/project_manager/logic/project_manager_provider.dart';
 import 'package:gridly/multitool/project_manager/views/unit_detail_screen.dart';
+import 'package:gridly/multitool/project_manager/views/advanced_configuration_wizard.dart';
 
 class ProjectManagerScreen extends StatefulWidget {
   const ProjectManagerScreen({Key? key}) : super(key: key);
@@ -76,46 +78,44 @@ class _ProjectManagerScreenState extends State<ProjectManagerScreen>
     BuildContext context,
     ProjectManagerProvider provider,
   ) {
-    return Scaffold(
-      body: _ConfigurationWizard(
-        onConfigComplete: (config) async {
-          try {
-            print('[ProjectManager] Tworzenie projektu: ${config.projectName}');
-            print('[ProjectManager] Systemy: ${config.selectedSystems.length}');
-            print('[ProjectManager] Mieszkań: ${config.estimatedUnits}');
-            
-            // Stwórz nowy projekt
-            await provider.createNewProject(config);
-            
-            print('[ProjectManager] Projekt utworzony!');
-            
-            if (mounted && context.mounted) {
-              ScaffoldMessenger.of(context).showSnackBar(
-                SnackBar(
-                  content: Text('Projekt "${config.projectName}" utworzony!'),
-                  backgroundColor: Colors.green,
-                  duration: const Duration(seconds: 2),
-                ),
-              );
-            }
-            
-            setState(() {}); // Trigger rebuild
-          } catch (e, stackTrace) {
-            print('[ProjectManager] Błąd tworzenia projektu: $e');
-            print('[ProjectManager] Stack trace: $stackTrace');
-            
-            if (mounted && context.mounted) {
-              ScaffoldMessenger.of(context).showSnackBar(
-                SnackBar(
-                  content: Text('Błąd: Nie udało się utworzyć projektu'),
-                  backgroundColor: Colors.red,
-                  duration: const Duration(seconds: 3),
-                ),
-              );
-            }
+    return AdvancedConfigurationWizard(
+      onComplete: (config) async {
+        try {
+          print('[ProjectManager] Tworzenie projektu: ${config.projectName}');
+          print('[ProjectManager] Systemy: ${config.selectedSystems.length}');
+          print('[ProjectManager] Mieszkań: ${config.totalUnits}');
+          
+          // Stwórz nowy projekt
+          await provider.createNewProjectAdvanced(config);
+          
+          print('[ProjectManager] Projekt utworzony!');
+          
+          if (mounted && context.mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Text('Projekt "${config.projectName}" utworzony!'),
+                backgroundColor: Colors.green,
+                duration: const Duration(seconds: 2),
+              ),
+            );
           }
-        },
-      ),
+          
+          setState(() {}); // Trigger rebuild
+        } catch (e, stackTrace) {
+          print('[ProjectManager] Błąd tworzenia projektu: $e');
+          print('[ProjectManager] Stack trace: $stackTrace');
+          
+          if (mounted && context.mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Text('Błąd: Nie udało się utworzyć projektu'),
+                backgroundColor: Colors.red,
+                duration: const Duration(seconds: 3),
+              ),
+            );
+          }
+        }
+      },
     );
   }
 
@@ -1048,474 +1048,3 @@ class _ProjectManagerScreenState extends State<ProjectManagerScreen>
   }
 }
 
-// ═══════════════════════════════════════════════════════════════════════════
-// WIZARD KONFIGURACJI
-// ═══════════════════════════════════════════════════════════════════════════
-
-class _ConfigurationWizard extends StatefulWidget {
-  final Function(BuildingConfiguration) onConfigComplete;
-
-  const _ConfigurationWizard({required this.onConfigComplete});
-
-  @override
-  State<_ConfigurationWizard> createState() => _ConfigurationWizardState();
-}
-
-class _ConfigurationWizardState extends State<_ConfigurationWizard> {
-  int _currentStep = 0;
-
-  // Step 1: Dane podstawowe
-  late String _projectName;
-  late BuildingType _buildingType;
-  late String _address;
-
-  // Step 2: Parametry
-  late int _totalLevels;
-  late int _basementLevels;
-  late bool _hasParking;
-  late bool _hasGarage;
-  late int _numberOfStairCases;
-  late int _unitsPerFloorPerStairCase;
-
-  // Step 3: Zasilanie
-  late PowerSupplyType _powerSupply;
-  late ConnectionType _connectionType;
-
-  // Step 4: Systemy
-  late Set<ElectricalSystemType> _selectedSystems;
-
-  @override
-  void initState() {
-    super.initState();
-    _projectName = '';
-    _buildingType = BuildingType.wielorodzinny;
-    _address = '';
-    _totalLevels = 3;
-    _basementLevels = 0;
-    _hasParking = false;
-    _hasGarage = false;
-    _numberOfStairCases = 2;
-    _unitsPerFloorPerStairCase = 4;
-    _powerSupply = PowerSupplyType.siecNiskiegoNapieciaBezposrednio;
-    _connectionType = ConnectionType.zlaczeDynamiczne;
-    _selectedSystems = {};
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text('Nowy projekt budowy'),
-        elevation: 0,
-      ),
-      body: Column(
-        children: [
-          // PROGRESS STEPPER
-          Padding(
-            padding: const EdgeInsets.all(16),
-            child: Row(
-              children: List.generate(
-                4,
-                (index) => Expanded(
-                  child: Column(
-                    children: [
-                      Container(
-                        width: 40,
-                        height: 40,
-                        decoration: BoxDecoration(
-                          color: index <= _currentStep
-                              ? Colors.blue
-                              : Colors.grey.shade300,
-                          shape: BoxShape.circle,
-                        ),
-                        child: Center(
-                          child: Text(
-                            '${index + 1}',
-                            style: TextStyle(
-                              color: index <= _currentStep
-                                  ? Colors.white
-                                  : Colors.grey,
-                              fontWeight: FontWeight.bold,
-                            ),
-                          ),
-                        ),
-                      ),
-                      const SizedBox(height: 8),
-                      Text(
-                        ['Dane', 'Parametry', 'Zasilanie', 'Systemy'][index],
-                        textAlign: TextAlign.center,
-                        style: const TextStyle(fontSize: 10),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-            ),
-          ),
-          // CONTENT
-          Expanded(
-            child: _buildStepContent(),
-          ),
-          // BUTTONS
-          Padding(
-            padding: const EdgeInsets.all(16),
-            child: Row(
-              children: [
-                if (_currentStep > 0)
-                  ElevatedButton(
-                    onPressed: () {
-                      setState(() => _currentStep--);
-                    },
-                    child: const Text('Wróć'),
-                  ),
-                const Spacer(),
-                if (_currentStep < 3)
-                  ElevatedButton(
-                    onPressed: () {
-                      setState(() => _currentStep++);
-                    },
-                    child: const Text('Dalej'),
-                  )
-                else
-                  ElevatedButton(
-                    onPressed: _createProject,
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: Colors.green,
-                      foregroundColor: Colors.white,
-                    ),
-                    child: const Text('Stwórz projekt'),
-                  ),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildStepContent() {
-    switch (_currentStep) {
-      case 0:
-        return _buildStep1();
-      case 1:
-        return _buildStep2();
-      case 2:
-        return _buildStep3();
-      case 3:
-        return _buildStep4();
-      default:
-        return const SizedBox();
-    }
-  }
-
-  Widget _buildStep1() {
-    return SingleChildScrollView(
-      padding: const EdgeInsets.all(16),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          const Text('Nazwa projektu', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600)),
-          const SizedBox(height: 8),
-          TextField(
-            onChanged: (v) => _projectName = v,
-            decoration: InputDecoration(
-              hintText: 'np. Nowe Mieszkania ul. Główna',
-              border: OutlineInputBorder(),
-            ),
-          ),
-          const SizedBox(height: 24),
-          const Text('Adres budowy', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600)),
-          const SizedBox(height: 8),
-          TextField(
-            onChanged: (v) => _address = v,
-            decoration: InputDecoration(
-              hintText: 'np. ul. Główna 123, Warszawa',
-              border: OutlineInputBorder(),
-            ),
-          ),
-          const SizedBox(height: 24),
-          const Text('Typ budynku', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600)),
-          const SizedBox(height: 8),
-          DropdownButton<BuildingType>(
-            value: _buildingType,
-            isExpanded: true,
-            onChanged: (value) {
-              setState(() => _buildingType = value ?? BuildingType.wielorodzinny);
-            },
-            items: BuildingType.values
-                .map((type) => DropdownMenuItem(
-                      value: type,
-                      child: Text(type.toString().split('.').last),
-                    ))
-                .toList(),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildStep2() {
-    return SingleChildScrollView(
-      padding: const EdgeInsets.all(16),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          const Text('Piętra nadziemne', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600)),
-          const SizedBox(height: 8),
-          Slider(
-            value: _totalLevels.toDouble(),
-            min: 1,
-            max: 30,
-            divisions: 29,
-            label: _totalLevels.toString(),
-            onChanged: (v) {
-              setState(() => _totalLevels = v.toInt());
-            },
-          ),
-          Text('${_totalLevels} pięter nadziemnych'),
-          const SizedBox(height: 24),
-          const Text('Piętra podziemne', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600)),
-          const SizedBox(height: 8),
-          Slider(
-            value: _basementLevels.toDouble(),
-            min: 0,
-            max: 5,
-            divisions: 5,
-            label: _basementLevels.toString(),
-            onChanged: (v) {
-              setState(() => _basementLevels = v.toInt());
-            },
-          ),
-          Text('${_basementLevels} pięter podziemnych'),
-          const SizedBox(height: 24),
-          CheckboxListTile(
-            title: const Text('Parking'),
-            value: _hasParking,
-            onChanged: (v) {
-              setState(() => _hasParking = v ?? false);
-            },
-          ),
-          CheckboxListTile(
-            title: const Text('Garaż'),
-            value: _hasGarage,
-            onChanged: (v) {
-              setState(() => _hasGarage = v ?? false);
-            },
-          ),
-          const SizedBox(height: 24),
-          const Divider(),
-          const SizedBox(height: 16),
-          const Text(
-            'Konfiguracja mieszkań',
-            style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
-          ),
-          const SizedBox(height: 16),
-          const Text('Liczba klatek schodowych', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600)),
-          const SizedBox(height: 8),
-          Slider(
-            value: _numberOfStairCases.toDouble(),
-            min: 1,
-            max: 10,
-            divisions: 9,
-            label: _numberOfStairCases.toString(),
-            onChanged: (v) {
-              setState(() => _numberOfStairCases = v.toInt());
-            },
-          ),
-          Text('$_numberOfStairCases ${_numberOfStairCases == 1 ? "klatka" : "klatki"}'),
-          const SizedBox(height: 24),
-          const Text('Mieszkań na piętro (na klatkę)', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600)),
-          const SizedBox(height: 8),
-          Slider(
-            value: _unitsPerFloorPerStairCase.toDouble(),
-            min: 1,
-            max: 20,
-            divisions: 19,
-            label: _unitsPerFloorPerStairCase.toString(),
-            onChanged: (v) {
-              setState(() => _unitsPerFloorPerStairCase = v.toInt());
-            },
-          ),
-          Text('$_unitsPerFloorPerStairCase mieszkań na piętro (na klatkę)'),
-          const SizedBox(height: 16),
-          Card(
-            color: Colors.blue.shade50,
-            child: Padding(
-              padding: const EdgeInsets.all(16),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const Text(
-                    'Podsumowanie',
-                    style: TextStyle(fontWeight: FontWeight.bold),
-                  ),
-                  const SizedBox(height: 8),
-                  Text('Łączna liczba mieszkań: ${_totalLevels * _numberOfStairCases * _unitsPerFloorPerStairCase}'),
-                  Text('Nazewnictwo: A101-A${_totalLevels}0$_unitsPerFloorPerStairCase${_numberOfStairCases > 1 ? ", B101-B${_totalLevels}0$_unitsPerFloorPerStairCase, ..." : ""}'),
-                ],
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildStep3() {
-    return SingleChildScrollView(
-      padding: const EdgeInsets.all(16),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          const Text('Typ zasilania', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600)),
-          const SizedBox(height: 8),
-          ...PowerSupplyType.values.map((type) => RadioListTile(
-            value: type,
-            groupValue: _powerSupply,
-            onChanged: (v) {
-              setState(() => _powerSupply = v ?? _powerSupply);
-            },
-            title: Text(type.toString().split('.').last),
-          )).toList(),
-          const SizedBox(height: 24),
-          const Text('Typ połączenia', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600)),
-          const SizedBox(height: 8),
-          ...ConnectionType.values.map((type) => RadioListTile(
-            value: type,
-            groupValue: _connectionType,
-            onChanged: (v) {
-              setState(() => _connectionType = v ?? _connectionType);
-            },
-            title: Text(type.toString().split('.').last),
-          )).toList(),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildStep4() {
-    return SingleChildScrollView(
-      padding: const EdgeInsets.all(16),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          const Text('Wybierz systemy elektryczne', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600)),
-          const SizedBox(height: 8),
-          ...[
-            ElectricalSystemType.oswietlenie,
-            ElectricalSystemType.zasilanie,
-            ElectricalSystemType.domofonowa,
-            ElectricalSystemType.odgromowa,
-            ElectricalSystemType.panelePV,
-            ElectricalSystemType.ladownarki,
-            ElectricalSystemType.ppoz,
-            ElectricalSystemType.cctv,
-            ElectricalSystemType.internet,
-            ElectricalSystemType.oddymianieKlatek,
-          ].map((system) => CheckboxListTile(
-            title: Text(_getSystemLabel(system)),
-            value: _selectedSystems.contains(system),
-            onChanged: (v) {
-              setState(() {
-                if (v ?? false) {
-                  _selectedSystems.add(system);
-                } else {
-                  _selectedSystems.remove(system);
-                }
-              });
-            },
-          )).toList(),
-        ],
-      ),
-    );
-  }
-
-  String _getSystemLabel(ElectricalSystemType system) {
-    switch (system) {
-      case ElectricalSystemType.oswietlenie:
-        return '💡 Oświetlenie';
-      case ElectricalSystemType.zasilanie:
-        return '🔌 Zasilanie (gniazda)';
-      case ElectricalSystemType.domofonowa:
-        return '📞 Domofon';
-      case ElectricalSystemType.odgromowa:
-        return '⚡ Ochrona odgromowa';
-      case ElectricalSystemType.panelePV:
-        return '☀️ Panele słoneczne';
-      case ElectricalSystemType.ladownarki:
-        return '🔋 Ładowarki samochodowe';
-      case ElectricalSystemType.ppoz:
-        return '🚨 System ppoż';
-      case ElectricalSystemType.cctv:
-        return '📹 CCTV/Monitoring';
-      case ElectricalSystemType.internet:
-        return '🌐 Internet/LAN';
-      case ElectricalSystemType.oddymianieKlatek:
-        return '💨 Oddymianie klatek';
-      default:
-        return system.toString();
-    }
-  }
-
-  void _createProject() {
-    // Szczegółowa walidacja
-    final errors = <String>[];
-    
-    if (_projectName.isEmpty) {
-      errors.add('Brak nazwy projektu');
-    }
-    if (_address.isEmpty) {
-      errors.add('Brak adresu budowy');
-    }
-    if (_selectedSystems.isEmpty) {
-      errors.add('Nie wybrano żadnych systemów');
-    }
-    
-    if (errors.isNotEmpty) {
-      print('[Wizard] Błędy walidacji: $errors');
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Uzupełnij brakujące pola:\n${errors.join('\n')}'),
-          backgroundColor: Colors.orange,
-          duration: const Duration(seconds: 3),
-        ),
-      );
-      return;
-    }
-
-    print('[Wizard] Walidacja OK, tworzenie konfiguracji...');
-    print('[Wizard] - Nazwa: $_projectName');
-    print('[Wizard] - Adres: $_address');
-    print('[Wizard] - Systemy: ${_selectedSystems.length}');
-    print('[Wizard] - Pięter: $_totalLevels');
-    print('[Wizard] - Klatek: $_numberOfStairCases');
-    print('[Wizard] - Mieszkań/piętro: $_unitsPerFloorPerStairCase');
-
-    final config = BuildingConfiguration(
-      projectName: _projectName,
-      buildingType: _buildingType,
-      address: _address,
-      projectStartDate: DateTime.now(),
-      totalLevels: _totalLevels,
-      basementLevels: _basementLevels,
-      hasParking: _hasParking,
-      hasGarage: _hasGarage,
-      powerSupplyType: _powerSupply,
-      connectionType: _connectionType,
-      estimatedPowerDemand: 100.0,
-      selectedSystems: _selectedSystems,
-      estimatedUnits: _buildingType == BuildingType.domek 
-        ? 1 
-        : _totalLevels * _numberOfStairCases * _unitsPerFloorPerStairCase,
-      estimatedStairCases: _numberOfStairCases,
-      stageDurations: BuildingTimingTemplates.wielorodzinny34pietra(),
-    );
-
-    print('[Wizard] Konfiguracja utworzona, wywołanie callbacka...');
-    
-    // Wywołaj callback
-    widget.onConfigComplete(config);
-    
-    print('[Wizard] Callback wywołany');
-  }
-}
