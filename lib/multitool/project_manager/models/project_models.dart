@@ -345,6 +345,9 @@ class ProjectUnit {
   // Instalacje specyficzne dla jednostki
   final Set<ElectricalSystemType> specificSystems;
   
+  // Typ lokalu
+  final bool isAlternateUnit; // Lokal zamienny
+  
   // Status prac
   final Map<String, TaskStatus> taskStatuses; // taskId -> status
   final Map<String, DateTime?> taskCompletionDates;
@@ -359,6 +362,7 @@ class ProjectUnit {
     required this.floor,
     required this.stairCase,
     this.specificSystems = const {},
+    this.isAlternateUnit = false,
     this.taskStatuses = const {},
     this.taskCompletionDates = const {},
     this.photoPaths = const [],
@@ -380,6 +384,7 @@ class ProjectUnit {
     int? floor,
     String? stairCase,
     Set<ElectricalSystemType>? specificSystems,
+    bool? isAlternateUnit,
     Map<String, TaskStatus>? taskStatuses,
     Map<String, DateTime?>? taskCompletionDates,
     List<String>? photoPaths,
@@ -391,6 +396,7 @@ class ProjectUnit {
       floor: floor ?? this.floor,
       stairCase: stairCase ?? this.stairCase,
       specificSystems: specificSystems ?? this.specificSystems,
+      isAlternateUnit: isAlternateUnit ?? this.isAlternateUnit,
       taskStatuses: taskStatuses ?? this.taskStatuses,
       taskCompletionDates: taskCompletionDates ?? this.taskCompletionDates,
       photoPaths: photoPaths ?? this.photoPaths,

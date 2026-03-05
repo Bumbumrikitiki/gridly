@@ -177,6 +177,32 @@ class _UnitDetailScreenState extends State<UnitDetailScreen>
               ),
             ),
           ),
+          const SizedBox(height: 16),
+
+          // Przełącznik lokalu zamiennego
+          Card(
+            color: unit.isAlternateUnit ? Colors.orange.shade50 : Colors.grey.shade50,
+            child: SwitchListTile(
+              title: const Text(
+                'Lokal zamienny',
+                style: TextStyle(fontWeight: FontWeight.w600),
+              ),
+              subtitle: Text(
+                unit.isAlternateUnit 
+                  ? 'Ten lokal wymaga projektu zamiennego' 
+                  : 'Standardowy lokal bez zmian',
+                style: TextStyle(fontSize: 12, color: Colors.grey.shade700),
+              ),
+              value: unit.isAlternateUnit,
+              onChanged: (value) {
+                provider.toggleUnitAlternateStatus(unit.unitId);
+              },
+              secondary: Icon(
+                unit.isAlternateUnit ? Icons.swap_horiz : Icons.home,
+                color: unit.isAlternateUnit ? Colors.orange : Colors.grey,
+              ),
+            ),
+          ),
           const SizedBox(height: 24),
 
           // Lista zadań pogrupowanych po etapach

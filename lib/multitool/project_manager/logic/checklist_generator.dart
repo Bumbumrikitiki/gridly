@@ -1,5 +1,6 @@
 import 'package:uuid/uuid.dart';
 import 'package:gridly/multitool/project_manager/models/project_models.dart';
+import 'package:gridly/multitool/project_manager/logic/residential_unit_tasks.dart';
 
 /// Inteligentny generator checklist'u z automatycznym planowaniem
 /// System analizuje typ budowy, systemy, etapy i generuje zadania
@@ -146,15 +147,19 @@ class ProjectChecklistGenerator {
     List<ProjectPhase> phases,
   ) {
     final tasks = <ChecklistTask>[];
-    final phaseMap = {for (var p in phases) p.stage: p};
 
-    for (final system in config.selectedSystems) {
-      tasks.addAll(_generateTasksForSystem(
-        system,
-        config,
-        phaseMap,
-      ));
+    // Dla budynków mieszkalnych wielolokalowych generuj zadania mieszkalne (28 zadań)
+    if (config.buildingType == BuildingType.wielorodzinny ||
+        config.buildingType == BuildingType.wielorodzinnyWysoki ||
+        config.buildingType == BuildingType.mieszany) {
+      // Generuj 28 zadań dla każdego mieszkania
+      tasks.addAll(
+        ResidentialUnitTasksGenerator.generateTasksForAllUnits(config),
+      );
     }
+
+    // UWAGA: Usunięto generowanie zadań dla systemów elektrycznych
+    // Zgodnie z wymaganiami - zostają tylko zadania mieszkalne
 
     return tasks;
   }
@@ -680,6 +685,7 @@ class ProjectChecklistGenerator {
           unitName: _getUnitName(config, unitId),
           floor: _getFloorFromUnitId(unitId),
           stairCase: _getStairCaseFromUnitId(config, unitId),
+          isAlternateUnit: false, // Domyślnie nie są zamienne (użytkownik może zmienić w UI)
           taskStatuses: taskStatuses,
           taskCompletionDates: taskCompletionDates,
         ),

@@ -5,6 +5,9 @@ import 'package:gridly/multitool/project_manager/models/building_hierarchy.dart'
 import 'package:gridly/multitool/project_manager/logic/project_manager_provider.dart';
 import 'package:gridly/multitool/project_manager/views/unit_detail_screen.dart';
 import 'package:gridly/multitool/project_manager/views/advanced_configuration_wizard.dart';
+import 'package:excel/excel.dart' as excel_pkg;
+import 'dart:html' as html;
+import 'dart:typed_data';
 
 class ProjectManagerScreen extends StatefulWidget {
   const ProjectManagerScreen({Key? key}) : super(key: key);
@@ -16,6 +19,12 @@ class ProjectManagerScreen extends StatefulWidget {
 class _ProjectManagerScreenState extends State<ProjectManagerScreen>
     with SingleTickerProviderStateMixin {
   late TabController _tabController;
+  
+  // Filtry dla zakładki mieszkań
+  Set<String> _selectedStairCases = {};
+  String _unitTypeFilter = 'all'; // 'all', 'alternate', 'standard'
+  bool _onlyWithNotes = false;
+  String? _taskFilter; // ID zadania do filtrowania
 
   @override
   void initState() {
@@ -46,7 +55,7 @@ class _ProjectManagerScreenState extends State<ProjectManagerScreen>
                       controller: _tabController,
                       isScrollable: true,
                       tabs: const [
-                        Tab(icon: Icon(Icons.list), text: 'Lista'),
+                        Tab(icon: Icon(Icons.calendar_month), text: 'Harmonogram'),
                         Tab(icon: Icon(Icons.timeline), text: 'Timeline'),
                         Tab(icon: Icon(Icons.notifications), text: 'Alerty'),
                         Tab(icon: Icon(Icons.apartment), text: 'Mieszkania'),
@@ -58,7 +67,7 @@ class _ProjectManagerScreenState extends State<ProjectManagerScreen>
                 : TabBarView(
                     controller: _tabController,
                     children: [
-                      _buildChecklistTab(context, provider),
+                      _buildScheduleChecklistTab(context, provider),
                       _buildTimelineTab(context, provider),
                       _buildAlertsTab(context, provider),
                       _buildUnitsTab(context, provider),
@@ -120,7 +129,336 @@ class _ProjectManagerScreenState extends State<ProjectManagerScreen>
   }
 
   // ═══════════════════════════════════════════════════════════════════════════
-  // TAB 1: LISTA ZADAŃ (CHECKLIST)
+  // TAB 1: HARMONOGRAM BUDOWY (CHECKLIST ETAPÓW)
+  // ═══════════════════════════════════════════════════════════════════════════
+
+  Widget _buildScheduleChecklistTab(
+    BuildContext context,
+    ProjectManagerProvider provider,
+  ) {
+    final project = provider.currentProject;
+    if (project == null) return const SizedBox();
+
+    // Dane harmonogramu budowy z dokumentu Word
+    final schedulePhases = [
+      {'name': 'Przygotowanie', 'percent': 5, 'weeks': '3-4', 'description': 'Projekty, harmonogram, zamówienia materiałów, pozwolenia'},
+      {'name': 'Fundamenty', 'percent': 15, 'weeks': '9-12', 'description': 'Wykopy, dreny, stopy fundamentowe, pasy, izolacje'},
+      {'name': 'Konstrukcja', 'percent': 20, 'weeks': '12-16', 'description': 'Słupy, belki, stropy żelbetowe, wznoszenie szkieletu budynku'},
+      {'name': 'Przegrody', 'percent': 10, 'weeks': '6-8', 'description': 'Ścianki działowe, przebicia, kanały instalacyjne, okablowanie'},
+      {'name': 'Tynki', 'percent': 10, 'weeks': '6-8', 'description': 'Tynki zewnętrzne i wewnętrzne, elewacja, ocieplenie'},
+      {'name': 'Posadzki', 'percent': 10, 'weeks': '6-8', 'description': 'Wylewki, jastrych, izolacje, ogrzewanie podłogowe'},
+      {'name': 'Osprzęt', 'percent': 15, 'weeks': '9-12', 'description': 'Gniazdka, włączniki, oprawy, tablice, okablowanie teletechniczne'},
+      {'name': 'Malowanie', 'percent': 5, 'weeks': '3-4', 'description': 'Malowanie ścian i sufitów, lakierowanie'},
+      {'name': 'Finalizacja', 'percent': 5, 'weeks': '3-4', 'description': 'Drzwi, parapety, montaż sanitariatów, meblościanki'},
+      {'name': 'Oddawanie', 'percent': 5, 'weeks': '3-4', 'description': 'Pomiary, dokumentacja, odbiory, protokoły, przekazanie kluczy'},
+    ];
+
+    return SingleChildScrollView(
+      padding: const EdgeInsets.all(16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Karta z podsumowaniem
+          Card(
+            color: Colors.blue.shade50,
+            child: Padding(
+              padding: const EdgeInsets.all(16),
+              child: Column(
+                children: [
+                  Row(
+                    children: [
+                      Icon(Icons.calendar_month, size: 32, color: Colors.blue.shade700),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            const Text(
+                              'Harmonogram budowy',
+                              style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                            ),
+                            Text(
+                              'Przewidywany czas: ${_calculateTotalWeeks(project.config)} tygodni',
+                              style: TextStyle(color: Colors.grey.shade700),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 16),
+                  // Progress bar ogólny
+                  ClipRRect(
+                    borderRadius: BorderRadius.circular(8),
+                    child: LinearProgressIndicator(
+                      value: _calculateScheduleProgress(project),
+                      minHeight: 10,
+                      backgroundColor: Colors.grey.shade300,
+                      valueColor: AlwaysStoppedAnimation<Color>(Colors.blue.shade600),
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    'Postęp: ${(_calculateScheduleProgress(project) * 100).toStringAsFixed(0)}%',
+                    style: TextStyle(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w600,
+                      color: Colors.blue.shade700,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+          const SizedBox(height: 24),
+
+          // Informacje o modyfikatorach czasu
+          if (project.config.basementLevels > 0 || project.config.hasGarage) ...[
+            Card(
+              color: Colors.amber.shade50,
+              child: Padding(
+                padding: const EdgeInsets.all(12),
+                child: Row(
+                  children: [
+                    Icon(Icons.info_outline, color: Colors.amber.shade700),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Text(
+                        _getTimeModifierInfo(project.config),
+                        style: TextStyle(fontSize: 13, color: Colors.grey.shade800),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+            const SizedBox(height: 16),
+          ],
+
+          // Checklist etapów
+          const Text(
+            'Etapy budowy',
+            style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+          ),
+          const SizedBox(height: 12),
+
+          ...schedulePhases.asMap().entries.map((entry) {
+            final index = entry.key;
+            final phase = entry.value;
+            final stageName = phase['name'] as String;
+            final BuildingStage? stage = _mapNameToStage(stageName);
+            
+            // Sprawdź czy etap jest ukończony (szukamy w fazach projektu)
+            final isCompleted = stage != null && 
+              project.phases.any((p) => p.stage == stage && p.progress >= 1.0);
+            
+            final isCurrent = stage != null && project.activePhase?.stage == stage;
+
+            return _buildSchedulePhaseCard(
+              stageName: stageName,
+              description: phase['description'] as String,
+              percent: phase['percent'] as int,
+              weeks: phase['weeks'] as String,
+              isCompleted: isCompleted,
+              isCurrent: isCurrent,
+              phaseNumber: index + 1,
+            );
+          }).toList(),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildSchedulePhaseCard({
+    required String stageName,
+    required String description,
+    required int percent,
+    required String weeks,
+    required bool isCompleted,
+    required bool isCurrent,
+    required int phaseNumber,
+  }) {
+    Color cardColor;
+    IconData icon;
+    
+    if (isCompleted) {
+      cardColor = Colors.green.shade50;
+      icon = Icons.check_circle;
+    } else if (isCurrent) {
+      cardColor = Colors.blue.shade50;
+      icon = Icons.play_circle;
+    } else {
+      cardColor = Colors.grey.shade50;
+      icon = Icons.circle_outlined;
+    }
+
+    return Card(
+      color: cardColor,
+      margin: const EdgeInsets.only(bottom: 12),
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Icon(
+                  icon,
+                  color: isCompleted 
+                    ? Colors.green 
+                    : (isCurrent ? Colors.blue : Colors.grey),
+                  size: 28,
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        children: [
+                          Text(
+                            '$phaseNumber. $stageName',
+                            style: TextStyle(
+                              fontSize: 16,
+                              fontWeight: FontWeight.bold,
+                              color: isCompleted || isCurrent 
+                                ? Colors.black 
+                                : Colors.grey.shade600,
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          if (isCurrent)
+                            Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                              decoration: BoxDecoration(
+                                color: Colors.blue.shade600,
+                                borderRadius: BorderRadius.circular(12),
+                              ),
+                              child: const Text(
+                                'W TRAKCIE',
+                                style: TextStyle(
+                                  color: Colors.white,
+                                  fontSize: 10,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                            ),
+                        ],
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        description,
+                        style: TextStyle(
+                          fontSize: 13,
+                          color: Colors.grey.shade700,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 12),
+            Row(
+              children: [
+                Expanded(
+                  child: Row(
+                    children: [
+                      Icon(Icons.access_time, size: 16, color: Colors.grey.shade600),
+                      const SizedBox(width: 4),
+                      Text(
+                        '$weeks tygodni',
+                        style: TextStyle(fontSize: 12, color: Colors.grey.shade600),
+                      ),
+                    ],
+                  ),
+                ),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                  decoration: BoxDecoration(
+                    color: Colors.grey.shade200,
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Text(
+                    '$percent% czasu',
+                    style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  BuildingStage? _mapNameToStage(String name) {
+    switch (name) {
+      case 'Przygotowanie': return BuildingStage.przygotowanie;
+      case 'Fundamenty': return BuildingStage.fundamenty;
+      case 'Konstrukcja': return BuildingStage.konstrukcja;
+      case 'Przegrody': return BuildingStage.przegrody;
+      case 'Tynki': return BuildingStage.tynki;
+      case 'Posadzki': return BuildingStage.posadzki;
+      case 'Osprzęt': return BuildingStage.osprzet;
+      case 'Malowanie': return BuildingStage.malowanie;
+      case 'Finalizacja': return BuildingStage.finalizacja;
+      case 'Oddawanie': return BuildingStage.oddawanie;
+      default: return null;
+    }
+  }
+
+  int _calculateTotalWeeks(BuildingConfiguration config) {
+    // Bazowy czas dla b udynków 5-8 kondygnacji: 18-24 miesiące
+    int baseWeeks = 90; // ~21 miesięcy (średnia)
+    
+    // Dodatkowe tygodnie za każdą kondygnację powyżej 5
+    if (config.totalLevels > 5) {
+      baseWeeks += (config.totalLevels - 5) * 3;
+    }
+    
+    // Dodatkowy czas za garaż podziemny
+    if (config.basementLevels == 1 || config.hasGarage) {
+      baseWeeks += 6; // +1.5 miesiąca
+    } else if (config.basementLevels >= 2) {
+      baseWeeks += 16; // +4 miesiące
+    }
+    
+    return baseWeeks;
+  }
+
+  double _calculateScheduleProgress(ConstructionProject project) {
+    final totalPhases = project.phases.length;
+    if (totalPhases == 0) return 0.0;
+    
+    int completedPhases = project.phases.where((p) => p.progress >= 1.0).length;
+    double currentPhaseProgress = project.activePhase?.progress ?? 0.0;
+    
+    return (completedPhases + currentPhaseProgress) / totalPhases;
+  }
+
+  String _getTimeModifierInfo(BuildingConfiguration config) {
+    final modifiers = <String>[];
+    
+    if (config.totalLevels > 5) {
+      modifiers.add('${config.totalLevels} kondygnacji (+${(config.totalLevels - 5) * 3} tyg.)');
+    }
+    
+    if (config.basementLevels == 1 || config.hasGarage) {
+      modifiers.add('Gara\u017c/piwnica 1-poz. (+6 tyg.)');
+    } else if (config.basementLevels >= 2) {
+      modifiers.add('Gara\u017c/piwnica 2-poz. (+16 tyg.)');
+    }
+    
+    if (modifiers.isEmpty) {
+      return 'Standardowy czas budowy bez modyfikatorów';
+    }
+    
+    return 'Modyfikatory czasu: ${modifiers.join(", ")}';
+  }
+
+  // ═══════════════════════════════════════════════════════════════════════════
+  // TAB 1 (STARA): LISTA ZADAŃ (CHECKLIST) - ZACHOWANE DLA KOMPATYBILNOŚCI
   // ═══════════════════════════════════════════════════════════════════════════
 
   Widget _buildChecklistTab(
@@ -785,7 +1123,7 @@ class _ProjectManagerScreenState extends State<ProjectManagerScreen>
   }
 
   // ═══════════════════════════════════════════════════════════════════════════
-  // TAB 4: MIESZKANIA / JEDNOSTKI
+  // TAB 4: MIESZKANIA / JEDNOSTKI - Z FILTROWANIEM I EKSPORTEM
   // ═══════════════════════════════════════════════════════════════════════════
 
   Widget _buildUnitsTab(
@@ -805,48 +1143,209 @@ class _ProjectManagerScreenState extends State<ProjectManagerScreen>
       );
     }
 
-    // Grupowanie mieszkań po piętrach i klatkach
+    // Pobierz wszystkie unikalne klatki schodowe
+    final allStairCases = project.units.map((u) => u.stairCase).toSet().toList()..sort();
+    
+    // Jeśli nie wybrano żadnych filtrów klatki, pokaż wszystkie
+    if (_selectedStairCases.isEmpty) {
+      _selectedStairCases = Set.from(allStairCases);
+    }
+
+    // Filtrowanie jednostek
+    var filteredUnits = project.units.where((unit) {
+      // Filtr po klatce
+      if (!_selectedStairCases.contains(unit.stairCase)) return false;
+      
+      // Filtr po typie lokalu
+      if (_unitTypeFilter == 'alternate' && !unit.isAlternateUnit) return false;
+      if (_unitTypeFilter == 'standard' && unit.isAlternateUnit) return false;
+      
+      // Filtr po uwagach
+      if (_onlyWithNotes && unit.defectsNotes.isEmpty) return false;
+      
+      // Filtr po zadaniu
+      if (_taskFilter != null) {
+        final taskStatus = unit.taskStatuses[_taskFilter];
+        if (taskStatus != TaskStatus.completed) return false;
+      }
+      
+      return true;
+    }).toList();
+
+    // Grupowanie po piętrach
     final unitsByFloor = <int, List<ProjectUnit>>{};
-    for (final unit in project.units) {
+    for (final unit in filteredUnits) {
       unitsByFloor.putIfAbsent(unit.floor, () => []).add(unit);
     }
-    
-    final sortedFloors = unitsByFloor.keys.toList()..sort((a, b) => b.compareTo(a)); // Od najwyższego
+    final sortedFloors = unitsByFloor.keys.toList()..sort((a, b) => b.compareTo(a));
 
     return SingleChildScrollView(
       padding: const EdgeInsets.all(16),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Nagłówek z podsumowaniem
+          // Panel podsumowania + eksport
           Card(
             color: Colors.blue.shade50,
             child: Padding(
               padding: const EdgeInsets.all(16),
-              child: Row(
+              child: Column(
                 children: [
-                  const Icon(Icons.apartment, size: 40, color: Colors.blue),
-                  const SizedBox(width: 16),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          'Lokale: ${project.units.length}',
-                          style: const TextStyle(
-                            fontSize: 18,
-                            fontWeight: FontWeight.bold,
-                          ),
+                  Row(
+                    children: [
+                      const Icon(Icons.apartment, size: 40, color: Colors.blue),
+                      const SizedBox(width: 16),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              'Wyświetlane: ${filteredUnits. length}/${project.units.length}',
+                              style: const TextStyle(
+                                fontSize: 18,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                            const SizedBox(height: 4),
+                            Text(
+                              'Ukończonych: ${filteredUnits.where((u) => u.completionPercentage >= 100).length}',
+                              style: TextStyle(
+                                fontSize: 14,
+                                color: Colors.grey.shade700,
+                              ),
+                            ),
+                          ],
                         ),
-                        const SizedBox(height: 4),
-                        Text(
-                          'Ukończonych: ${project.units.where((u) => u.completionPercentage >= 100).length}',
-                          style: TextStyle(
-                            fontSize: 14,
-                            color: Colors.grey.shade700,
-                          ),
+                      ),
+                      // Przyciski eksportu
+                      IconButton(
+                        icon: const Icon(Icons.download, color: Colors.blue),
+                        onPressed: () => _showExportMenu(context, project, filteredUnits),
+                        tooltip: 'Eksport wykazu mieszkań',
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+          ),
+          const SizedBox(height: 16),
+
+          // Panel filtrów
+          Card(
+            color: Colors.grey.shade100,
+            child: Padding(
+              padding: const EdgeInsets.all(16),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text(
+                    'Filtry',
+                    style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                  ),
+                  const SizedBox(height: 12),
+
+                  // Filtr klatek schodowych
+                  const Text('Klatka schodowa:', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
+                  const SizedBox(height: 8),
+                  Wrap(
+                    spacing: 8,
+                    children: allStairCases.map((stairCase) {
+                      final isSelected = _selectedStairCases.contains(stairCase);
+                      return FilterChip(
+                        label: Text('Klatka $stairCase'),
+                        selected: isSelected,
+                        onSelected: (selected) {
+                          setState(() {
+                            if (selected) {
+                              _selectedStairCases.add(stairCase);
+                            } else {
+                              _selectedStairCases.remove(stairCase);
+                            }
+                          });
+                        },
+                      );
+                    }).toList(),
+                  ),
+                  const SizedBox(height: 16),
+
+                  // Filtr typu lokalu
+                  const Text('Typ lokalu:', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
+                  const SizedBox(height: 8),
+                  Wrap(
+                    spacing: 8,
+                    children: [
+                      ChoiceChip(
+                        label: const Text('Wszystkie'),
+                        selected: _unitTypeFilter == 'all',
+                        onSelected: (_) => setState(() => _unitTypeFilter = 'all'),
+                      ),
+                      ChoiceChip(
+                        label: const Text('Lokale zamienne'),
+                        selected: _unitTypeFilter == 'alternate',
+                        onSelected: (_) => setState(() => _unitTypeFilter = 'alternate'),
+                      ),
+                      ChoiceChip(
+                        label: const Text('Lokale bez zmian'),
+                        selected: _unitTypeFilter == 'standard',
+                        onSelected: (_) => setState(() => _unitTypeFilter = 'standard'),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 16),
+
+                  // Filtr uwag
+                  CheckboxListTile(
+                    dense: true,
+                    contentPadding: EdgeInsets.zero,
+                    title: const Text('Tylko lokale z uwagami'),
+                    value: _onlyWithNotes,
+                    onChanged: (value) => setState(() => _onlyWithNotes = value ?? false),
+                  ),
+                  const SizedBox(height: 8),
+
+                  // Filtr zadania
+                  Row(
+                    children: [
+                      const Text('Zadanie ukończone:', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: DropdownButton<String?>(
+                          value: _taskFilter,
+                          isExpanded: true,
+                          hint: const Text('Wszystkie'),
+                          items: [
+                            const DropdownMenuItem<String?>(
+                              value: null,
+                              child: Text('Wszystkie'),
+                            ),
+                            ...project.allTasks.take(10).map((task) {
+                              return DropdownMenuItem<String>(
+                                value: task.id,
+                                child: Text(task.title, overflow: TextOverflow.ellipsis),
+                              );
+                            }),
+                          ],
+                          onChanged: (value) => setState(() => _taskFilter = value),
                         ),
-                      ],
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 12),
+
+                  // Przycisk czyszczenia filtrów
+                  Center(
+                    child: TextButton.icon(
+                      icon: const Icon(Icons.clear_all),
+                      label: const Text('Wyczyść filtry'),
+                      onPressed: () {
+                        setState(() {
+                          _selectedStairCases = Set.from(allStairCases);
+                          _unitTypeFilter = 'all';
+                          _onlyWithNotes = false;
+                          _taskFilter = null;
+                        });
+                      },
                     ),
                   ),
                 ],
@@ -855,46 +1354,243 @@ class _ProjectManagerScreenState extends State<ProjectManagerScreen>
           ),
           const SizedBox(height: 24),
 
-          // Tabela mieszkań pogrupowana po piętrach
-          ...sortedFloors.map((floor) {
-            final unitsOnFloor = unitsByFloor[floor]!;
-            unitsOnFloor.sort((a, b) => a.unitId.compareTo(b.unitId));
+          // Lista mieszkań
+          if (filteredUnits.isEmpty)
+            const Padding(
+              padding: EdgeInsets.all(32),
+              child: Center(
+                child: Text(
+                  'Brak lokali spełniających kryteria',
+                  style: TextStyle(color: Colors.grey, fontSize: 16),
+                ),
+              ),
+            )
+          else
+            ...sortedFloors.map((floor) {
+              final unitsOnFloor = unitsByFloor[floor]!;
+              unitsOnFloor.sort((a, b) => a.unitId.compareTo(b.unitId));
 
-            return Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Padding(
-                  padding: const EdgeInsets.symmetric(vertical: 12),
-                  child: Text(
-                    'Piętro ${floor == 0 ? "PARTER" : floor.toString()}',
-                    style: const TextStyle(
-                      fontSize: 16,
-                      fontWeight: FontWeight.bold,
+              return Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 12),
+                    child: Text(
+                      'Piętro ${floor == 0 ? "PARTER" : floor.toString()}',
+                      style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
                     ),
                   ),
-                ),
-                GridView.builder(
-                  shrinkWrap: true,
-                  physics: const NeverScrollableScrollPhysics(),
-                  gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                    crossAxisCount: 4,
-                    childAspectRatio: 1.2,
-                    crossAxisSpacing: 8,
-                    mainAxisSpacing: 8,
+                  GridView.builder(
+                    shrinkWrap: true,
+                    physics: const NeverScrollableScrollPhysics(),
+                    gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                      crossAxisCount: 4,
+                      childAspectRatio: 1.2,
+                      crossAxisSpacing: 8,
+                      mainAxisSpacing: 8,
+                    ),
+                    itemCount: unitsOnFloor.length,
+                    itemBuilder: (context, index) {
+                      final unit = unitsOnFloor[index];
+                      return _buildUnitCard(context, unit, provider);
+                    },
                   ),
-                  itemCount: unitsOnFloor.length,
-                  itemBuilder: (context, index) {
-                    final unit = unitsOnFloor[index];
-                    return _buildUnitCard(context, unit, provider);
-                  },
-                ),
-                const SizedBox(height: 16),
-              ],
-            );
-          }).toList(),
+                  const SizedBox(height: 16),
+                ],
+              );
+            }).toList(),
         ],
       ),
     );
+  }
+
+  void _showExportMenu(BuildContext context, ConstructionProject project, List<ProjectUnit> filteredUnits) {
+    showModalBottomSheet(
+      context: context,
+      builder: (context) => Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          ListTile(
+            leading: const Icon(Icons.table_chart, color: Colors.green),
+            title: const Text('Pobierz Excel'),
+            subtitle: Text('${filteredUnits.length} lokali'),
+            onTap: () {
+              Navigator.pop(context);
+              _generateExcelReport(project, filteredUnits);
+            },
+          ),
+          ListTile(
+            leading: const Icon(Icons.picture_as_pdf, color: Colors.red),
+            title: const Text('Pobierz PDF'),
+            subtitle: const Text('W przygotowaniu'),
+            enabled: false,
+            onTap: () {
+              Navigator.pop(context);
+              // TODO: Implement PDF export
+            },
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _generateExcelReport(ConstructionProject project, List<ProjectUnit> units) async {
+    try {
+      // Stwórz workbook
+      final excel = excel_pkg.Excel.createExcel();
+      final sheet = excel['Wykaz lokali mieszkalnych'];
+      
+      // Usuń domyślny worksheet
+      excel.delete('Sheet1');
+
+      // Nagłówek - wiersz 1
+      sheet.merge(excel_pkg.CellIndex.indexByString('A1'), excel_pkg.CellIndex.indexByString('AD1'));
+      final titleCell = sheet.cell(excel_pkg.CellIndex.indexByString('A1'));
+      titleCell.value = excel_pkg.TextCellValue('Wykaz lokali mieszkalnych');
+      titleCell.cellStyle = excel_pkg.CellStyle(
+        bold: true,
+        fontSize: 16,
+        horizontalAlign: excel_pkg.HorizontalAlign.Center,
+      );
+
+      // Nazwa budowy - wiersz 3
+      final projectNameCell = sheet.cell(excel_pkg.CellIndex.indexByString('A3'));
+      projectNameCell.value = excel_pkg.TextCellValue('Nazwa budowy: ${project.config.projectName}');
+      projectNameCell.cellStyle = excel_pkg.CellStyle(bold: true);
+
+      // Data - wiersz 4
+      final dateCell = sheet.cell(excel_pkg.CellIndex.indexByString('A4'));
+      dateCell.value = excel_pkg.TextCellValue('Data: ${DateTime.now().toString().split(' ')[0]}');
+      dateCell.cellStyle = excel_pkg.CellStyle(italic: true);
+
+      // Metadane - wiersz 6
+      sheet.merge(excel_pkg.CellIndex.indexByString('A6'), excel_pkg.CellIndex.indexByString('AD6'));
+      final metaCell = sheet.cell(excel_pkg.CellIndex.indexByString('A6'));
+      metaCell.value = excel_pkg.TextCellValue('Nr budynku / klatka / piętro');
+      metaCell.cellStyle = excel_pkg.CellStyle(
+        italic: true,
+        horizontalAlign: excel_pkg.HorizontalAlign.Center,
+      );
+
+      // Nagłówki kolumn - wiersz 7
+      final headerStyle = excel_pkg.CellStyle(
+        bold: true,
+        backgroundColorHex: excel_pkg.ExcelColor.fromHexString('#D3D3D3'),
+        horizontalAlign: excel_pkg.HorizontalAlign.Center,
+        verticalAlign: excel_pkg.VerticalAlign.Center,
+      );
+
+      // Kolumna A: Nr lokalu
+      final colA = sheet.cell(excel_pkg.CellIndex.indexByString('A7'));
+      colA.value = excel_pkg.TextCellValue('Nr lokalu');
+      colA.cellStyle = headerStyle;
+
+      // Kolumna B: Lokal zamienny
+      final colB = sheet.cell(excel_pkg.CellIndex.indexByString('B7'));
+      colB.value = excel_pkg.TextCellValue('Lokal zamienny');
+      colB.cellStyle = headerStyle;
+
+      // Kolumny C-AD: 28 zadań (bez "Projekt zamienny" - to jest warunkowe)
+      final taskTitles = [
+        'Ścianki działowe:',
+        'Montaż okablowania:',
+        'Montaż okablowania na balkonie, loggy, ogródku:',
+        'Montaż puszek elektroinstalacyjnych:',
+        'Dokumentacja fotograficzna okablowania:',
+        'Doprowadzenie kabla WLZ:',
+        'Odbiory inspektora nadzoru inwestorskiego:',
+        'Tynki:',
+        'Wykonanie pomiaru Riso:',
+        'Ułożenie rur osłonowych pod instalacje teletechniczną:',
+        'Dokumentacja fotograficzna rur osłonowych:',
+        'Jastrych (wylewka):',
+        'Doprowadzenie okablowania teletechnicznego w rurach:',
+        'Malowanie:',
+        'Montaż tablicy mieszkaniowej elektrycznej - TM:',
+        'Podłączenie tablicy mieszkaniowej:',
+        'Montaż teletechnicznej skrzynki mieszkaniowej - TSM:',
+        'Montaż osprzętu:',
+        'Montaż unifonu, wideodomofonu:',
+        'Montaż czujnika dymu:',
+        'Montaż oprawek oświetleniowych:',
+        'Uruchomienie instalacji domofonowej:',
+        'Pomiary teletechniczne:',
+        'Pomiary elektryczne:',
+        'Odbiory inspektora nadzoru inwestorskiego I termin:',
+        'Odbiory inspektora nadzoru inwestorskiego II termin:',
+        'Odbiory inspektora nadzoru inwestorskiego końcowe:',
+      ];
+
+      for (int i = 0; i < taskTitles.length; i++) {
+        final colIndex = String.fromCharCode(67 + i); // C=67, D=68, etc.
+        final cell = sheet.cell(excel_pkg.CellIndex.indexByString('$colIndex'  + '7'));
+        cell.value = excel_pkg.TextCellValue(taskTitles[i]);
+        cell.cellStyle = headerStyle;
+      }
+
+      // Dane mieszkań - zaczynając od wiersza 8
+      for (int i = 0; i < units.length; i++) {
+        final unit = units[i];
+        final rowIndex = 8 + i;
+
+        // Nr lokalu
+        sheet.cell(excel_pkg.CellIndex.indexByColumnRow(columnIndex: 0, rowIndex: rowIndex))
+          .value = excel_pkg.TextCellValue(unit.unitId);
+
+        // Lokal zamienny (0/1)
+        sheet.cell(excel_pkg.CellIndex.indexByColumnRow(columnIndex: 1, rowIndex: rowIndex))
+          .value = excel_pkg.IntCellValue(unit.isAlternateUnit ? 1 : 0);
+
+        // Zadania (0/1)
+        final unitTasks = project.allTasks.where((t) => 
+          t.unitIds != null && t.unitIds!.contains(unit.unitId)
+        ).toList();
+
+        for (int j = 0; j < taskTitles.length && j < unitTasks.length; j++) {
+          final task = unitTasks[j];
+          final status = unit.taskStatuses[task.id] ?? TaskStatus.pending;
+          final isCompleted = status == TaskStatus.completed ? 1 : 0;
+          
+          sheet.cell(excel_pkg.CellIndex.indexByColumnRow(columnIndex: 2 + j, rowIndex: rowIndex))
+            .value = excel_pkg.IntCellValue(isCompleted);
+        }
+      }
+
+      // Szerokości kolumn są ustawiane automatycznie przez pakiet excel
+      // W przyszłości można dodać ręczne ustawienie jeśli pakiet to wspiera
+
+      // Zapisz plik
+      final bytes = excel.encode();
+      if (bytes == null) {
+        throw Exception('Nie udało się wygenerować pliku Excel');
+      }
+
+      // Pobierz plik (Web)
+      final blob = html.Blob([Uint8List.fromList(bytes)]);
+      final url = html.Url.createObjectUrlFromBlob(blob);
+      final anchor = html.AnchorElement(href: url)
+        ..setAttribute('download', 'Wykaz_lokali_mieszkalnych.xlsx')
+        ..click();
+      html.Url.revokeObjectUrl(url);
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Plik Excel został pobrany'),
+            backgroundColor: Colors.green,
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Błąd generowania pliku: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
   }
 
   Widget _buildUnitCard(
@@ -932,13 +1628,36 @@ class _ProjectManagerScreenState extends State<ProjectManagerScreen>
           child: Column(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              // ID mieszkania
-              Text(
-                unit.unitId,
-                style: const TextStyle(
-                  fontSize: 16,
-                  fontWeight: FontWeight.bold,
-                ),
+              // ID mieszkania + badge zamienny
+              Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Text(
+                    unit.unitId,
+                    style: const TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                  if (unit.isAlternateUnit) ...[
+                    const SizedBox(width: 4),
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
+                      decoration: BoxDecoration(
+                        color: Colors.orange.shade600,
+                        borderRadius: BorderRadius.circular(4),
+                      ),
+                      child: const Text(
+                        'Z',
+                        style: TextStyle(
+                          color: Colors.white,
+                          fontSize: 10,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                    ),
+                  ],
+                ],
               ),
               
               // Procent ukończenia

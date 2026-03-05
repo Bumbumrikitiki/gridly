@@ -282,6 +282,23 @@ class ProjectManagerProvider extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// Zmień status lokalu zamiennego
+  void toggleUnitAlternateStatus(String unitId) {
+    if (_currentProject == null) return;
+
+    final unitIndex = _currentProject!.units.indexWhere((u) => u.unitId == unitId);
+    if (unitIndex == -1) throw Exception('Mieszkanie nie znalezione');
+    
+    final unit = _currentProject!.units[unitIndex];
+    
+    _currentProject!.units[unitIndex] = unit.copyWith(
+      isAlternateUnit: !unit.isAlternateUnit,
+    );
+
+    _updateProject();
+    notifyListeners();
+  }
+
   /// Dodaj zdjęcie do mieszkania
   void addUnitPhoto(String unitId, String photoPath) {
     if (_currentProject == null) return;
