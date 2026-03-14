@@ -1,14 +1,15 @@
 /// Przewodnik Szyn Wyrównawczych i Uziemienia Budowlanego
 /// 
 /// ⚠️ OGRANICZENIE ODPOWIEDZIALNOŚCI:
-/// - Wartości w tym narzędziu są ORIENTACYJNE i oparte na normach PN-IEC 60364-5-54, PN-EN 50164, PN-IEC 61936
+/// - Wartości w tym narzędziu są ORIENTACYJNE i oparte na normach PN-HD 60364-5-54, PN-EN 50164, PN-IEC 61936
 /// - Wartości stanowią WSPARCIE dla projektanta/inspektora, nie zastępcę obliczeń szczegółowych
 /// - OBOWIĄZKOWA weryfikacja przez uprawnionych projektantów i inspektorów ds. bezpieczeństwa
-/// - W przypadku wątpliwości - zawsze konsultacja z projektantem/inspektorem elektryk
+/// - W przypadku wątpliwości - zawsze konsultacja z projektantem/inspektorem elektrykiem
 /// - Użytkownik aplikacji ponosi PEŁNĄ odpowiedzialność za prawidłowość wyboru parametrów
 /// - Producent aplikacji nie ponosi odpowiedzialności za błędy w doborze materiałów wynikłe z użycia tego narzędzia
+library;
 
-// Delegacja typów elementów wymagających uziemienia/wyrównania potencjału
+// Definicja typów elementów wymagających uziemienia/wyrównania potencjału
 enum BondingElementType {
   przedzielnica, // Rozdzielnica główna (RB, RBTK)
   ruPH, // Rura przewodu handlowego
@@ -62,7 +63,7 @@ enum PradNominalny {
   i200A, // Duże trany, zasilanie główne
 }
 
-// Przekroje przewodów miedzianych (PE/N) wg PN-IEC 60364-5-54
+// Przekroje przewodów miedzianych (PE/N) wg PN-HD 60364-5-54
 enum PrzekrojKabla {
   mm2_1_5, // 1,5 mm² - małe prądy I≤16A (rzadko)
   mm2_2_5, // 2,5 mm² - I≤20A, gniazda
@@ -77,7 +78,7 @@ enum PrzekrojKabla {
 }
 
 /// Model typu PEN
-/// W Polsce standard to podział PEN na PE i N wg PN-IEC 60364-4-41
+/// W Polsce standard to podział PEN na PE i N wg PN-HD 60364-4-41
 class PodzialPEN {
   final String nazwa; // Np. "Podział PEN na budowie"
   final String opis;
@@ -105,7 +106,7 @@ class SzynaWyrownawcza {
   final String rezystancja; // "ρ ≈ 0.0175 Ω·mm²/m"
   final String dozwolonyPrad; // "Bez ograniczeń dla rozm. >100mm²"
   final List<SposobPoczenia> dostepneSposoby; // Jakie połączenia?
-  final String norma; // PN-IEC 60364-5-54
+  final String norma; // PN-HD 60364-5-54
   final String uwagi;
 
   SzynaWyrownawcza({
@@ -142,7 +143,7 @@ class ElementUziemienia {
   final String specjalnePrzypisy; // Np. "Max 2 m do GSW"
   
   // Normy
-  final List<String> normy; // PN-IEC 60364-5-54, PN-EN 50164 itd
+  final List<String> normy; // PN-HD 60364-5-54, PN-EN 50164 itd
   
   ElementUziemienia({
     required this.typ,
@@ -171,7 +172,7 @@ class RekomendacjaKabla {
   final String dlaczego; // Uzasadnienie normatywne
   final String uwagi; // Specjalne uwagi dla tego elementu
   final List<String> warunkiBudowy; // Rodzaj budowy, w której to się stosuje
-  final String norma; // Norma (np. PN-IEC 60364-5-54)
+  final String norma; // Norma (np. PN-HD 60364-5-54)
   final String disclaimer; // DISCLAIMER
 
   RekomendacjaKabla({
@@ -246,13 +247,13 @@ class BazaRekomendacji {
         PrzekrojKabla.mm2_50,
       ],
       dlaczego:
-        'Rozdzielnica to centrum rozdzielnic - musi być niezawodnie uziemiona wg PN-IEC 60364-5-54 tab. 54.1',
-      punktPodlaczenia: 'Do szyny PE wewnątrz rozdzielnice - dedykowany punkt',
+        'Rozdzielnica jest centralnym punktem dystrybucji i musi być niezawodnie uziemiona wg PN-HD 60364-5-54 (tab. 54.1).',
+      punktPodlaczenia: 'Do szyny PE wewnątrz rozdzielnicy - dedykowany punkt',
       rekomendowanySposob: SposobPoczenia.srubaM12,
       wymagaSpawania: false,
       wymagaPrintosowania: false,
       specjalnePrzypisy: 'Połączenie musi wytrzymać min. 200 A²s²',
-      normy: ['PN-IEC 60364-5-54', 'PN-IEC 60364-4-41', 'PN-EN 50164'],
+      normy: ['PN-HD 60364-5-54', 'PN-HD 60364-4-41', 'PN-EN 50164'],
     ),
 
     // RURY
@@ -267,14 +268,14 @@ class BazaRekomendacji {
         PrzekrojKabla.mm2_16,
       ],
       dlaczego:
-        'Rury staowe mogą być węzłem wyrównawczym - bezpieczeństwo wg PN-IEC 60364-4-41',
-      punktPodlaczenia: 'Na rurę 30-50 cm od wejścia do budowy - klipsem lub sznurem',
+        'Rury stalowe mogą być elementem wyrównania potencjałów - bezpieczeństwo wg PN-HD 60364-4-41.',
+      punktPodlaczenia: 'Na rurę 30-50 cm od wejścia do budowy - opaską lub certyfikowanym zaciskiem',
       rekomendowanySposob: SposobPoczenia.srubaM10,
       wymagaSpawania: false,
       wymagaPrintosowania: true, // Wymagane certyfikowane złącze!
       specjalnePrzypisy:
-        'Odległość od GSW max 2 m. Musi być na pół metra od filtrów. Oczyścić warstwę ochron',
-      normy: ['PN-IEC 60364-4-41', 'PN-EN 50164'],
+        'Odległość od GSW max 2 m. Montaż min. 0,5 m od filtrów. Oczyścić warstwę ochronną przed montażem.',
+      normy: ['PN-HD 60364-4-41', 'PN-EN 50164'],
     ),
 
     ElementUziemienia(
@@ -294,8 +295,8 @@ class BazaRekomendacji {
       wymagaSpawania: false,
       wymagaPrintosowania: true, // BARDZO WAŻNE - rura gazowa!
       specjalnePrzypisy:
-        'OBOWIĄZKOWE certyfikowane złącze wg PN-EN 50164. Odbyć się musi przed szafką gazową',
-      normy: ['PN-IEC 60364-4-41', 'PN-EN 50164', 'PN-EN 12098-5'],
+        'OBOWIĄZKOWE certyfikowane złącze wg PN-EN 50164. Połączenie wykonać przed szafką gazową.',
+      normy: ['PN-HD 60364-4-41', 'PN-EN 50164', 'PN-EN 12098-5'],
     ),
 
     ElementUziemienia(
@@ -314,7 +315,7 @@ class BazaRekomendacji {
       wymagaSpawania: false,
       wymagaPrintosowania: false,
       specjalnePrzypisy: 'Przeprowadzić u góry, przed wylaniem do gruntu',
-      normy: ['PN-IEC 60364-4-41'],
+      normy: ['PN-HD 60364-4-41'],
     ),
 
     // RUSZTOWANIE
@@ -322,7 +323,7 @@ class BazaRekomendacji {
       typ: BondingElementType.rusztowanie,
       nazwa: 'Rusztowanie metalowe',
       opis:
-        'Struktura rusztowania - drażniące bezpieczeństwo pracowników i maszyn',
+        'Konstrukcja rusztowania metalowego - kluczowy element bezpieczeństwa pracowników i sprzętu',
       wymaganyPrzekrocj: '≥ 10 mm² Cu dla rusztowań >10 m',
       dopuszczalnePrzekroje: [
         PrzekrojKabla.mm2_10,
@@ -339,16 +340,16 @@ class BazaRekomendacji {
         'Spawanie do głównego słupa rusztowania. Min. 2 niezależne połączenia. Połączenia muszą wytrzymać 200 A²s²',
       normy: [
         'PN-ISO 12811',
-        'PN-IEC 60364-4-41',
-        'PN-EN 1004 (rusztowania kołne)',
+        'PN-HD 60364-4-41',
+        'PN-EN 1004 (rusztowania kołowe)',
       ],
     ),
 
     // BARAK
     ElementUziemienia(
       typ: BondingElementType.barak,
-      nazwa: 'Barak (liczba drzwi)',
-      opis: 'Drewniany barak z metalową obudową',
+      nazwa: 'Barak (konstrukcja metalowa)',
+      opis: 'Drewniany barak z elementami metalowej obudowy',
       wymaganyPrzekrocj: '≥ 6-10 mm² Cu',
       dopuszczalnePrzekroje: [
         PrzekrojKabla.mm2_6,
@@ -357,13 +358,13 @@ class BazaRekomendacji {
       ],
       dlaczego:
         'Obudowa metalowa baraku musi być wyrównana - miejsca gdzie mogą przebywać ludzie',
-      punktPodlaczenia: 'Na kadrze drzwi i na belkach nośnych (min. 2 punkty)',
+      punktPodlaczenia: 'Na krawędzi drzwiowej i na belkach nośnych (min. 2 punkty)',
       rekomendowanySposob: SposobPoczenia.srubaM10,
       wymagaSpawania: false,
       wymagaPrintosowania: false,
       specjalnePrzypisy:
-        'Każdy barak min. 2 niezależne połączenia. Odbiór odbiorcy po ustawieniu',
-      normy: ['PN-IEC 60364-4-41'],
+        'Każdy barak: min. 2 niezależne połączenia. Odbiór przez inspektora po ustawieniu.',
+      normy: ['PN-HD 60364-4-41'],
     ),
 
     // KONTENER
@@ -377,13 +378,13 @@ class BazaRekomendacji {
         PrzekrojKabla.mm2_10,
       ],
       dlaczego:
-        'Kontener metalowy musi być słaboupozorniony - to połączenie elektryczne',
-      punktPodlaczenia: 'Na furcie kontenera lub na nogu',
+        'Kontener metalowy musi być objęty połączeniami wyrównawczymi i uziemieniem ochronnym.',
+      punktPodlaczenia: 'Na ramie kontenera lub na nodze konstrukcyjnej',
       rekomendowanySposob: SposobPoczenia.srubaM10,
       wymagaSpawania: false,
       wymagaPrintosowania: false,
       specjalnePrzypisy: 'Sprawdzać regularnie stan połączenia (korozja)',
-      normy: ['PN-IEC 60364-4-41'],
+      normy: ['PN-HD 60364-4-41'],
     ),
   ];
 
@@ -396,24 +397,24 @@ class BazaRekomendacji {
     PrzekrojKabla przekroj = PrzekrojKabla.mm2_6; // Domyślnie
     String uzasadnienie = '';
 
-    // Prostawa logika - wg norm
+    // Prosta logika - wg norm
     switch (element) {
       case BondingElementType.przedzielnica:
         if (prad == PradNominalny.i160A || prad == PradNominalny.i200A) {
           przekroj = PrzekrojKabla.mm2_50;
-          uzasadnienie = 'Rozdzielnica główna- dla dużego prądu wg tab. 54.1';
+          uzasadnienie = 'Rozdzielnica główna - dla dużego prądu wg tab. 54.1';
         } else if (prad == PradNominalny.i125A) {
           przekroj = PrzekrojKabla.mm2_35;
         } else {
           przekroj = PrzekrojKabla.mm2_25;
-          uzasadnienie = 'Rozdzielnica wg PN-IEC 60364-5-54';
+          uzasadnienie = 'Rozdzielnica wg PN-HD 60364-5-54';
         }
         break;
 
       case BondingElementType.ruWoda:
       case BondingElementType.ruGas:
         przekroj = PrzekrojKabla.mm2_6;
-        uzasadnienie = 'Rury wg PN-IEC 60364-4-41 tab. 54.2';
+        uzasadnienie = 'Rury wg PN-HD 60364-4-41 tab. 54.2';
         break;
 
       case BondingElementType.rusztowanie:
@@ -430,7 +431,7 @@ class BazaRekomendacji {
       case BondingElementType.barak:
       case BondingElementType.kontener:
         przekroj = PrzekrojKabla.mm2_6;
-        uzasadnienie = 'Tymczasowe konstrukcje wg PN-IEC 60364-4-41';
+        uzasadnienie = 'Tymczasowe konstrukcje wg PN-HD 60364-4-41';
         break;
 
       default:
@@ -448,7 +449,7 @@ class BazaRekomendacji {
       dlaczego: uzasadnienie,
       uwagi: 'Orientacyjnie - wymaga konsultacji projektanta',
       warunkiBudowy: ['Budowy tymczasowe', 'Budowy czasowe wg PWN'],
-      norma: 'PN-IEC 60364-5-54 / PN-EN 50164',
+      norma: 'PN-HD 60364-5-54 / PN-EN 50164',
       disclaimer: 'ℹ️ ORIENTACYJNIE - Wymaga weryfikacji projektanta/inspektora elektryk!',
     );
   }

@@ -2,9 +2,11 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../models/bonding_elements_models.dart';
 import '../logic/bonding_calculator.dart';
+import 'package:gridly/multitool/uziemienie/views/grounding_screen.dart';
+import 'package:gridly/multitool/uziemienie/views/measurement_analyzer_screen.dart';
 
 class BondingGuideScreen extends StatefulWidget {
-  const BondingGuideScreen({Key? key}) : super(key: key);
+  const BondingGuideScreen({super.key});
 
   @override
   State<BondingGuideScreen> createState() => _BondingGuideScreenState();
@@ -17,13 +19,56 @@ class _BondingGuideScreenState extends State<BondingGuideScreen>
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: 4, vsync: this);
+    _tabController = TabController(length: 3, vsync: this);
   }
 
   @override
   void dispose() {
     _tabController.dispose();
     super.dispose();
+  }
+
+  void _showGroundingOptions(BuildContext context) {
+    showDialog(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Projekt Uziemienia'),
+        content: const Text('Wybierz funkcję:'),
+        actions: [
+          TextButton(
+            onPressed: () {
+              Navigator.pop(dialogContext);
+              Navigator.pushReplacement(
+                context,
+                MaterialPageRoute(
+                  builder: (_) => const GroundingScreen(),
+                ),
+              );
+            },
+            child: const Text('Kalkulator\nuziemienia'),
+          ),
+          TextButton(
+            onPressed: () {
+              Navigator.pop(dialogContext);
+              Navigator.pushReplacement(
+                context,
+                MaterialPageRoute(
+                  builder: (_) => const MeasurementAnalyzerScreen(),
+                ),
+              );
+            },
+            child: const Text('Analizator\npomiaru'),
+          ),
+          TextButton(
+            onPressed: () {
+              Navigator.pop(dialogContext);
+              // Already on this screen, do nothing
+            },
+            child: const Text('Szyny\nwyrównawcze'),
+          ),
+        ],
+      ),
+    );
   }
 
   @override
@@ -37,6 +82,11 @@ class _BondingGuideScreenState extends State<BondingGuideScreen>
               title: const Text('Szyny Wyrównawcze i Uziemienie'),
               centerTitle: true,
               elevation: 0,
+              leading: IconButton(
+                icon: const Icon(Icons.arrow_back),
+                tooltip: 'Wybierz inną opcję uziemienia',
+                onPressed: () => _showGroundingOptions(context),
+              ),
               bottom: TabBar(
                 controller: _tabController,
                 isScrollable: true,
@@ -44,7 +94,6 @@ class _BondingGuideScreenState extends State<BondingGuideScreen>
                   Tab(icon: Icon(Icons.info), text: 'Info'),
                   Tab(icon: Icon(Icons.calculate), text: 'Kalkulator'),
                   Tab(icon: Icon(Icons.table_chart), text: 'Elementy'),
-                  Tab(icon: Icon(Icons.book), text: 'Normy'),
                 ],
               ),
             ),
@@ -54,7 +103,6 @@ class _BondingGuideScreenState extends State<BondingGuideScreen>
                 _buildInfoTab(context, provider),
                 _buildCalculatorTab(context, provider),
                 _buildElementsTab(context, provider),
-                _buildNormsTab(context, provider),
               ],
             ),
           );
@@ -122,7 +170,7 @@ Funkcje:
 
 Materiały: Mosiądz (najczęściej), miedź, aluminium
 Rozmiary: 10×10 mm do 16×20 mm (przekrój 100-320 mm²)
-Norma: PN-IEC 60364-5-54, PN-EN 50164
+Norma: PN-HD 60364-5-54, PN-EN 50164
 ''',
           ),
 
@@ -450,7 +498,7 @@ Zabrania się:
           const SizedBox(height: 16),
           ...BazaRekomendacji.standardoweElementy
               .map((element) => _buildElementCard(context, element))
-              .toList(),
+              ,
         ],
       ),
     );
@@ -475,7 +523,7 @@ Zabrania się:
                 style: TextStyle(fontSize: 11, color: Colors.grey.shade700)),
             const Divider(),
             // Szczegóły
-            _elementDetailRow('Wymogany przekrój:', element.wymaganyPrzekrocj),
+            _elementDetailRow('Wymagany przekrój:', element.wymaganyPrzekrocj),
             _elementDetailRow(
                 'Punkt podłączenia:', element.punktPodlaczenia),
             _elementDetailRow('Sposób podłączenia:',
@@ -524,112 +572,7 @@ Zabrania się:
     );
   }
 
-  /// TAB 4 - Normy i referencje
-  Widget _buildNormsTab(BuildContext context, BondingCalculatorProvider provider) {
-    final tabelaPrzekrojow = provider.getTabelaPrzekrojow();
-    final szynaWymagania = provider.getWymagaSzynyWyrownawczej();
-    final penWymagania = provider.getWymagaPodzialuPEN();
 
-    return SingleChildScrollView(
-      padding: const EdgeInsets.all(16),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          // Tabela przekrojów
-          _buildNormSection(
-            'Tabela przekrojów kabla (PN-IEC 60364-5-54)',
-            tabelaPrzekrojow,
-          ),
-          const SizedBox(height: 24),
-
-          // Główna szyna wyrówn
-          _buildNormSection(
-            'Wymogi dla Głównej Szyny Wyrównawczej',
-            szynaWymagania,
-          ),
-          const SizedBox(height: 24),
-
-          // Podział PEN
-          _buildNormSection(
-            'Wymogi dla podziału PEN (PN-IEC 60364-4-41)',
-            penWymagania,
-          ),
-          const SizedBox(height: 24),
-
-          // Normy i dokumenty
-          _buildSection(
-            'Normy stosowane w tym narzędziu',
-            '''
-📘 PN-IEC 60364-5-54:2017
-   Normy elektroenergetyczne - Projekt instalacji
-   Tabela 54.1: Wymogi dla przewodów ochronnych
-
-📘 PN-IEC 60364-4-41:2020
-   Normy elektroenergetyczne - Zabezpieczenie przed porażeniami
-   Sys­temy TN-S, TN-C-S, TT
-
-📘 PN-EN 50164:2012
-   Przewody ochronne i szyny wyrównawcze
-   Wymogi dla materiałów i połączeń
-
-📘 PN-ISO 12811:2012
-   Bezpieczeństwo na budowach - Rusztowania
-   Warunki bezpiecznego stawiania i eksploatacji
-
-📘 PN-EN 1004-1:2004
-   Rusztowania mobilne - Wymagania bezpieczeństwa
-
-Wszystkie wartości w tym narzędziu bazują na powyższych normach!
-Szczegóły - zaradź u projektanta ds. bezpieczeństwa elektryk.
-''',
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildNormSection(String title, Map<String, String> data) {
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: Colors.grey.shade50,
-        border: Border.all(color: Colors.grey.shade300),
-        borderRadius: BorderRadius.circular(8),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(title,
-              style: const TextStyle(
-                  fontSize: 13, fontWeight: FontWeight.bold)),
-          const SizedBox(height: 12),
-          ...data.entries.map((entry) {
-            return Padding(
-              padding: const EdgeInsets.symmetric(vertical: 8),
-              child: Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  SizedBox(
-                    width: 140,
-                    child: Text(entry.key + ':',
-                        style: const TextStyle(
-                            fontSize: 11, fontWeight: FontWeight.w600)),
-                  ),
-                  Expanded(
-                    child: Text(entry.value,
-                        style: TextStyle(
-                            fontSize: 11,
-                            color: Colors.grey.shade800,
-                            height: 1.4)),
-                  ),
-                ],
-              ),
-            );
-          }).toList(),
-        ],
-      ),
-    );
-  }
 
   Widget _buildSection(String title, String content) {
     return Container(
@@ -661,7 +604,7 @@ Szczegóły - zaradź u projektanta ds. bezpieczeństwa elektryk.
       padding: const EdgeInsets.symmetric(vertical: 4),
       child: Row(
         children: [
-          Text(label + ' ',
+          Text('$label ',
               style:
                   const TextStyle(fontSize: 12, fontWeight: FontWeight.w600)),
           Expanded(

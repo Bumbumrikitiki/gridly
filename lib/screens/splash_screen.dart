@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:gridly/models/grid_models.dart';
 import 'package:gridly/services/grid_provider.dart';
+import 'package:gridly/widgets/electrical_loading_animation.dart';
 
 class SplashScreen extends StatefulWidget {
   const SplashScreen({super.key});
@@ -171,14 +172,19 @@ class _SplashScreenState extends State<SplashScreen>
               crossAxisAlignment: CrossAxisAlignment.center,
               children: [
                 const SizedBox(height: 12),
-                Text(
-                  'GRIDLY',
-                  textAlign: TextAlign.center,
+                ShimmerText(
+                  text: 'GRIDLY',
                   style: theme.textTheme.displayMedium?.copyWith(
                     color: theme.colorScheme.primary,
                     letterSpacing: 6,
                     fontWeight: FontWeight.w700,
+                  ) ?? const TextStyle(
+                    fontSize: 48,
+                    color: Color(0xFFF7B500),
+                    letterSpacing: 6,
+                    fontWeight: FontWeight.w700,
                   ),
+                  shimmerColor: Colors.white,
                 ),
                 const SizedBox(height: 6),
                 Text(
@@ -234,11 +240,33 @@ class _SplashScreenState extends State<SplashScreen>
                               ),
                             ),
                           )
-                        : const Center(
-                            key: ValueKey('loading_indicator'),
-                            child: SizedBox(
-                              width: 220,
-                              child: LinearProgressIndicator(),
+                        : Center(
+                            key: const ValueKey('loading_indicator'),
+                            child: Column(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                ElectricalLoadingAnimation(
+                                  primaryColor: theme.colorScheme.primary,
+                                  size: 200,
+                                ),
+                                const SizedBox(height: 24),
+                                Row(
+                                  mainAxisAlignment: MainAxisAlignment.center,
+                                  children: [
+                                    Text(
+                                      'Inicjalizacja',
+                                      style: theme.textTheme.bodyLarge?.copyWith(
+                                        color: Colors.white70,
+                                      ),
+                                    ),
+                                    const SizedBox(width: 4),
+                                    LoadingDots(
+                                      color: theme.colorScheme.primary,
+                                      size: 6,
+                                    ),
+                                  ],
+                                ),
+                              ],
                             ),
                           ),
                   ),

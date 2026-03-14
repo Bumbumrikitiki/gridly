@@ -1,10 +1,14 @@
 import 'package:uuid/uuid.dart';
 import 'package:gridly/multitool/project_manager/models/project_models.dart';
-import 'package:gridly/multitool/project_manager/logic/residential_unit_tasks.dart';
 
 /// Inteligentny generator checklist'u z automatycznym planowaniem
 /// System analizuje typ budowy, systemy, etapy i generuje zadania
 /// z właściwym czasowaniem i alertami
+/// 
+/// Integracja z bazą danych harmonogramu budowy:
+/// - Dane z dokumentu o etapach budowy budynków mieszkalnych i biurowych
+/// - Dynamiczne dostosowywanie harmonogramu na podstawie liczby pięter i garaży
+/// - Specjalistyczne kroki dla pomezczczeń podziemnych
 class ProjectChecklistGenerator {
   static const _uuid = Uuid();
 
@@ -14,16 +18,22 @@ class ProjectChecklistGenerator {
   ) {
     final projectId = _uuid.v4();
     
-    // 1. Generuj fazy budowy (etapy z datami)
-    final phases = _generatePhases(config);
+    // 1. Oblicz harmonogram na podstawie całkowitego czasu budowy
+    final schedule = ScheduleCalculator.calculateSchedule(config);
     
-    // 2. Generuj wszystkie zadania dla wybranych systemów
-    final allTasks = _generateAllTasks(config, phases);
+    // 2. Generuj fazy budowy (etapy z datami)
+    final phases = ScheduleCalculator.generatePhases(config, schedule);
     
-    // 3. Generuj jednostki (mieszkania, biura)
+    // 3. Generuj wszystkie zadania dla wybranych systemów
+    var allTasks = _generateAllTasks(config, phases);
+    
+    // 4. Oznacz zadania jako wykonane jeśli etap już się skończył
+    allTasks = _markCompletedTasksByStage(allTasks, config.currentBuildingStage);
+    
+    // 5. Generuj jednostki (mieszkania, biura)
     final units = _generateUnits(config, allTasks);
     
-    // 4. Stwórz projekt
+    // 6. Stwórz projekt
     var project = ConstructionProject(
       projectId: projectId,
       config: config,
@@ -32,7 +42,7 @@ class ProjectChecklistGenerator {
       units: units,
     );
     
-    // 5. Generuj początkowe alerty
+    // 7. Generuj początkowe alerty
     final initialAlerts = _generateInitialAlerts(project);
     project = ConstructionProject(
       projectId: project.projectId,
@@ -47,99 +57,39 @@ class ProjectChecklistGenerator {
   }
 
   // ═══════════════════════════════════════════════════════════════════════
-  // GENEROWANIE FAZ BUDOWY
+  // OZNACZANIE WYKONANYCH ZADAŃ NA PODSTAWIE AKTUALNEGO ETAPU
   // ═══════════════════════════════════════════════════════════════════════
 
-  static List<ProjectPhase> _generatePhases(BuildingConfiguration config) {
-    final phases = <ProjectPhase>[];
-    var currentDate = config.projectStartDate;
-
-    for (final stage in BuildingStage.values) {
-      final duration = config.stageDurations[stage] ?? 2;
-      final endDate = currentDate.add(Duration(days: duration * 7));
-      
-      phases.add(
-        ProjectPhase(
-          stage: stage,
-          startDate: currentDate,
-          endDate: endDate,
-          description: _getPhaseDescription(stage),
-          criticalTasks: _getCriticalTasks(stage, config),
-        ),
-      );
-      
-      currentDate = endDate;
-    }
-
-    return phases;
-  }
-
-  static String _getPhaseDescription(BuildingStage stage) {
-    switch (stage) {
-      case BuildingStage.przygotowanie:
-        return 'Projekty, harmonogram, zamówienia';
-      case BuildingStage.fundamenty:
-        return 'Dreny, pasy, pale fundamentowe';
-      case BuildingStage.konstrukcja:
-        return 'Szkielety, stropy, słupy, wznoszenie';
-      case BuildingStage.przegrody:
-        return 'Ścianki działowe, przechody, kanały';
-      case BuildingStage.tynki:
-        return 'Tynki zewnętrzne i wewnętrzne';
-      case BuildingStage.posadzki:
-        return 'Posadzki, wylewki, przepusty';
-      case BuildingStage.osprzet:
-        return 'Osprzęt elektryczny, oprawy';
-      case BuildingStage.malowanie:
-        return 'Malowanie, lakierowanie';
-      case BuildingStage.finalizacja:
-        return 'Drzwi finalne, meblościany';
-      case BuildingStage.ozeInstalacje:
-        return 'Instalacje OZE (PV, BESS)';
-      case BuildingStage.evInfrastruktura:
-        return 'Infrastruktura EV (ładowarki, DLM)';
-      case BuildingStage.oddawanie:
-        return 'Pomiary, dokumentacja, odbiór';
-    }
-  }
-
-  static List<String> _getCriticalTasks(
-    BuildingStage stage,
-    BuildingConfiguration config,
+  static List<ChecklistTask> _markCompletedTasksByStage(
+    List<ChecklistTask> tasks,
+    BuildingStage currentStage,
   ) {
-    switch (stage) {
-      case BuildingStage.przygotowanie:
-        return [
-          'Zatwierdź harmonogram budowy',
-          'Wyślij rozdzielnice do prefabrykacji',
-          'Przygotuj dokumentację techniczną',
-        ];
-      case BuildingStage.przegrody:
-        return [
-          'UŁÓŻ KABLE W ŚCIANACH - OSTATNIA SZANSA!',
-          'Przepusty przez słupy',
-          'Kanały w posadzkach',
-        ];
-      case BuildingStage.tynki:
-        return [
-          'OSTATNIA SZANSA NA KABLE!',
-          'Przygotowanie powierzchni',
-        ];
-      case BuildingStage.osprzet:
-        return [
-          'Montaż puszek elektrycznych',
-          'Obsadzenie osprzętu',
-          'Sprawdzenie połączeń',
-        ];
-      case BuildingStage.oddawanie:
-        return [
-          'POMIARY ELEKTRYCZNE (UZT, IP, oporność)',
-          'Wykończeń dokumentacji',
-          'Odbiór budowy',
-        ];
-      default:
-        return [];
-    }
+    final stageOrder = BuildingStage.values.toList();
+    final currentStageIndex = stageOrder.indexOf(currentStage);
+
+    return tasks.map((task) {
+      final taskStageIndex = stageOrder.indexOf(task.stage);
+      
+      // Jeśli zadanie jest z etapu wcześniejszego niż aktualny, oznacz jako wykonane
+      if (taskStageIndex < currentStageIndex) {
+        return ChecklistTask(
+          id: task.id,
+          title: task.title,
+          description: task.description,
+          system: task.system,
+          stage: task.stage,
+          daysBeforeStageEnd: task.daysBeforeStageEnd,
+          status: TaskStatus.completed,
+          completedDate: DateTime.now(),
+          dueDate: task.dueDate,
+          dependsOnTaskIds: task.dependsOnTaskIds,
+          notes: '${task.notes}\n[AUTOMATYCZNIE OZNACZONE JAKO WYKONANE]',
+          attachmentPaths: task.attachmentPaths,
+          unitIds: task.unitIds,
+        );
+      }
+      return task;
+    }).toList();
   }
 
   // ═══════════════════════════════════════════════════════════════════════
@@ -150,479 +100,365 @@ class ProjectChecklistGenerator {
     BuildingConfiguration config,
     List<ProjectPhase> phases,
   ) {
-    final tasks = <ChecklistTask>[];
-
-    // Dla budynków mieszkalnych wielolokalowych generuj zadania mieszkalne (28 zadań)
-    if (config.buildingType == BuildingType.wielorodzinny ||
-        config.buildingType == BuildingType.wielorodzinnyWysoki ||
-        config.buildingType == BuildingType.mieszany) {
-      // Generuj 28 zadań dla każdego mieszkania
-      tasks.addAll(
-        ResidentialUnitTasksGenerator.generateTasksForAllUnits(config),
-      );
+    final allTasks = <ChecklistTask>[];
+    
+    // Zadania specyficzne dla lokali mieszkalnych
+    if (config.buildingType == BuildingType.mieszkalny && config.estimatedUnits > 1) {
+      allTasks.addAll(_generateResidentialUnitTasks(config));
     }
-
-    // UWAGA: Usunięto generowanie zadań dla systemów elektrycznych
-    // Zgodnie z wymaganiami - zostają tylko zadania mieszkalne
-
-    return tasks;
+    
+    return allTasks;
   }
 
-  static List<ChecklistTask> _generateTasksForSystem(
-    ElectricalSystemType system,
+  // ═══════════════════════════════════════════════════════════════════════
+  // GENERATOR ZADAŃ DLA LOKALI MIESZKALNYCH
+  // (podstawa: lista prac lokale mieszkalne.xlsx)
+  // ═══════════════════════════════════════════════════════════════════════
+
+  static List<ChecklistTask> _generateResidentialUnitTasks(
     BuildingConfiguration config,
-    Map<BuildingStage, ProjectPhase> phaseMap,
   ) {
     final tasks = <ChecklistTask>[];
-    final taskIdBase = system.toString().split('.').last;
+    final unitIds = _generateUnitIds(config);
 
-    switch (system) {
-      // ════════════════════════════════════════════════════════════════
-      // ZASILANIE I ROZDZIELNICE
-      // ════════════════════════════════════════════════════════════════
-      case ElectricalSystemType.zasilanie:
-        // T1: Zamówienie rozdzielnic
-        tasks.add(ChecklistTask(
-          id: '$taskIdBase-01-order',
-          title: '🚀 WYSYŁKA: Rozdzielnice do prefabrykacji',
-          description:
-            'Wyślij rozdzielnice główne i podrzędne do zakładu prefabrykacji. '
-            'Czas realizacji: 4-6 tygodni! Konieczne 4 tygodnie PRZED fazą przegród.',
-          system: system,
-          stage: BuildingStage.przygotowanie,
-          daysBeforeStageEnd: 28,
-          dependsOnTaskIds: [],
-          notes: 'Kontakt z dostawcą, potwierdzenie dostępu do hali',
-        ));
+    // T1: Projekt zamienny
+    tasks.add(ChecklistTask(
+      id: 'unit-01-alt-project',
+      title: 'Projekt zamienny:',
+      description: 'Przygotuj lub zatwierdź projekt zamienny dla lokalu ze zmianami lokatorskimi. Oznacz "Nie dotyczy" jeśli standard.',
+      system: ElectricalSystemType.oswietlenie,
+      stage: BuildingStage.przygotowanie,
+      daysBeforeStageEnd: 14,
+      unitIds: unitIds,
+    ));
 
-        // T2: Przeboje i kanały
-        tasks.add(ChecklistTask(
-          id: '$taskIdBase-02-holes',
-          title: 'Przeboje na trasach zasilaczy',
-          description:
-            'Wykonaj przeboje w słupach i ścianach nośnych dla zasilaczy głównych. '
-            'Etap: podczas wznoszenia konstrukcji.',
-          system: system,
-          stage: BuildingStage.konstrukcja,
-          daysBeforeStageEnd: 7,
-          dependsOnTaskIds: ['$taskIdBase-01-order'],
-        ));
+    // T2: Ścianki działowe
+    tasks.add(ChecklistTask(
+      id: 'unit-02-partition-walls',
+      title: 'Ścianki działowe:',
+      description: 'Wykonanie ścianek działowych wewnętrznych zgodnie z projektem.',
+      system: ElectricalSystemType.oswietlenie,
+      stage: BuildingStage.przegrody,
+      daysBeforeStageEnd: 14,
+      unitIds: unitIds,
+    ));
 
-        // T3: Przygotowanie węzła głównego
-        tasks.add(ChecklistTask(
-          id: '$taskIdBase-03-main-node',
-          title: 'Przygotowanie węzła centralnego zasilania',
-          description:
-            'Czyść i przygotuj miejsce dla rozdzielnic (pokój techniczny). '
-            'Rozdzielnice powinny już być dostarczone i czekać na montaż.',
-          system: system,
-          stage: BuildingStage.przegrody,
-          daysBeforeStageEnd: 7,
-          dependsOnTaskIds: ['$taskIdBase-02-holes'],
-        ));
+    // T3: Montaż okablowania
+    tasks.add(ChecklistTask(
+      id: 'unit-03-wiring',
+      title: 'Montaż okablowania:',
+      description: 'Rozprowadzenie przewodów elektrycznych w lokalu. PRZED tynkami!',
+      system: ElectricalSystemType.oswietlenie,
+      stage: BuildingStage.przegrody,
+      daysBeforeStageEnd: 7,
+      dependsOnTaskIds: ['unit-02-partition-walls'],
+      unitIds: unitIds,
+    ));
 
-        // T4: Montaż rozdzielnic
-        tasks.add(ChecklistTask(
-          id: '$taskIdBase-04-install-dist',
-          title: 'Montaż rozdzielnic głównych i podrzędnych',
-          description:
-            'Zainstaluj rozdzielnice w pokoju technicznym. '
-            'Połącz zasilaczy wchodzący. '
-            'Konieczne przygotowaniu dokumentacji.',
-          system: system,
-          stage: BuildingStage.osprzet,
-          daysBeforeStageEnd: 14,
-          dependsOnTaskIds: ['$taskIdBase-03-main-node'],
-        ));
+    // T4: Montaż okablowania na balkonie/loggi/ogródku
+    tasks.add(ChecklistTask(
+      id: 'unit-04-wiring-outdoor',
+      title: 'Montaż okablowania na balkonie, loggy, ogródku:',
+      description: 'Okablowanie zewnętrznych przestrzeni przynależnych do lokalu.',
+      system: ElectricalSystemType.oswietlenie,
+      stage: BuildingStage.przegrody,
+      daysBeforeStageEnd: 7,
+      dependsOnTaskIds: ['unit-03-wiring'],
+      unitIds: unitIds,
+    ));
 
-        // T5: Podział zasilania
-        tasks.add(ChecklistTask(
-          id: '$taskIdBase-05-distribution',
-          title: 'Podział zasilania do pięter i mieszkań',
-          description:
-            'Poprowadź kable zasilające do rozdzielnic piętrowych. '
-            'Kable muszą być ułożone PRZED tynkami!',
-          system: system,
-          stage: BuildingStage.tynki,
-          daysBeforeStageEnd: 7,
-          dependsOnTaskIds: ['$taskIdBase-02-holes'],
-          unitIds: config.estimatedUnits > 1 ? _generateUnitIds(config) : null,
-        ));
+    // T5: Montaż puszek elektroinstalacyjnych
+    tasks.add(ChecklistTask(
+      id: 'unit-05-socket-boxes',
+      title: 'Montaż puszek elektroinstalacyjnych:',
+      description: 'Osadzenie puszek podtynkowych dla gniazd, włączników, lamp. PRZED tynkami!',
+      system: ElectricalSystemType.oswietlenie,
+      stage: BuildingStage.przegrody,
+      daysBeforeStageEnd: 3,
+      dependsOnTaskIds: ['unit-03-wiring'],
+      unitIds: unitIds,
+    ));
 
-        break;
+    // T6: Dokumentacja fotograficzna okablowania
+    tasks.add(ChecklistTask(
+      id: 'unit-06-wiring-photos',
+      title: 'Dokumentacja fotograficzna okablowania:',
+      description: 'Wykonaj zdjęcia tras przewodów PRZED zakryciem tynkami. Ważne dla późniejszych serwisów.',
+      system: ElectricalSystemType.oswietlenie,
+      stage: BuildingStage.przegrody,
+      daysBeforeStageEnd: 1,
+      dependsOnTaskIds: ['unit-04-wiring', 'unit-05-socket-boxes'],
+      unitIds: unitIds,
+    ));
 
-      // ════════════════════════════════════════════════════════════════
-      // OŚWIETLENIE
-      // ════════════════════════════════════════════════════════════════
-      case ElectricalSystemType.oswietlenie:
-        // T1: Marki tynkowe
-        tasks.add(ChecklistTask(
-          id: '$taskIdBase-01-marks',
-          title: '✏️ Zaznaczenie puszek oświetlenia na ścianach',
-          description:
-            'Zaznacz położenie puszek dla opraw sufitowych. '
-            'Mierz od planów i dokumentacji. '
-            'PRZED tynkami wewnętrznymi!',
-          system: system,
-          stage: BuildingStage.przegrody,
-          daysBeforeStageEnd: 3,
-          unitIds: config.estimatedUnits > 1 ? _generateUnitIds(config) : null,
-        ));
+    // T7: Doprowadzenie kabla WLZ
+    tasks.add(ChecklistTask(
+      id: 'unit-07-wlz-cable',
+      title: 'Doprowadzenie kabla WLZ:',
+      description: 'Kabel od licznika głównego do tablicy mieszkaniowej (Wewnętrzna Linia Zasilająca).',
+      system: ElectricalSystemType.zasilanie,
+      stage: BuildingStage.przegrody,
+      daysBeforeStageEnd: 7,
+      unitIds: unitIds,
+    ));
 
-        // T2: Rozprowadzenie kabli
-        tasks.add(ChecklistTask(
-          id: '$taskIdBase-02-wiring',
-          title: 'Rozprowadzenie kabli oświetlenia',
-          description:
-            'Ułóż kable na sufitach, pod posadzkami i w ścianach. '
-            'Zgodnie z planem instalacji. '
-            'OSTATNIA szansa PRZED tynkami!',
-          system: system,
-          stage: BuildingStage.tynki,
-          daysBeforeStageEnd: 1,
-          dependsOnTaskIds: ['$taskIdBase-01-marks'],
-          unitIds: config.estimatedUnits > 1 ? _generateUnitIds(config) : null,
-        ));
+    // T8: Odbiory inspektora nadzoru inwestorskiego
+    tasks.add(ChecklistTask(
+      id: 'unit-08-inspector-check-1',
+      title: 'Odbiory inspektora nadzoru inwestorskiego:',
+      description: 'Inspekcja ukrytych tras okablowania przez inspektora nadzoru. PRZED tynkami!',
+      system: ElectricalSystemType.oswietlenie,
+      stage: BuildingStage.przegrody,
+      daysBeforeStageEnd: 1,
+      dependsOnTaskIds: ['unit-06-wiring-photos'],
+      unitIds: unitIds,
+    ));
 
-        // T3: Obsadzenie puszek
-        tasks.add(ChecklistTask(
-          id: '$taskIdBase-03-socket-prep',
-          title: 'Obsadzenie puszek oświetlenia',
-          description:
-            'Wstaw puszki elektroinstalacyjne w zaznaczone miejsca. '
-            'Zabezpiecz przed zabrudzeniem podczas tynków.',
-          system: system,
-          stage: BuildingStage.tynki,
-          daysBeforeStageEnd: 1,
-          dependsOnTaskIds: ['$taskIdBase-02-wiring'],
-          unitIds: config.estimatedUnits > 1 ? _generateUnitIds(config) : null,
-        ));
+    // T9: Tynki
+    tasks.add(ChecklistTask(
+      id: 'unit-09-plastering',
+      title: 'Tynki:',
+      description: 'Wykonanie tynków wewnętrznych. Status: wykonane / w trakcie.',
+      system: ElectricalSystemType.oswietlenie,
+      stage: BuildingStage.tynki,
+      daysBeforeStageEnd: 7,
+      dependsOnTaskIds: ['unit-08-inspector-check-1'],
+      unitIds: unitIds,
+    ));
 
-        // T4: Czyszczenie puszek
-        tasks.add(ChecklistTask(
-          id: '$taskIdBase-04-clean',
-          title: 'Czyszczenie puszek PO tynkach',
-          description:
-            'Wystrugaj tynk z puszek. Przygotuj do montażu osprzętu. '
-            'Uważaj na uszkodzenia kabli!',
-          system: system,
-          stage: BuildingStage.osprzet,
-          daysBeforeStageEnd: 14,
-          dependsOnTaskIds: ['$taskIdBase-03-socket-prep'],
-          unitIds: config.estimatedUnits > 1 ? _generateUnitIds(config) : null,
-        ));
+    // T10: Wykonanie pomiaru Riso
+    tasks.add(ChecklistTask(
+      id: 'unit-10-riso-measurement',
+      title: 'Wykonanie pomiaru Riso:',
+      description: 'Pomiar rezystancji izolacji instalacji elektrycznej (Riso). Wymagany protokół.',
+      system: ElectricalSystemType.zasilanie,
+      stage: BuildingStage.tynki,
+      daysBeforeStageEnd: 3,
+      dependsOnTaskIds: ['unit-09-plastering'],
+      unitIds: unitIds,
+    ));
 
-        // T5: Montaż opraw
-        tasks.add(ChecklistTask(
-          id: '$taskIdBase-05-install',
-          title: 'Montaż opraw oświetleniowych',
-          description:
-            'Zainstaluj oprawy w sufitach i ścianach. '
-            'Podłącz kable. Sprawdź działanie.',
-          system: system,
-          stage: BuildingStage.malowanie,
-          daysBeforeStageEnd: 7,
-          dependsOnTaskIds: ['$taskIdBase-04-clean'],
-          unitIds: config.estimatedUnits > 1 ? _generateUnitIds(config) : null,
-        ));
+    // T11: Ułożenie rur osłonowych pod instalacje teletechniczne
+    tasks.add(ChecklistTask(
+      id: 'unit-11-telecom-conduits',
+      title: 'Ułożenie rur osłonowych pod instalacje teletechniczną:',
+      description: 'Rury osłonowe dla kabli teletechnicznych (internet, TV, domofon). PRZED wylewką!',
+      system: ElectricalSystemType.internet,
+      stage: BuildingStage.posadzki,
+      daysBeforeStageEnd: 7,
+      unitIds: unitIds,
+    ));
 
-        break;
+    // T12: Dokumentacja fotograficzna rur osłonowych
+    tasks.add(ChecklistTask(
+      id: 'unit-12-conduits-photos',
+      title: 'Dokumentacja fotograficzna rur osłonowych:',
+      description: 'Zdjęcia tras rur teletechnicznych PRZED wylewką.',
+      system: ElectricalSystemType.internet,
+      stage: BuildingStage.posadzki,
+      daysBeforeStageEnd: 3,
+      dependsOnTaskIds: ['unit-11-telecom-conduits'],
+      unitIds: unitIds,
+    ));
 
-      // ════════════════════════════════════════════════════════════════
-      // SYSTEMY BEZPIECZEŃSTWA
-      // ════════════════════════════════════════════════════════════════
-      case ElectricalSystemType.ppoz:
-        tasks.add(ChecklistTask(
-          id: '$taskIdBase-01-design',
-          title: 'Przygotowanie projektu systemu ppoż',
-          description:
-            'Sporządź schemat systemu ppoż (detekcja, zasilanie, sygnalizacja). '
-            'Uzgodnij z straż pożarną.',
-          system: system,
-          stage: BuildingStage.przygotowanie,
-          daysBeforeStageEnd: 14,
-        ));
+    // T13: Jastrych (wylewka)
+    tasks.add(ChecklistTask(
+      id: 'unit-13-screed',
+      title: 'Jastrych (wylewka):',
+      description: 'Wykonanie wylewki podłogowej. Status: wykonane / w trakcie.',
+      system: ElectricalSystemType.oswietlenie,
+      stage: BuildingStage.posadzki,
+      daysBeforeStageEnd: 7,
+      dependsOnTaskIds: ['unit-12-conduits-photos'],
+      unitIds: unitIds,
+    ));
 
-        tasks.add(ChecklistTask(
-          id: '$taskIdBase-02-wiring',
-          title: 'Rozprowadzenie urządzeń ppoż',
-          description:
-            'Rozmieść detektory dymu/ciepła w pomieszczeniach. '
-            'Ułóż kable sygnalizacyjne (przed tynkami!)',
-          system: system,
-          stage: BuildingStage.przegrody,
-          daysBeforeStageEnd: 3,
-        ));
+    // T14: Doprowadzenie okablowania teletechnicznego w rurach
+    tasks.add(ChecklistTask(
+      id: 'unit-14-telecom-cables',
+      title: 'Doprowadzenie okablowania teletechnicznego w rurach:',
+      description: 'Przeciągnięcie kabli UTP, koncentrycznych, domofonu w rurach osłonowych.',
+      system: ElectricalSystemType.internet,
+      stage: BuildingStage.posadzki,
+      daysBeforeStageEnd: 3,
+      dependsOnTaskIds: ['unit-11-telecom-conduits', 'unit-13-screed'],
+      unitIds: unitIds,
+    ));
 
-        tasks.add(ChecklistTask(
-          id: '$taskIdBase-03-test',
-          title: 'Test i regulacja systemu ppoż',
-          description:
-            'Przeprowadź test wszystkich detektorów. '
-            'Sprawdzenie centrali, zasilania, sygnalizacji.',
-          system: system,
-          stage: BuildingStage.finalizacja,
-          daysBeforeStageEnd: 7,
-          dependsOnTaskIds: ['$taskIdBase-02-wiring'],
-        ));
-        break;
+    // T15: Malowanie
+    tasks.add(ChecklistTask(
+      id: 'unit-15-painting',
+      title: 'Malowanie:',
+      description: 'Malowanie ścian i sufitów. Status: wykonane / w trakcie.',
+      system: ElectricalSystemType.oswietlenie,
+      stage: BuildingStage.malowanie,
+      daysBeforeStageEnd: 7,
+      dependsOnTaskIds: ['unit-13-screed'],
+      unitIds: unitIds,
+    ));
 
-      case ElectricalSystemType.cctv:
-        tasks.add(ChecklistTask(
-          id: '$taskIdBase-01-positions',
-          title: 'Określenie pozycji kamer CCTV',
-          description:
-            'Zaznacz miejsca montażu kamer. '
-            'Przy wejściach, klatce schodowej, parkingu, halach.',
-          system: system,
-          stage: BuildingStage.przegrody,
-          daysBeforeStageEnd: 7,
-        ));
+    // T16: Montaż tablicy mieszkaniowej elektrycznej - TM
+    tasks.add(ChecklistTask(
+      id: 'unit-16-electrical-panel',
+      title: 'Montaż tablicy mieszkaniowej elektrycznej - TM:',
+      description: 'Instalacja rozdzielnicy mieszkaniowej (TM) z zabezpieczeniami.',
+      system: ElectricalSystemType.zasilanie,
+      stage: BuildingStage.osprzet,
+      daysBeforeStageEnd: 14,
+      dependsOnTaskIds: ['unit-07-wlz-cable'],
+      unitIds: unitIds,
+    ));
 
-        tasks.add(ChecklistTask(
-          id: '$taskIdBase-02-wiring',
-          title: 'Ułożenie kabli dla CCTV',
-          description:
-            'Ułóż kable zasilające i sygnałowe. '
-            'Zgodnie ze schematem projektu.',
-          system: system,
-          stage: BuildingStage.tynki,
-          daysBeforeStageEnd: 1,
-          dependsOnTaskIds: ['$taskIdBase-01-positions'],
-        ));
+    // T17: Podłączenie tablicy mieszkaniowej
+    tasks.add(ChecklistTask(
+      id: 'unit-17-panel-connection',
+      title: 'Podłączenie tablicy mieszkaniowej:',
+      description: 'Podłączenie wszystkich obwodów do rozdzielnicy TM. Test zabezpieczeń.',
+      system: ElectricalSystemType.zasilanie,
+      stage: BuildingStage.osprzet,
+      daysBeforeStageEnd: 10,
+      dependsOnTaskIds: ['unit-16-electrical-panel'],
+      unitIds: unitIds,
+    ));
 
-        tasks.add(ChecklistTask(
-          id: '$taskIdBase-03-install',
-          title: 'Montaż i konfiguracja kamer',
-          description:
-            'Zainstaluj kamery. Konfiguruj rejestrator. '
-            'Sprawdzenie transmisji i rejestracji.',
-          system: system,
-          stage: BuildingStage.osprzet,
-          daysBeforeStageEnd: 7,
-          dependsOnTaskIds: ['$taskIdBase-02-wiring'],
-        ));
-        break;
+    // T18: Montaż teletechnicznej skrzynki mieszkaniowej - TSM
+    tasks.add(ChecklistTask(
+      id: 'unit-18-telecom-box',
+      title: 'Montaż teletechnicznej skrzynki mieszkaniowej - TSM:',
+      description: 'Instalacja skrzynki TSM dla terminacji kabli teletechnicznych.',
+      system: ElectricalSystemType.internet,
+      stage: BuildingStage.osprzet,
+      daysBeforeStageEnd: 10,
+      dependsOnTaskIds: ['unit-14-telecom-cables'],
+      unitIds: unitIds,
+    ));
 
-      case ElectricalSystemType.domofonowa:
-        tasks.add(ChecklistTask(
-          id: '$taskIdBase-01-project',
-          title: 'Projekt systemu domofonowego',
-          description:
-            'Schemat rozdzielenia domofonu dla każdej klatki schodowej. '
-            'Liczba mieszkań, lokalizacja słuchawek.',
-          system: system,
-          stage: BuildingStage.przygotowanie,
-          daysBeforeStageEnd: 14,
-        ));
+    // T19: Montaż osprzętu
+    tasks.add(ChecklistTask(
+      id: 'unit-19-fixtures',
+      title: 'Montaż osprzętu:',
+      description: 'Montaż gniazd, włączników, anten RTV, gniazd RJ45.',
+      system: ElectricalSystemType.oswietlenie,
+      stage: BuildingStage.osprzet,
+      daysBeforeStageEnd: 7,
+      dependsOnTaskIds: ['unit-15-painting', 'unit-17-panel-connection'],
+      unitIds: unitIds,
+    ));
 
-        tasks.add(ChecklistTask(
-          id: '$taskIdBase-02-cables',
-          title: 'Rozprowadzenie przewodów domofonowych',
-          description:
-            'Ułóż przewody od wejścia/bramy do rozdzielnic. '
-            'Od rozdzielnic do mieszkań.',
-          system: system,
-          stage: BuildingStage.przegrody,
-          daysBeforeStageEnd: 3,          unitIds: config.estimatedUnits > 1 ? _generateUnitIds(config) : null,        ));
+    // T20: Montaż unifonu, wideodomofonu
+    tasks.add(ChecklistTask(
+      id: 'unit-20-intercom',
+      title: 'Montaż unifonu, wideodomofonu:',
+      description: 'Instalacja słuchawki/monitora domofonu w mieszkaniu.',
+      system: ElectricalSystemType.domofonowa,
+      stage: BuildingStage.osprzet,
+      daysBeforeStageEnd: 7,
+      dependsOnTaskIds: ['unit-18-telecom-box'],
+      unitIds: unitIds,
+    ));
 
-        tasks.add(ChecklistTask(
-          id: '$taskIdBase-03-mounting',
-          title: 'Montaż paneli domofonowych i słuchawek',
-          description:
-            'Zainstaluj panele wejściowe. Słuchawki w mieszkaniach. '
-            'Połączenia i test.',
-          system: system,
-          stage: BuildingStage.osprzet,
-          daysBeforeStageEnd: 14,
-          dependsOnTaskIds: ['$taskIdBase-02-cables'],
-          unitIds: config.estimatedUnits > 1 ? _generateUnitIds(config) : null,
-        ));
-        break;
+    // T21: Montaż czujnika dymu
+    tasks.add(ChecklistTask(
+      id: 'unit-21-smoke-detector',
+      title: 'Montaż czujnika dymu:',
+      description: 'Instalacja czujników dymu zgodnie z przepisami p.poż.',
+      system: ElectricalSystemType.ppoz,
+      stage: BuildingStage.osprzet,
+      daysBeforeStageEnd: 7,
+      dependsOnTaskIds: ['unit-15-painting'],
+      unitIds: unitIds,
+    ));
 
-      // ════════════════════════════════════════════════════════════════
-      // SYSTEMY NOWOCZESNE
-      // ════════════════════════════════════════════════════════════════
-      case ElectricalSystemType.panelePV:
-        tasks.add(ChecklistTask(
-          id: '$taskIdBase-01-project',
-          title: 'Projekt systemu PV z magazynem energii',
-          description:
-            'Sporządź projekt paneli słonecznych. '
-            'Wyznacz miejsce na dachu, inverter w pokoju technicznym.',
-          system: system,
-          stage: BuildingStage.przygotowanie,
-          daysBeforeStageEnd: 14,
-        ));
+    // T22: Montaż oprawek oświetleniowych
+    tasks.add(ChecklistTask(
+      id: 'unit-22-light-fixtures',
+      title: 'Montaż oprawek oświetleniowych:',
+      description: 'Montaż opraw/żyrandoli sufitowych i kinkietów ściennych.',
+      system: ElectricalSystemType.oswietlenie,
+      stage: BuildingStage.malowanie,
+      daysBeforeStageEnd: 3,
+      dependsOnTaskIds: ['unit-19-fixtures'],
+      unitIds: unitIds,
+    ));
 
-        tasks.add(ChecklistTask(
-          id: '$taskIdBase-02-wiring',
-          title: 'Przygotowanie tras dla systemu PV',
-          description:
-            'Ułóż kable zasilające na dachu i do invertera. '
-            'Preparacja mocowań na dachu.',
-          system: system,
-          stage: BuildingStage.tynki,
-          daysBeforeStageEnd: 7,
-        ));
+    // T23: Uruchomienie instalacji domofonowej
+    tasks.add(ChecklistTask(
+      id: 'unit-23-intercom-activation',
+      title: 'Uruchomienie instalacji domofonowej:',
+      description: 'Konfiguracja i test połączenia domofonu. Sprawdzenie audio/wideo.',
+      system: ElectricalSystemType.domofonowa,
+      stage: BuildingStage.finalizacja,
+      daysBeforeStageEnd: 7,
+      dependsOnTaskIds: ['unit-20-intercom'],
+      unitIds: unitIds,
+    ));
 
-        tasks.add(ChecklistTask(
-          id: '$taskIdBase-03-install',
-          title: 'Montaż paneli i invertera PV',
-          description:
-            'Zainstaluj panele słoneczne na dachu. '
-            'Inverter w pokoju technicznym, podłączenie do sieci.',
-          system: system,
-          stage: BuildingStage.osprzet,
-          daysBeforeStageEnd: 7,
-          dependsOnTaskIds: ['$taskIdBase-02-wiring'],
-        ));
+    // T24: Pomiary teletechniczne
+    tasks.add(ChecklistTask(
+      id: 'unit-24-telecom-measurements',
+      title: 'Pomiary teletechniczne:',
+      description: 'Pomiary sieci teletechnicznych (testy UTP, sygnał TV, domofon). Protokoły.',
+      system: ElectricalSystemType.internet,
+      stage: BuildingStage.finalizacja,
+      daysBeforeStageEnd: 5,
+      dependsOnTaskIds: ['unit-18-telecom-box', 'unit-23-intercom-activation'],
+      unitIds: unitIds,
+    ));
 
-        tasks.add(ChecklistTask(
-          id: '$taskIdBase-04-test',
-          title: 'Uruchomienie i test systemu PV',
-          description:
-            'Sprawdzenie generacji energii, magazynowania, zasilania. '
-            'Dokumentacja i pomiary.',
-          system: system,
-          stage: BuildingStage.finalizacja,
-          daysBeforeStageEnd: 3,
-          dependsOnTaskIds: ['$taskIdBase-03-install'],
-        ));
-        break;
+    // T25: Pomiary elektryczne
+    tasks.add(ChecklistTask(
+      id: 'unit-25-electrical-measurements',
+      title: 'Pomiary elektryczne:',
+      description: 'Kompleksowe pomiary instalacji elektrycznej (Riso, pętle zwarciowe, sprawność wyłączników). Protokoły odbiorcze.',
+      system: ElectricalSystemType.zasilanie,
+      stage: BuildingStage.finalizacja,
+      daysBeforeStageEnd: 5,
+      dependsOnTaskIds: ['unit-17-panel-connection', 'unit-19-fixtures'],
+      unitIds: unitIds,
+    ));
 
-      case ElectricalSystemType.ladownarki:
-        tasks.add(ChecklistTask(
-          id: '$taskIdBase-01-points',
-          title: 'Określenie stanowisk ładowarek',
-          description:
-            'Zaplanuj stanowiska ładowarek w garażu/na parkingu. '
-            'Liczba i lokalizacja względem rozdzielnic.',
-          system: system,
-          stage: BuildingStage.przygotowanie,
-          daysBeforeStageEnd: 14,
-        ));
+    // T26: Odbiory inspektora nadzoru inwestorskiego - I termin
+    tasks.add(ChecklistTask(
+      id: 'unit-26-inspector-check-2',
+      title: 'Odbiory inspektora nadzoru inwestorskiego I termin:',
+      description: 'Pierwszy termin odbioru przez inspektora nadzoru. Weryfikacja kompletności.',
+      system: ElectricalSystemType.oswietlenie,
+      stage: BuildingStage.finalizacja,
+      daysBeforeStageEnd: 7,
+      dependsOnTaskIds: ['unit-24-telecom-measurements', 'unit-25-electrical-measurements'],
+      unitIds: unitIds,
+    ));
 
-        tasks.add(ChecklistTask(
-          id: '$taskIdBase-02-cables',
-          title: 'Ułożenie kabli zasilających do ładowarek',
-          description:
-            'Ułóż kable zasilające od rozdzielnic do stanowisk. '
-            'Przed zalewaniem posadzek!',
-          system: system,
-          stage: BuildingStage.posadzki,
-          daysBeforeStageEnd: 1,
-        ));
+    // T27: Odbiory inspektora nadzoru inwestorskiego - II termin
+    tasks.add(ChecklistTask(
+      id: 'unit-27-inspector-check-3',
+      title: 'Odbiory inspektora nadzoru inwestorskiego II termin:',
+      description: 'Drugi termin odbioru - usunięcie uwag z I terminu.',
+      system: ElectricalSystemType.oswietlenie,
+      stage: BuildingStage.finalizacja,
+      daysBeforeStageEnd: 3,
+      dependsOnTaskIds: ['unit-26-inspector-check-2'],
+      unitIds: unitIds,
+    ));
 
-        tasks.add(ChecklistTask(
-          id: '$taskIdBase-03-install',
-          title: 'Montaż ładowarek elektrycznych',
-          description:
-            'Zainstaluj słupki/pudła ładowarek. Podłącz zasilanie. '
-            'Test działania.',
-          system: system,
-          stage: BuildingStage.osprzet,
-          daysBeforeStageEnd: 7,
-          dependsOnTaskIds: ['$taskIdBase-02-cables'],
-        ));
-        break;
-
-      case ElectricalSystemType.internet:
-        tasks.add(ChecklistTask(
-          id: '$taskIdBase-01-project',
-          title: 'Projekt sieci LAN (strukturalna)',
-          description:
-            'Sporządź projekt okablowania strukturalnego. '
-            'Węzeł główny, serwerownia, gniazda w mieszkaniach.',
-          system: system,
-          stage: BuildingStage.przygotowanie,
-          daysBeforeStageEnd: 14,
-        ));
-
-        tasks.add(ChecklistTask(
-          id: '$taskIdBase-02-backbone',
-          title: 'Ułożenie magistrali (backbone)',
-          description:
-            'Ułóż kable główne od węzła do rozdzielnic piętrowych. '
-            'Instalacja w szachtach przed tynkami.',
-          system: system,
-          stage: BuildingStage.przegrody,
-          daysBeforeStageEnd: 3,
-        ));
-
-        tasks.add(ChecklistTask(
-          id: '$taskIdBase-03-cables-units',
-          title: 'Okablowanie do mieszkań (gniazda RJ45)',
-          description:
-            'Poprowadź kable UTP/FTP do gniazd w mieszkaniach. '
-            'Przed tynkami! Oznacz każdy kabel.',
-          system: system,
-          stage: BuildingStage.tynki,
-          daysBeforeStageEnd: 1,
-          unitIds: config.estimatedUnits > 1 ? _generateUnitIds(config) : null,
-        ));
-
-        tasks.add(ChecklistTask(
-          id: '$taskIdBase-04-sockets',
-          title: 'Montaż gniazd RJ45 w mieszkaniach',
-          description:
-            'Zainstaluj gniazda sieciowe RJ45 w mieszkaniach. '
-            'Zaciskanie wg schematu T568A/B.',
-          system: system,
-          stage: BuildingStage.osprzet,
-          daysBeforeStageEnd: 10,
-          dependsOnTaskIds: ['$taskIdBase-03-cables-units'],
-          unitIds: config.estimatedUnits > 1 ? _generateUnitIds(config) : null,
-        ));
-
-        tasks.add(ChecklistTask(
-          id: '$taskIdBase-05-test',
-          title: 'Test i certyfikacja sieci',
-          description:
-            'Wykonaj pomiary testerem sieciowym. '
-            'Certyfikacja odcinków. Dokumentacja.',
-          system: system,
-          stage: BuildingStage.finalizacja,
-          daysBeforeStageEnd: 7,
-          dependsOnTaskIds: ['$taskIdBase-04-sockets'],
-        ));
-        break;
-
-      default:
-        // Dla pozostałych systemów - podstawowe zadania
-        tasks.add(ChecklistTask(
-          id: '$taskIdBase-01-project',
-          title: 'Przygotowanie projektu: ${_getSystemName(system)}',
-          description: 'Sporządź projekt dla systemu: ${_getSystemName(system)}',
-          system: system,
-          stage: BuildingStage.przygotowanie,
-          daysBeforeStageEnd: 14,
-        ));
-
-        tasks.add(ChecklistTask(
-          id: '$taskIdBase-02-prep',
-          title: 'Przygotowanie tras: ${_getSystemName(system)}',
-          description:
-            'Przygotuj trasy dla systemu: ${_getSystemName(system)}',
-          system: system,
-          stage: BuildingStage.przegrody,
-          daysBeforeStageEnd: 3,
-        ));
-
-        tasks.add(ChecklistTask(
-          id: '$taskIdBase-03-install',
-          title: 'Montaż systemu: ${_getSystemName(system)}',
-          description: 'Zainstaluj system: ${_getSystemName(system)}',
-          system: system,
-          stage: BuildingStage.osprzet,
-          daysBeforeStageEnd: 7,
-          // Większość systemów ma instalację per mieszkanie
-          unitIds: config.estimatedUnits > 1 ? _generateUnitIds(config) : null,
-        ));
-    }
+    // T28: Odbiory inspektora nadzoru inwestorskiego - końcowe
+    tasks.add(ChecklistTask(
+      id: 'unit-28-inspector-final',
+      title: 'Odbiory inspektora nadzoru inwestorskiego końcowe:',
+      description: 'Odbiór końcowy lokalu. Protokół przekazania.',
+      system: ElectricalSystemType.oswietlenie,
+      stage: BuildingStage.oddawanie,
+      daysBeforeStageEnd: 0,
+      dependsOnTaskIds: ['unit-27-inspector-check-3'],
+      unitIds: unitIds,
+    ));
 
     return tasks;
   }
+
+  // ═══════════════════════════════════════════════════════════════════════
+  // GENEROWANIE JEDNOSTEK (MIESZKAŃ)
+  // ═══════════════════════════════════════════════════════════════════════
 
   static String _getSystemName(ElectricalSystemType system) {
     switch (system) {
@@ -655,10 +491,6 @@ class ProjectChecklistGenerator {
     }
   }
 
-  // ═══════════════════════════════════════════════════════════════════════
-  // GENEROWANIE JEDNOSTEK (MIESZKAŃ)
-  // ═══════════════════════════════════════════════════════════════════════
-
   static List<ProjectUnit> _generateUnits(
     BuildingConfiguration config,
     List<ChecklistTask> allTasks,
@@ -674,9 +506,13 @@ class ProjectChecklistGenerator {
     for (final unitId in unitIds) {
       final taskStatuses = <String, TaskStatus>{};
       final taskCompletionDates = <String, DateTime?>{};
+      final isAlternateUnit = false;
 
       // Każda jednostka ma te same zadania
       for (final task in allTasks) {
+        if (task.id == kAlternateProjectTaskId && !isAlternateUnit) {
+          continue;
+        }
         if (task.unitIds == null || task.unitIds!.contains(unitId)) {
           taskStatuses[task.id] = TaskStatus.pending;
           taskCompletionDates[task.id] = null;
@@ -689,7 +525,7 @@ class ProjectChecklistGenerator {
           unitName: _getUnitName(config, unitId),
           floor: _getFloorFromUnitId(unitId),
           stairCase: _getStairCaseFromUnitId(config, unitId),
-          isAlternateUnit: false, // Domyślnie nie są zamienne (użytkownik może zmienić w UI)
+          isAlternateUnit: isAlternateUnit,
           taskStatuses: taskStatuses,
           taskCompletionDates: taskCompletionDates,
         ),
@@ -704,23 +540,26 @@ class ProjectChecklistGenerator {
 
     if (config.estimatedUnits <= 1) return unitIds;
 
-    // Użyj rzeczywistej liczby klatek z konfiguracji
-    final stairCaseLetters = ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J'];
-    final numStairCases = config.estimatedStairCases.clamp(1, stairCaseLetters.length);
-    
-    // Oblicz ile mieszkań na piętro na klatce
-    final totalLevels = config.totalLevels;
-    final unitsPerFloorPerStairCase = (config.estimatedUnits / (totalLevels * numStairCases)).ceil();
-
-    // Format: A101, A102, A103, A104 (piętro 1, mieszkanie 1-4)
-    //         A201, A202, A203, A204 (piętro 2, mieszkanie 1-4)
-    for (int stairIdx = 0; stairIdx < numStairCases; stairIdx++) {
-      final stairCase = stairCaseLetters[stairIdx];
-      for (int floor = 1; floor <= totalLevels; floor++) {
-        for (int unit = 1; unit <= unitsPerFloorPerStairCase; unit++) {
-          if (unitIds.length < config.estimatedUnits) {
-            // Format: A101 (A + piętro*100 + numer mieszkania)
-            unitIds.add('$stairCase${floor * 100 + unit}');
+    // Iteruj po budynkach
+    for (int buildingIdx = 0; buildingIdx < config.buildings.length; buildingIdx++) {
+      final building = config.buildings[buildingIdx];
+      
+      // Iteruj po klatach w budynku
+      for (final stairCase in building.stairCases) {
+        // Iteruj po piętrach w klatce
+        for (int floor = 1; floor <= stairCase.numberOfLevels; floor++) {
+          // Pobierz liczbę mieszkań na tym piętrze
+          final unitsOnFloor = stairCase.unitsPerFloor[floor] ?? 2;
+          
+          // Generuj ID dla każdego mieszkania na piętrze
+          for (int unitNum = 1; unitNum <= unitsOnFloor; unitNum++) {
+            if (unitIds.length < config.estimatedUnits) {
+              // Format: B1-A101 (Building 1, Staircase A, Floor 1, Unit 01)
+              final buildingNum = buildingIdx + 1;
+              final floorCode = floor * 100 + unitNum;
+              final unitId = 'B$buildingNum-${stairCase.stairCaseName}$floorCode';
+              unitIds.add(unitId);
+            }
           }
         }
       }
@@ -734,14 +573,28 @@ class ProjectChecklistGenerator {
   }
 
   static int _getFloorFromUnitId(String unitId) {
-    // Przykład: A101 -> 1, A205 -> 2, A304 -> 3
-    final numPart = int.tryParse(unitId.substring(1));
+    // Supported formats:
+    // - B1-A101 -> floor 1
+    // - A101 -> floor 1
+    final parts = unitId.split('-');
+    final core = parts.length > 1 ? parts.last : unitId;
+    if (core.isEmpty) return 0;
+    final numPart = int.tryParse(core.substring(1));
     if (numPart == null) return 0;
-    return numPart ~/ 100; // Setki to piętro
+    return numPart ~/ 100; // Setki to pietro
   }
 
-  static String _getStairCaseFromUnitId(BuildingConfiguration config, String unitId) {
-    return unitId[0]; // A, B, C, D
+  static String _getStairCaseFromUnitId(
+    BuildingConfiguration config,
+    String unitId,
+  ) {
+    // Supported formats:
+    // - B1-A101 -> stair A
+    // - A101 -> stair A
+    final parts = unitId.split('-');
+    final core = parts.length > 1 ? parts.last : unitId;
+    if (core.isEmpty) return '';
+    return core[0];
   }
 
   // ═══════════════════════════════════════════════════════════════════════
@@ -761,7 +614,7 @@ class ProjectChecklistGenerator {
         severity: AlertSeverity.critical,
         title: '⚠️ PILNIE: Rozdzielnice do prefabrykacji!',
         message:
-          'Za ${daysDifference} dni powinny być wysłane rozdzielnice do prefabrykacji. '
+          'Za $daysDifference dni powinny być wysłane rozdzielnice do prefabrykacji. '
           'Czas realizacji: 4-6 tygodni! Brak tego działania spowoduje znaczne opóźnienia projektu.',
         actionSuggestion: 'Natychmiast skontaktuj się z dostawcą i potwierdź wysyłkę',
         relatedTaskId: project.allTasks
@@ -781,7 +634,7 @@ class ProjectChecklistGenerator {
       alerts.add(ProjectAlert(
         id: _uuid.v4(),
         severity: AlertSeverity.urgent,
-        title: '🚨 Za ${daysTillTynki} dni zaczynają się tynki!',
+        title: '🚨 Za $daysTillTynki dni zaczynają się tynki!',
         message:
           'OSTATNIA SZANSA ułożyć kable w ścianach, pod posadzkami i wewnątrz struktu ry! '
           'Po tynkach będzie za późno!',

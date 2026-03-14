@@ -355,8 +355,8 @@ class ResidentialUnitTasksGenerator {
   ) {
     final allTasks = <ChecklistTask>[];
 
-    // Dla budynków jednorodzinnych i dupleksów nie generujemy zadań mieszkalnych
-    if (config.estimatedUnits <= 1) {
+    // Dla projektów bez mieszkań nie generujemy zadań mieszkalnych
+    if (config.estimatedUnits < 1) {
       return allTasks;
     }
 
@@ -382,7 +382,7 @@ class ResidentialUnitTasksGenerator {
   static List<String> _generateUnitIds(BuildingConfiguration config) {
     final unitIds = <String>[];
 
-    if (config.estimatedUnits <= 1) return unitIds;
+    if (config.estimatedUnits < 1) return unitIds;
 
     // Użyj rzeczywistej liczby klatek z konfiguracji
     final stairCaseLetters = ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J'];

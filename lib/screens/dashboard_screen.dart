@@ -4,11 +4,11 @@ import 'package:provider/provider.dart';
 import 'package:gridly/services/app_settings_provider.dart';
 import 'package:gridly/services/auth_provider.dart';
 import 'package:gridly/services/monetization_provider.dart';
-import 'package:gridly/widgets/pdf_report_dialog.dart';
 import 'package:gridly/widgets/export_project_dialog.dart';
 import 'package:gridly/widgets/ad_banner_placeholder.dart';
 import 'package:gridly/widgets/main_mobile_nav_bar.dart';
 import 'package:gridly/theme/grid_theme.dart';
+import 'package:gridly/multitool/project_manager/views/project_selector_screen.dart';
 
 class DashboardScreen extends StatelessWidget {
   const DashboardScreen({super.key});
@@ -61,7 +61,41 @@ class DashboardScreen extends StatelessWidget {
                 showProBadge: true,
               ),
               const SizedBox(height: 8),
-              _buildExportButtons(context, isMobile),
+              Consumer2<MonetizationProvider, AppSettingsProvider>(
+                builder: (context, monetization, settings, _) {
+                  final isPro = monetization.isPro;
+
+                  return ElevatedButton.icon(
+                    onPressed: () {
+                      if (!isPro) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(
+                            content: Text('Ta funkcja jest dostępna w wersji PRO.'),
+                          ),
+                        );
+                        if (settings.autoOpenPaywallForLockedFeatures) {
+                          Navigator.pushNamed(context, '/paywall');
+                        }
+                        return;
+                      }
+
+                      showExportProjectDialog(
+                        context,
+                        auditData: {},
+                        calculatorData: {},
+                        labelData: {},
+                      );
+                    },
+                    icon: Icon(isPro ? Icons.save : Icons.lock),
+                    label: Text(isMobile ? 'PRO' : 'Eksportuj Projekt (PRO)'),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Colors.blue,
+                      foregroundColor: Colors.white,
+                      padding: EdgeInsets.symmetric(vertical: isMobile ? 12 : 16),
+                    ),
+                  );
+                },
+              ),
               const SizedBox(height: 20),
               const AdBannerPlaceholder(slotId: 'dashboard_bottom'),
               const SizedBox(height: 20),
@@ -166,7 +200,7 @@ class DashboardScreen extends StatelessWidget {
 
   Widget _buildQuickButtonsGrid(BuildContext context, bool isMobile) {
     return GridView.count(
-      crossAxisCount: isMobile ? 2 : 3,
+      crossAxisCount: isMobile ? 2 : 4,
       mainAxisSpacing: 8,
       crossAxisSpacing: 8,
       shrinkWrap: true,
@@ -187,6 +221,17 @@ class DashboardScreen extends StatelessWidget {
         ),
         _buildDashboardButton(
           context,
+          'Moja Budowa',
+          Icons.construction,
+          () => Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (context) => const ProjectSelectorScreen(),
+            ),
+          ),
+        ),
+        _buildDashboardButton(
+          context,
           'Multitool',
           Icons.build,
           () => Navigator.pushNamed(context, '/multitool'),
@@ -194,8 +239,6 @@ class DashboardScreen extends StatelessWidget {
       ],
     );
   }
-
-
 
   Widget _buildDashboardButton(
     BuildContext context,
@@ -248,67 +291,6 @@ class DashboardScreen extends StatelessWidget {
             ],
           ),
         ),
-      ),
-    );
-  }
-
-  Widget _buildExportButtons(BuildContext context, bool isMobile) {
-    return Consumer2<MonetizationProvider, AppSettingsProvider>(
-      builder: (context, monetization, settings, _) {
-        final isPro = monetization.isPro;
-
-        return Row(
-          children: [
-            Expanded(
-              child: ElevatedButton.icon(
-                onPressed: () => showPdfReportDialog(context),
-                icon: const Icon(Icons.description),
-                label: Text(isMobile ? 'PDF' : 'Generuj PDF'),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: Colors.green,
-                  foregroundColor: Colors.white,
-                  padding: EdgeInsets.symmetric(vertical: isMobile ? 12 : 16),
-                ),
-              ),
-            ),
-            const SizedBox(width: 8),
-            Expanded(
-              child: ElevatedButton.icon(
-                onPressed: () {
-                  if (!isPro) {
-                    _showProRequiredSnackBar(context);
-                    if (settings.autoOpenPaywallForLockedFeatures) {
-                      Navigator.pushNamed(context, '/paywall');
-                    }
-                    return;
-                  }
-
-                  showExportProjectDialog(
-                    context,
-                    auditData: {},
-                    calculatorData: {},
-                    labelData: {},
-                  );
-                },
-                icon: Icon(isPro ? Icons.save : Icons.lock),
-                label: Text(isMobile ? 'PRO' : 'Eksportuj Projekt (PRO)'),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: Colors.blue,
-                  foregroundColor: Colors.white,
-                  padding: EdgeInsets.symmetric(vertical: isMobile ? 12 : 16),
-                ),
-              ),
-            ),
-          ],
-        );
-      },
-    );
-  }
-
-  void _showProRequiredSnackBar(BuildContext context) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text('Ta funkcja jest dostępna w wersji PRO.'),
       ),
     );
   }

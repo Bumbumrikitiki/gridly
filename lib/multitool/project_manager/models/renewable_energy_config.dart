@@ -1,406 +1,448 @@
-// renewable_energy_config.dart
-// Konfiguracja systemów OZE i elektromobilności
+/// Konfiguracja OZE (Odnawialne Źródła Energii) i Elektromobilności
+/// 
+/// Obsługuje:
+/// - Instalacje fotowoltaiki (PV)
+/// - Magazyny energii (BESS)
+/// - Ładowarki samochodów elektrycznych (EV)
+/// - System zarządzania mocą (DLM)
 
-import 'package:flutter/foundation.dart';
+library;
 
-// === ENUMY ===
-
-/// Rozmiar systemu fotowoltaicznego
 enum PhotovoltaicSystemSize {
-  none,           // Brak instalacji
-  microSmall,     // < 6.5 kWp (mikroinstalacja mała)
-  microMedium,    // 6.5-10 kWp (mikroinstalacja średnia)
-  microLarge,     // 10-50 kWp (mikroinstalacja duża)
-  commercial,     // > 50 kWp (komercyjna)
+  micro, // < 6.5 kWp (bez wymogów straży pożarnej)
+  standard, // 6.5 - 50 kWp (wymaga zawiadomienia straży pożarnej)
+  large, // > 50 kWp (wymaga pełnej dokumentacji ppoż)
 }
 
-/// Typ magazynu energii
 enum BatteryStorageType {
-  none,                // Brak magazynu
-  lifepo4Residential,  // LiFePO4 mieszkaniowy (5-20 kWh)
-  lifepo4Commercial,   // LiFePO4 komercyjny (20-100 kWh)
-  liionIndustrial,     // Li-ion przemysłowy (> 100 kWh)
+  liIon, // Litowo-jonowe
+  lfp, // LiFePO4
+  saltWater, // Wodne azotan sodu
+  leadAcid, // Ołowiowo-kwasowe (zalecane tylko dla systemów < 5 kWh)
 }
 
-/// Typ stacji ładowania EV
 enum ChargingStationType {
-  none,          // Brak ładowarek
-  wallbox,       // Wallbox (AC, 3.7-22 kW)
-  standAlone,    // Wolnostojąca (AC/DC, do 50 kW)
-  fastCharger,   // Szybka (DC, 50-350 kW)
+  wallbox, // Wallbox (7-22 kW, dom/budynek)
+  publichCommonSlupek, // Słupek publiczny (22-350 kW)
+  dcFastCharger, // Szybka ładowarka DC (50-350 kW)
 }
 
-/// System zarządzania mocą (DLM - Dynamic Load Management)
 enum DlmSystemType {
-  none,     // Brak DLM
-  passive,  // Pasywne balansowanie (lokalne sensory)
-  active,   // Aktywne balansowanie (centralne zarządzanie)
+  none, // Bez systemu zarządzania
+  passive, // Pasywne limity mocy
+  activeRealtime, // Aktywne zarządzanie w czasie rzeczywistym
 }
 
-// === KLASY KONFIGURACJI ===
-
-/// Konfiguracja instalacji fotowoltaicznej
-@immutable
+/// Konfiguracja systemu fotowoltaiki
 class PhotovoltaicConfiguration {
-  const PhotovoltaicConfiguration({
-    this.isInstalled = false,
-    this.peakPower = 0.0,
-    this.systemSize = PhotovoltaicSystemSize.none,
-    this.requiresFireDeptApproval = false,
-    this.requiresOsdNotification = true,
-  });
-
-  final bool isInstalled;
-  final double peakPower;  // Moc szczytowa w kWp
+  final bool isEnabled;
+  final double installedPowerKwp; // Moc zainstalowana w kWp
   final PhotovoltaicSystemSize systemSize;
-  final bool requiresFireDeptApproval;  // Zgłoszenie do PSP (> 6.5 kWp)
-  final bool requiresOsdNotification;    // Zgłoszenie do OSD (≤ 50 kWp)
-
+  final int estimatedMonthlyProductionKwh; // Szacunkowa roczna produkcja w kWh
+  final String moduleType; // Monokrystaliczne, polikrystaliczne
+  final String inverterType; // Typ falownika
+  final String? customModuleModel;
+  final String? customInverterModel;
+  
+  // Załączniki dokumentacyjne
+  final List<String> attachments; // Nazwy plików załączników
+  
+  PhotovoltaicConfiguration({
+    this.isEnabled = false,
+    this.installedPowerKwp = 0.0,
+    this.systemSize = PhotovoltaicSystemSize.micro,
+    this.estimatedMonthlyProductionKwh = 0,
+    this.moduleType = 'Monokrystaliczne',
+    this.inverterType = 'Trójfazowy',
+    this.customModuleModel,
+    this.customInverterModel,
+    List<String>? attachments,
+  }) : attachments = attachments ?? [];
+  
+  // Czy wymaga zgłoszenia do straży pożarnej (> 6,5 kWp)
+  bool get requiresFireDepartmentNotification => installedPowerKwp > 6.5;
+  
+  // Czy wymaga pełnej dokumentacji ppoż (> 50 kWp)
+  bool get requiresFullFireSafetyDocs => installedPowerKwp > 50.0;
+  
   PhotovoltaicConfiguration copyWith({
-    bool? isInstalled,
-    double? peakPower,
+    bool? isEnabled,
+    double? installedPowerKwp,
     PhotovoltaicSystemSize? systemSize,
-    bool? requiresFireDeptApproval,
-    bool? requiresOsdNotification,
+    int? estimatedMonthlyProductionKwh,
+    String? moduleType,
+    String? inverterType,
+    String? customModuleModel,
+    String? customInverterModel,
+    List<String>? attachments,
   }) {
     return PhotovoltaicConfiguration(
-      isInstalled: isInstalled ?? this.isInstalled,
-      peakPower: peakPower ?? this.peakPower,
+      isEnabled: isEnabled ?? this.isEnabled,
+      installedPowerKwp: installedPowerKwp ?? this.installedPowerKwp,
       systemSize: systemSize ?? this.systemSize,
-      requiresFireDeptApproval:
-          requiresFireDeptApproval ?? this.requiresFireDeptApproval,
-      requiresOsdNotification:
-          requiresOsdNotification ?? this.requiresOsdNotification,
+      estimatedMonthlyProductionKwh: estimatedMonthlyProductionKwh ?? this.estimatedMonthlyProductionKwh,
+      moduleType: moduleType ?? this.moduleType,
+      inverterType: inverterType ?? this.inverterType,
+      customModuleModel: customModuleModel ?? this.customModuleModel,
+      customInverterModel: customInverterModel ?? this.customInverterModel,
+      attachments: attachments ?? this.attachments,
     );
   }
+  
+  Map<String, dynamic> toJson() => {
+    'isEnabled': isEnabled,
+    'installedPowerKwp': installedPowerKwp,
+    'systemSize': systemSize.toString(),
+    'estimatedMonthlyProductionKwh': estimatedMonthlyProductionKwh,
+    'moduleType': moduleType,
+    'inverterType': inverterType,
+    'customModuleModel': customModuleModel,
+    'customInverterModel': customInverterModel,
+    'attachments': attachments,
+  };
+  
+  factory PhotovoltaicConfiguration.fromJson(Map<String, dynamic> json) => PhotovoltaicConfiguration(
+    isEnabled: json['isEnabled'] as bool? ?? false,
+    installedPowerKwp: (json['installedPowerKwp'] as num?)?.toDouble() ?? 0.0,
+    systemSize: _parsePhotovoltaicSystemSize(json['systemSize'] as String?),
+    estimatedMonthlyProductionKwh: json['estimatedMonthlyProductionKwh'] as int? ?? 0,
+    moduleType: json['moduleType'] as String? ?? 'Monokrystaliczne',
+    inverterType: json['inverterType'] as String? ?? 'Trójfazowy',
+    customModuleModel: json['customModuleModel'] as String?,
+    customInverterModel: json['customInverterModel'] as String?,
+    attachments: List<String>.from(json['attachments'] as List? ?? []),
+  );
+}
 
-  Map<String, dynamic> toJson() {
-    return {
-      'isInstalled': isInstalled,
-      'peakPower': peakPower,
-      'systemSize': systemSize.name,
-      'requiresFireDeptApproval': requiresFireDeptApproval,
-      'requiresOsdNotification': requiresOsdNotification,
-    };
-  }
-
-  factory PhotovoltaicConfiguration.fromJson(Map<String, dynamic> json) {
-    return PhotovoltaicConfiguration(
-      isInstalled: json['isInstalled'] as bool? ?? false,
-      peakPower: (json['peakPower'] as num?)?.toDouble() ?? 0.0,
-      systemSize: PhotovoltaicSystemSize.values.firstWhere(
-        (e) => e.name == json['systemSize'],
-        orElse: () => PhotovoltaicSystemSize.none,
-      ),
-      requiresFireDeptApproval: json['requiresFireDeptApproval'] as bool? ?? false,
-      requiresOsdNotification: json['requiresOsdNotification'] as bool? ?? true,
-    );
-  }
-
-  static PhotovoltaicSystemSize determineSizeFromPower(double peakPower) {
-    if (peakPower <= 0) return PhotovoltaicSystemSize.none;
-    if (peakPower < 6.5) return PhotovoltaicSystemSize.microSmall;
-    if (peakPower <= 10) return PhotovoltaicSystemSize.microMedium;
-    if (peakPower <= 50) return PhotovoltaicSystemSize.microLarge;
-    return PhotovoltaicSystemSize.commercial;
+PhotovoltaicSystemSize _parsePhotovoltaicSystemSize(String? value) {
+  switch (value) {
+    case 'PhotovoltaicSystemSize.micro':
+      return PhotovoltaicSystemSize.micro;
+    case 'PhotovoltaicSystemSize.standard':
+      return PhotovoltaicSystemSize.standard;
+    case 'PhotovoltaicSystemSize.large':
+      return PhotovoltaicSystemSize.large;
+    default:
+      return PhotovoltaicSystemSize.micro;
   }
 }
 
 /// Konfiguracja magazynu energii (BESS)
-@immutable
 class BatteryStorageConfiguration {
-  const BatteryStorageConfiguration({
-    this.isInstalled = false,
-    this.capacity = 0.0,
-    this.storageType = BatteryStorageType.none,
-    this.requiresCertification = false,
-  });
-
-  final bool isInstalled;
-  final double capacity;  // Pojemność w kWh
-  final BatteryStorageType storageType;
-  final bool requiresCertification;  // Certyfikat NC RfG
-
+  final bool isEnabled;
+  final double storageSizeKwh; // Pojemność w kWh
+  final BatteryStorageType batteryType;
+  final double usableCapacityPercent; // Procent pojemności dostępny do użytku
+  final String? customBatteryModel;
+  
+  // Załączniki
+  final List<String> attachments;
+  
+  BatteryStorageConfiguration({
+    this.isEnabled = false,
+    this.storageSizeKwh = 0.0,
+    this.batteryType = BatteryStorageType.liIon,
+    this.usableCapacityPercent = 90.0,
+    this.customBatteryModel,
+    List<String>? attachments,
+  }) : attachments = attachments ?? [];
+  
   BatteryStorageConfiguration copyWith({
-    bool? isInstalled,
-    double? capacity,
-    BatteryStorageType? storageType,
-    bool? requiresCertification,
+    bool? isEnabled,
+    double? storageSizeKwh,
+    BatteryStorageType? batteryType,
+    double? usableCapacityPercent,
+    String? customBatteryModel,
+    List<String>? attachments,
   }) {
     return BatteryStorageConfiguration(
-      isInstalled: isInstalled ?? this.isInstalled,
-      capacity: capacity ?? this.capacity,
-      storageType: storageType ?? this.storageType,
-      requiresCertification:
-          requiresCertification ?? this.requiresCertification,
+      isEnabled: isEnabled ?? this.isEnabled,
+      storageSizeKwh: storageSizeKwh ?? this.storageSizeKwh,
+      batteryType: batteryType ?? this.batteryType,
+      usableCapacityPercent: usableCapacityPercent ?? this.usableCapacityPercent,
+      customBatteryModel: customBatteryModel ?? this.customBatteryModel,
+      attachments: attachments ?? this.attachments,
     );
   }
+  
+  Map<String, dynamic> toJson() => {
+    'isEnabled': isEnabled,
+    'storageSizeKwh': storageSizeKwh,
+    'batteryType': batteryType.toString(),
+    'usableCapacityPercent': usableCapacityPercent,
+    'customBatteryModel': customBatteryModel,
+    'attachments': attachments,
+  };
+  
+  factory BatteryStorageConfiguration.fromJson(Map<String, dynamic> json) => BatteryStorageConfiguration(
+    isEnabled: json['isEnabled'] as bool? ?? false,
+    storageSizeKwh: (json['storageSizeKwh'] as num?)?.toDouble() ?? 0.0,
+    batteryType: _parseBatteryStorageType(json['batteryType'] as String?),
+    usableCapacityPercent: (json['usableCapacityPercent'] as num?)?.toDouble() ?? 90.0,
+    customBatteryModel: json['customBatteryModel'] as String?,
+    attachments: List<String>.from(json['attachments'] as List? ?? []),
+  );
+}
 
-  Map<String, dynamic> toJson() {
-    return {
-      'isInstalled': isInstalled,
-      'capacity': capacity,
-      'storageType': storageType.name,
-      'requiresCertification': requiresCertification,
-    };
+BatteryStorageType _parseBatteryStorageType(String? value) {
+  switch (value) {
+    case 'BatteryStorageType.lfp':
+      return BatteryStorageType.lfp;
+    case 'BatteryStorageType.saltWater':
+      return BatteryStorageType.saltWater;
+    case 'BatteryStorageType.leadAcid':
+      return BatteryStorageType.leadAcid;
+    case 'BatteryStorageType.liIon':
+    default:
+      return BatteryStorageType.liIon;
   }
+}
 
-  factory BatteryStorageConfiguration.fromJson(Map<String, dynamic> json) {
-    return BatteryStorageConfiguration(
-      isInstalled: json['isInstalled'] as bool? ?? false,
-      capacity: (json['capacity'] as num?)?.toDouble() ?? 0.0,
-      storageType: BatteryStorageType.values.firstWhere(
-        (e) => e.name == json['storageType'],
-        orElse: () => BatteryStorageType.none,
-      ),
-      requiresCertification: json['requiresCertification'] as bool? ?? false,
+/// Pojedyncza stacja ładowania
+class ChargingStation {
+  final String stationId; // Unikatowy identyfikator
+  final String stationName; // Nazwa/lokalizacja
+  final ChargingStationType stationType;
+  final double chargingPowerKw; // Moc ładowania w kW
+  final int numberOfConnectors; // Liczba złączy
+  final bool isFastCharging; // Czy szybka ładowarka
+  String? customModel;
+  
+  // Załączniki
+  final List<String> attachments;
+  
+  ChargingStation({
+    required this.stationId,
+    required this.stationName,
+    required this.stationType,
+    this.chargingPowerKw = 7.0,
+    this.numberOfConnectors = 1,
+    this.isFastCharging = false,
+    this.customModel,
+    List<String>? attachments,
+  }) : attachments = attachments ?? [];
+  
+  ChargingStation copyWith({
+    String? stationId,
+    String? stationName,
+    ChargingStationType? stationType,
+    double? chargingPowerKw,
+    int? numberOfConnectors,
+    bool? isFastCharging,
+    String? customModel,
+    List<String>? attachments,
+  }) {
+    return ChargingStation(
+      stationId: stationId ?? this.stationId,
+      stationName: stationName ?? this.stationName,
+      stationType: stationType ?? this.stationType,
+      chargingPowerKw: chargingPowerKw ?? this.chargingPowerKw,
+      numberOfConnectors: numberOfConnectors ?? this.numberOfConnectors,
+      isFastCharging: isFastCharging ?? this.isFastCharging,
+      customModel: customModel ?? this.customModel,
+      attachments: attachments ?? this.attachments,
     );
   }
+  
+  Map<String, dynamic> toJson() => {
+    'stationId': stationId,
+    'stationName': stationName,
+    'stationType': stationType.toString(),
+    'chargingPowerKw': chargingPowerKw,
+    'numberOfConnectors': numberOfConnectors,
+    'isFastCharging': isFastCharging,
+    'customModel': customModel,
+    'attachments': attachments,
+  };
+  
+  factory ChargingStation.fromJson(Map<String, dynamic> json) => ChargingStation(
+    stationId: json['stationId'] as String? ?? '',
+    stationName: json['stationName'] as String? ?? '',
+    stationType: _parseChargingStationType(json['stationType'] as String?),
+    chargingPowerKw: (json['chargingPowerKw'] as num?)?.toDouble() ?? 7.0,
+    numberOfConnectors: json['numberOfConnectors'] as int? ?? 1,
+    isFastCharging: json['isFastCharging'] as bool? ?? false,
+    customModel: json['customModel'] as String?,
+    attachments: List<String>.from(json['attachments'] as List? ?? []),
+  );
+}
 
-  static BatteryStorageType determineTypeFromCapacity(double capacity) {
-    if (capacity <= 0) return BatteryStorageType.none;
-    if (capacity <= 20) return BatteryStorageType.lifepo4Residential;
-    if (capacity <= 100) return BatteryStorageType.lifepo4Commercial;
-    return BatteryStorageType.liionIndustrial;
+ChargingStationType _parseChargingStationType(String? value) {
+  switch (value) {
+    case 'ChargingStationType.publichCommonSlupek':
+      return ChargingStationType.publichCommonSlupek;
+    case 'ChargingStationType.dcFastCharger':
+      return ChargingStationType.dcFastCharger;
+    case 'ChargingStationType.wallbox':
+    default:
+      return ChargingStationType.wallbox;
   }
 }
 
 /// Konfiguracja elektromobilności (ładowarki EV)
-@immutable
 class ElectricMobilityConfiguration {
-  const ElectricMobilityConfiguration({
-    this.isInstalled = false,
-    this.numberOfChargingPoints = 0,
-    this.stationType = ChargingStationType.none,
+  final bool isEnabled;
+  final List<ChargingStation> chargingStations;
+  final DlmSystemType dlmSystem; // System zarządzania mocą
+  final double maxAllowedDrawKw; // Maksymalny pobór mocy (ograniczenie)
+  
+  // Załączniki
+  final List<String> attachments;
+  
+  ElectricMobilityConfiguration({
+    this.isEnabled = false,
+    List<ChargingStation>? chargingStations,
     this.dlmSystem = DlmSystemType.none,
-    this.requiresUdtInspection = false,
-    this.requiresDlm = false,
-  });
-
-  final bool isInstalled;
-  final int numberOfChargingPoints;
-  final ChargingStationType stationType;
-  final DlmSystemType dlmSystem;
-  final bool requiresUdtInspection;  // Dla stacji ogólnodostępnych
-  final bool requiresDlm;             // Obowiązkowe dla > 5 stanowisk
-
+    this.maxAllowedDrawKw = 0.0,
+    List<String>? attachments,
+  })  : chargingStations = chargingStations ?? [],
+        attachments = attachments ?? [];
+  
+  // Czy wymaga systemu DLM (> 5 stanowisk)
+  bool get requiresDlmSystem => chargingStations.length > 5;
+  
+  // Całkowita moc ładowania wszystkich stacji
+  double get totalChargingPowerKw {
+    return chargingStations.fold(0.0, (sum, station) => sum + station.chargingPowerKw);
+  }
+  
   ElectricMobilityConfiguration copyWith({
-    bool? isInstalled,
-    int? numberOfChargingPoints,
-    ChargingStationType? stationType,
+    bool? isEnabled,
+    List<ChargingStation>? chargingStations,
     DlmSystemType? dlmSystem,
-    bool? requiresUdtInspection,
-    bool? requiresDlm,
+    double? maxAllowedDrawKw,
+    List<String>? attachments,
   }) {
     return ElectricMobilityConfiguration(
-      isInstalled: isInstalled ?? this.isInstalled,
-      numberOfChargingPoints:
-          numberOfChargingPoints ?? this.numberOfChargingPoints,
-      stationType: stationType ?? this.stationType,
+      isEnabled: isEnabled ?? this.isEnabled,
+      chargingStations: chargingStations ?? this.chargingStations,
       dlmSystem: dlmSystem ?? this.dlmSystem,
-      requiresUdtInspection:
-          requiresUdtInspection ?? this.requiresUdtInspection,
-      requiresDlm: requiresDlm ?? this.requiresDlm,
+      maxAllowedDrawKw: maxAllowedDrawKw ?? this.maxAllowedDrawKw,
+      attachments: attachments ?? this.attachments,
     );
   }
+  
+  Map<String, dynamic> toJson() => {
+    'isEnabled': isEnabled,
+    'chargingStations': chargingStations.map((s) => s.toJson()).toList(),
+    'dlmSystem': dlmSystem.toString(),
+    'maxAllowedDrawKw': maxAllowedDrawKw,
+    'attachments': attachments,
+  };
+  
+  factory ElectricMobilityConfiguration.fromJson(Map<String, dynamic> json) => ElectricMobilityConfiguration(
+    isEnabled: json['isEnabled'] as bool? ?? false,
+    chargingStations: (json['chargingStations'] as List?)
+        ?.map((s) => ChargingStation.fromJson(s as Map<String, dynamic>))
+        .toList(),
+    dlmSystem: _parseDlmSystemType(json['dlmSystem'] as String?),
+    maxAllowedDrawKw: (json['maxAllowedDrawKw'] as num?)?.toDouble() ?? 0.0,
+    attachments: List<String>.from(json['attachments'] as List? ?? []),
+  );
+}
 
-  Map<String, dynamic> toJson() {
-    return {
-      'isInstalled': isInstalled,
-      'numberOfChargingPoints': numberOfChargingPoints,
-      'stationType': stationType.name,
-      'dlmSystem': dlmSystem.name,
-      'requiresUdtInspection': requiresUdtInspection,
-      'requiresDlm': requiresDlm,
-    };
-  }
-
-  factory ElectricMobilityConfiguration.fromJson(Map<String, dynamic> json) {
-    return ElectricMobilityConfiguration(
-      isInstalled: json['isInstalled'] as bool? ?? false,
-      numberOfChargingPoints: json['numberOfChargingPoints'] as int? ?? 0,
-      stationType: ChargingStationType.values.firstWhere(
-        (e) => e.name == json['stationType'],
-        orElse: () => ChargingStationType.none,
-      ),
-      dlmSystem: DlmSystemType.values.firstWhere(
-        (e) => e.name == json['dlmSystem'],
-        orElse: () => DlmSystemType.none,
-      ),
-      requiresUdtInspection: json['requiresUdtInspection'] as bool? ?? false,
-      requiresDlm: json['requiresDlm'] as bool? ?? false,
-    );
+DlmSystemType _parseDlmSystemType(String? value) {
+  switch (value) {
+    case 'DlmSystemType.passive':
+      return DlmSystemType.passive;
+    case 'DlmSystemType.activeRealtime':
+      return DlmSystemType.activeRealtime;
+    case 'DlmSystemType.none':
+    default:
+      return DlmSystemType.none;
   }
 }
 
-/// Główna klasa konfiguracji OZE i elektromobilności
-@immutable
-class RenewableEnergyConfig {
-  const RenewableEnergyConfig({
-    this.photovoltaic = const PhotovoltaicConfiguration(),
-    this.batteryStorage = const BatteryStorageConfiguration(),
-    this.electricMobility = const ElectricMobilityConfiguration(),
-  });
-
+/// Pełna konfiguracja systemów odnawialnych i elektromobilności
+class RenewableEnergyConfiguration {
   final PhotovoltaicConfiguration photovoltaic;
   final BatteryStorageConfiguration batteryStorage;
   final ElectricMobilityConfiguration electricMobility;
-
-  bool get hasAnyRenewableEnergy =>
-      photovoltaic.isInstalled ||
-      batteryStorage.isInstalled ||
-      electricMobility.isInstalled;
-
-  RenewableEnergyConfig copyWith({
+  final DateTime? createdAt;
+  final DateTime? updatedAt;
+  
+  RenewableEnergyConfiguration({
     PhotovoltaicConfiguration? photovoltaic,
     BatteryStorageConfiguration? batteryStorage,
     ElectricMobilityConfiguration? electricMobility,
+    this.createdAt,
+    this.updatedAt,
+  })  : photovoltaic = photovoltaic ?? PhotovoltaicConfiguration(),
+        batteryStorage = batteryStorage ?? BatteryStorageConfiguration(),
+        electricMobility = electricMobility ?? ElectricMobilityConfiguration();
+  
+  bool get isOptimalConfiguration {
+    // Optymalna konfiguracja: PV + BESS + DLM (jeśli jest EV)
+    if (!photovoltaic.isEnabled) return false;
+    if (electricMobility.isEnabled && electricMobility.dlmSystem == DlmSystemType.none) return false;
+    return true;
+  }
+  
+  RenewableEnergyConfiguration copyWith({
+    PhotovoltaicConfiguration? photovoltaic,
+    BatteryStorageConfiguration? batteryStorage,
+    ElectricMobilityConfiguration? electricMobility,
+    DateTime? createdAt,
+    DateTime? updatedAt,
   }) {
-    return RenewableEnergyConfig(
+    return RenewableEnergyConfiguration(
       photovoltaic: photovoltaic ?? this.photovoltaic,
       batteryStorage: batteryStorage ?? this.batteryStorage,
       electricMobility: electricMobility ?? this.electricMobility,
+      createdAt: createdAt ?? this.createdAt,
+      updatedAt: updatedAt ?? this.updatedAt,
     );
   }
-
-  Map<String, dynamic> toJson() {
-    return {
-      'photovoltaic': photovoltaic.toJson(),
-      'batteryStorage': batteryStorage.toJson(),
-      'electricMobility': electricMobility.toJson(),
-    };
-  }
-
-  factory RenewableEnergyConfig.fromJson(Map<String, dynamic> json) {
-    return RenewableEnergyConfig(
-      photovoltaic: json['photovoltaic'] != null
-          ? PhotovoltaicConfiguration.fromJson(
-              json['photovoltaic'] as Map<String, dynamic>)
-          : const PhotovoltaicConfiguration(),
-      batteryStorage: json['batteryStorage'] != null
-          ? BatteryStorageConfiguration.fromJson(
-              json['batteryStorage'] as Map<String, dynamic>)
-          : const BatteryStorageConfiguration(),
-      electricMobility: json['electricMobility'] != null
-          ? ElectricMobilityConfiguration.fromJson(
-              json['electricMobility'] as Map<String, dynamic>)
-          : const ElectricMobilityConfiguration(),
-    );
-  }
+  
+  Map<String, dynamic> toJson() => {
+    'photovoltaic': photovoltaic.toJson(),
+    'batteryStorage': batteryStorage.toJson(),
+    'electricMobility': electricMobility.toJson(),
+    'createdAt': createdAt?.toIso8601String(),
+    'updatedAt': updatedAt?.toIso8601String(),
+  };
+  
+  factory RenewableEnergyConfiguration.fromJson(Map<String, dynamic> json) => RenewableEnergyConfiguration(
+    photovoltaic: json['photovoltaic'] != null
+        ? PhotovoltaicConfiguration.fromJson(json['photovoltaic'] as Map<String, dynamic>)
+        : null,
+    batteryStorage: json['batteryStorage'] != null
+        ? BatteryStorageConfiguration.fromJson(json['batteryStorage'] as Map<String, dynamic>)
+        : null,
+    electricMobility: json['electricMobility'] != null
+        ? ElectricMobilityConfiguration.fromJson(json['electricMobility'] as Map<String, dynamic>)
+        : null,
+    createdAt: json['createdAt'] != null ? DateTime.parse(json['createdAt'] as String) : null,
+    updatedAt: json['updatedAt'] != null ? DateTime.parse(json['updatedAt'] as String) : null,
+  );
 }
 
-// === VALIDATOR ===
-
-/// Walidator reguł biznesowych dla konfiguracji OZE/EV
+/// Walidacja i reguły
 class RenewableEnergyValidator {
-  /// Sprawdza czy wymagane jest zgłoszenie do straży pożarnej
-  /// Reguła: PV > 6.5 kWp wymaga zgłoszenia do PSP
-  static bool requiresFireDepartmentNotification(
-      PhotovoltaicConfiguration pv) {
-    return pv.isInstalled && pv.peakPower > 6.5;
-  }
-
-  /// Sprawdza czy wymagane jest zgłoszenie mikroinstalacji do OSD
-  /// Reguła: PV ≤ 50 kWp wymaga zgłoszenia do operatora sieci
-  static bool requiresOsdMicroinstallationNotification(
-      PhotovoltaicConfiguration pv) {
-    return pv.isInstalled && pv.peakPower > 0 && pv.peakPower <= 50;
-  }
-
-  /// Sprawdza czy system DLM jest krytyczny (obowiązkowy)
-  /// Reguła: > 5 stanowisk ładowania wymaga DLM
-  static bool requiresMandatoryDlm(ElectricMobilityConfiguration ev) {
-    return ev.isInstalled && ev.numberOfChargingPoints > 5;
-  }
-
-  /// Sprawdza czy wymagana jest inspekcja UDT
-  /// Reguła: Stacje ogólnodostępne wymagają UDT
-  static bool requiresUdtInspection(ElectricMobilityConfiguration ev) {
-    return ev.isInstalled &&
-        ev.requiresUdtInspection &&
-        ev.stationType != ChargingStationType.none;
-  }
-
-  /// Zwraca listę ostrzeżeń dla danej konfiguracji
-  static List<String> getWarnings(RenewableEnergyConfig config) {
-    final warnings = <String>[];
-
-    // Ostrzeżenia PV
-    if (requiresFireDepartmentNotification(config.photovoltaic)) {
-      warnings.add(
-          '⚠️ PV > 6.5 kWp: wymagane zgłoszenie do Państwowej Straży Pożarnej');
-    }
-    if (requiresOsdMicroinstallationNotification(config.photovoltaic)) {
-      warnings.add('📋 Wymagane zgłoszenie mikroinstalacji do OSD');
-    }
-
-    // Ostrzeżenia BESS
-    if (config.batteryStorage.isInstalled &&
-        config.batteryStorage.capacity > 20) {
-      warnings.add('🔋 BESS > 20 kWh: wymagany certyfikat NC RfG');
-    }
-
-    // Ostrzeżenia EV
-    if (requiresMandatoryDlm(config.electricMobility)) {
-      warnings.add(
-          '🚨 > 5 stanowisk EV: system DLM jest OBOWIĄZKOWY (zapobieganie awariom zasilania)');
-    }
-    if (config.electricMobility.isInstalled &&
-        config.electricMobility.numberOfChargingPoints > 0 &&
-        config.electricMobility.dlmSystem == DlmSystemType.none &&
-        config.electricMobility.numberOfChargingPoints > 3) {
-      warnings.add('💡 Zalecany system DLM dla optymalizacji obciążenia');
-    }
-    if (requiresUdtInspection(config.electricMobility)) {
-      warnings.add(
-          '🔍 Stacja ogólnodostępna: wymagana decyzja UDT przed eksploatacją');
-    }
-
-    return warnings;
-  }
-
-  /// Zwraca listę wymaganych dokumentów/załączników
-  static List<String> getRequiredDocuments(RenewableEnergyConfig config) {
-    final docs = <String>[];
-
-    if (config.photovoltaic.isInstalled) {
-      docs.add('Schemat jednokreskowy instalacji PV');
-      docs.add('Protokół pomiarów parametrów instalacji fotowoltaicznej');
-      
-      if (requiresFireDepartmentNotification(config.photovoltaic)) {
-        docs.add('Zgłoszenie do Państwowej Straży Pożarnej');
-        docs.add('Uzgodnienie projektu z rzeczoznawcą ppoż.');
-      }
-      
-      if (requiresOsdMicroinstallationNotification(config.photovoltaic)) {
-        docs.add('Zgłoszenie mikroinstalacji do Operatora (OSD)');
+  static List<String> validateConfiguration(RenewableEnergyConfiguration config) {
+    final issues = <String>[];
+    
+    // Reguła: PV > 6,5 kWp wymaga zgłoszenia do straży pożarnej
+    if (config.photovoltaic.isEnabled && config.photovoltaic.requiresFireDepartmentNotification) {
+      if (!config.photovoltaic.attachments.contains('Zgłoszenie Straż Pożarna')) {
+        issues.add('⚠️ PV powyżej 6,5 kWp wymaga Zgłoszenia do Straży Pożarnej');
       }
     }
-
-    if (config.batteryStorage.isInstalled) {
-      docs.add('Karta gwarancyjna magazynu energii');
-      
-      if (config.batteryStorage.requiresCertification) {
-        docs.add('Certyfikat NC RfG');
+    
+    // Reguła: PV wymaga zgłoszenia do OSD (mikroinstalacja)
+    if (config.photovoltaic.isEnabled && config.photovoltaic.installedPowerKwp <= 50.0) {
+      if (!config.photovoltaic.attachments.contains('Zgłoszenie OSD')) {
+        issues.add('⚠️ PV wymaga Zgłoszenia mikroinstalacji do Operatora (OSD)');
       }
     }
-
-    if (config.electricMobility.isInstalled) {
-      docs.add('Deklaracja zgodności producenta stacji ładowania');
-      
-      if (config.electricMobility.numberOfChargingPoints > 1) {
-        docs.add('Atest na kable ognioodporne (jeśli wymagane)');
-      }
-      
-      if (config.electricMobility.dlmSystem != DlmSystemType.none) {
-        docs.add('Raport z konfiguracji systemu balansu obciążenia (DLM)');
-      }
-      
-      if (requiresUdtInspection(config.electricMobility)) {
-        docs.add('Decyzja UDT dopuszczająca do eksploatacji');
+    
+    // Reguła: EV > 5 stanowisk wymaga DLM
+    if (config.electricMobility.isEnabled && config.electricMobility.requiresDlmSystem) {
+      if (config.electricMobility.dlmSystem == DlmSystemType.none) {
+        issues.add('🚨 Więcej niż 5 stanowisk ładowania wymaga systemu DLM!');
       }
     }
-
-    return docs;
+    
+    return issues;
   }
 }

@@ -1,10 +1,9 @@
 import 'package:flutter/foundation.dart';
 import 'package:uuid/uuid.dart';
+import 'dart:convert';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:gridly/multitool/project_manager/models/project_models.dart';
-import 'package:gridly/multitool/project_manager/models/building_hierarchy.dart';
 import 'package:gridly/multitool/project_manager/logic/checklist_generator.dart';
-import 'package:gridly/multitool/project_manager/logic/schedule_calculator.dart';
-import 'package:gridly/multitool/project_manager/logic/climate_analyzer.dart';
 
 /// Provider zarządzający stanem projektu budowy
 /// - Tworzenie projektów
@@ -13,6 +12,7 @@ import 'package:gridly/multitool/project_manager/logic/climate_analyzer.dart';
 /// - Generowanie alertów
 class ProjectManagerProvider extends ChangeNotifier {
   static const _uuid = Uuid();
+  static const _storageKey = 'construction_projects';
 
   // Aktualnie wybrany projekt
   ConstructionProject? _currentProject;
@@ -27,102 +27,63 @@ class ProjectManagerProvider extends ChangeNotifier {
   List<ConstructionProject> get allProjects => List.unmodifiable(_projects);
 
   // ═══════════════════════════════════════════════════════════════════════════
-  // ZARZĄDZANIE PROJEKTAMI
+  // PERSYSTENCJA
   // ═══════════════════════════════════════════════════════════════════════════
 
-  /// Stwórz nowy projekt z zaawansowaną hierarchią budynków
-  Future<void> createNewProjectAdvanced(AdvancedProjectConfiguration advancedConfig) async {
+  /// Załaduj zapisane projekty z SharedPreferences
+  Future<void> loadSavedProjects() async {
     _isLoading = true;
     notifyListeners();
 
     try {
-      print('[Provider] Generowanie zaawansowanego projektu...');
-      print('[Provider] - Budynków: ${advancedConfig.buildings.length}');
-      print('[Provider] - Mieszkań: ${advancedConfig.totalUnits}');
-      print('[Provider] - Systemów: ${advancedConfig.selectedSystems.length}');
-      
-      // Oblicz harmonogram z uwzględnieniem klimatu
-      final climateMultiplier = PolishClimateAnalyzer.calculateScheduleMultiplier(
-        advancedConfig.projectStartDate,
-        advancedConfig.projectEndDate,
-      );
-      
-      print('[Provider] - Mnożnik klimatyczny: ${climateMultiplier.toStringAsFixed(2)}x');
-      
-      // Generate schedule report (optional - for debugging)
-      final scheduleReport = ScheduleCalculator.generateDetailedScheduleReport(
-        advancedConfig,
-        advancedConfig.totalWeeks,
-        climateMultiplier: climateMultiplier,
-      );
-      print('[Provider] Harmonogram:\n$scheduleReport');
-      
-      // Konwertuj na stary format BuildingConfiguration
-      // (żeby istniejący generator checklist mógł działać)
-      final config = _convertToLegacyFormat(advancedConfig);
-      
-      // Generator tworzy kompletny projekt
-      final project = ProjectChecklistGenerator.generateProject(config);
-      
-      print('[Provider] Projekt wygenerowany: ${project.allTasks.length} zadań, ${project.units.length} mieszkań');
-      
-      _currentProject = project;
-      _projects.add(project);
+      print('[Provider] Ładowanie zapisanych projektów...');
+      final prefs = await SharedPreferences.getInstance();
+      final String? projectsJson = prefs.getString(_storageKey);
 
-      print('[Provider] Projekt zapisany w pamięci');
+      if (projectsJson != null && projectsJson.isNotEmpty) {
+        final List<dynamic> projectsList = jsonDecode(projectsJson);
+        _projects.clear();
+        
+        for (final projectData in projectsList) {
+          try {
+            final project = ConstructionProject.fromJson(projectData);
+            _projects.add(project);
+          } catch (e) {
+            print('[Provider] Błąd przy ładowaniu projektu: $e');
+          }
+        }
+        
+        print('[Provider] Załadowano ${_projects.length} projektów');
+      } else {
+        print('[Provider] Brak zapisanych projektów');
+      }
     } catch (e, stackTrace) {
-      print('Błąd przy tworzeniu projektu: $e');
+      print('[Provider] Błąd ładowania projektów: $e');
       print('Stack trace: $stackTrace');
-      rethrow;
     } finally {
       _isLoading = false;
       notifyListeners();
     }
   }
 
-  /// Konwertuj zaawansowaną konfigurację hierarchiczną na stary format
-  BuildingConfiguration _convertToLegacyFormat(AdvancedProjectConfiguration advanced) {
-    // Ustaw domyślny typ budynku na podstawie liczby mieszkań
-    BuildingType buildingType;
-    if (advanced.totalUnits <= 2) {
-      buildingType = BuildingType.dupleks;
-    } else if (advanced.totalUnits <= 10) {
-      buildingType = BuildingType.wielorodzinny; // 3-5 pięter
-    } else if (advanced.totalUnits <= 50) {
-      buildingType = BuildingType.wielorodzinnyWysoki; // 6+ pięter
-    } else {
-      buildingType = BuildingType.mieszany;
+  /// Zapisz wszystkie projekty do SharedPreferences
+  Future<void> _saveProjects() async {
+    try {
+      print('[Provider] Zapisywanie ${_projects.length} projektów...');
+      final prefs = await SharedPreferences.getInstance();
+      final projectsList = _projects.map((p) => p.toJson()).toList();
+      final projectsJson = jsonEncode(projectsList);
+      await prefs.setString(_storageKey, projectsJson);
+      print('[Provider] Projekty zapisane');
+    } catch (e, stackTrace) {
+      print('[Provider] Błąd zapisywania projektów: $e');
+      print('Stack trace: $stackTrace');
     }
-    
-    // Oblicz średnie wartości z całej hierarchii
-    final totalFloors = advanced.totalFloors;
-    final totalBasement = advanced.totalBasementLevels;
-    final hasParking = advanced.hasAnyParking;
-    final hasGarage = advanced.hasAnyGarage;
-    
-    // Stage durations - użyj szablonu albo dynamicznie wygeneruj
-    final stageDurations = BuildingTimingTemplates.wielorodzinny34pietra();
-    
-    return BuildingConfiguration(
-      projectName: advanced.projectName,
-      buildingType: buildingType,
-      address: advanced.address,
-      projectStartDate: advanced.projectStartDate,
-      totalLevels: (totalFloors / advanced.buildings.length).ceil(),
-      basementLevels: totalBasement > 0 ? (totalBasement / advanced.buildings.where((b) => b.hasGarage).length).ceil() : 0,
-      hasParking: hasParking,
-      hasGarage: hasGarage,
-      powerSupplyType: PowerSupplyType.siecNiskiegoNapieciaBezposrednio,
-      connectionType: ConnectionType.rozdzielnicaNN,
-      estimatedPowerDemand: advanced.totalUnits * 10.0, // 10kW per unit
-      selectedSystems: Set<ElectricalSystemType>.from(
-        advanced.selectedSystems.whereType<ElectricalSystemType>(),
-      ),
-      estimatedUnits: advanced.totalUnits,
-      estimatedStairCases: advanced.totalStairCases,
-      stageDurations: stageDurations,
-    );
   }
+
+  // ═══════════════════════════════════════════════════════════════════════════
+  // ZARZĄDZANIE PROJEKTAMI
+  // ═══════════════════════════════════════════════════════════════════════════
 
   /// Stwórz nowy projekt
   Future<void> createNewProject(BuildingConfiguration config) async {
@@ -131,7 +92,7 @@ class ProjectManagerProvider extends ChangeNotifier {
 
     try {
       print('[Provider] Generowanie projektu...');
-      // Generator tworzy kompletnylista projekt
+      // Generator tworzy kompletny projekt
       final project = ProjectChecklistGenerator.generateProject(config);
       
       print('[Provider] Projekt wygenerowany: ${project.allTasks.length} zadań, ${project.units.length} mieszkań');
@@ -139,9 +100,9 @@ class ProjectManagerProvider extends ChangeNotifier {
       _currentProject = project;
       _projects.add(project);
 
-      print('[Provider] Projekt zapisany w pamięci');
-      // Zapisz do pamięci (w realnym app -> SQLite)
-      // _saveProjectToDb(project);
+      // Zapisz do SharedPreferences
+      await _saveProjects();
+      print('[Provider] Projekt zapisany');
     } catch (e, stackTrace) {
       print('Błąd przy tworzeniu projektu: $e');
       print('Stack trace: $stackTrace');
@@ -150,6 +111,120 @@ class ProjectManagerProvider extends ChangeNotifier {
       _isLoading = false;
       notifyListeners();
     }
+  }
+
+  /// Zaktualizuj istniejący projekt
+  Future<void> updateProject(BuildingConfiguration config) async {
+    if (_currentProject == null) return;
+
+    _isLoading = true;
+    notifyListeners();
+
+    try {
+      print('[Provider] Aktualizowanie projektu...');
+      // Regeneruj projekt na podstawie nowych danych i połącz z dotychczasowym postępem
+      final updatedProject = ProjectChecklistGenerator.generateProject(config);
+      final mergedTasks = _mergeTasks(
+        updatedProject.allTasks,
+        _currentProject!.allTasks,
+      );
+      final mergedUnits = _mergeUnits(
+        updatedProject.units,
+        _currentProject!.units,
+      );
+
+      final alerts = _currentProject!.alerts.isNotEmpty
+          ? _currentProject!.alerts
+          : updatedProject.alerts;
+
+      final projectWithId = ConstructionProject(
+        projectId: _currentProject!.projectId,
+        config: config,
+        phases: updatedProject.phases,
+        allTasks: mergedTasks,
+        alerts: alerts,
+        units: mergedUnits,
+        createdAt: _currentProject!.createdAt,
+        lastModifiedAt: DateTime.now(),
+      );
+      
+      // Zamień w liście
+      final index = _projects.indexWhere((p) => p.projectId == _currentProject!.projectId);
+      if (index != -1) {
+        _projects[index] = projectWithId;
+      }
+      
+      _currentProject = projectWithId;
+      
+      // Zapisz do SharedPreferences
+      await _saveProjects();
+      print('[Provider] Projekt zaktualizowany');
+    } catch (e, stackTrace) {
+      print('Błąd przy aktualizowaniu projektu: $e');
+      print('Stack trace: $stackTrace');
+      rethrow;
+    } finally {
+      _isLoading = false;
+      notifyListeners();
+    }
+  }
+
+  List<ChecklistTask> _mergeTasks(
+    List<ChecklistTask> newTasks,
+    List<ChecklistTask> oldTasks,
+  ) {
+    final oldMap = {for (final task in oldTasks) task.id: task};
+
+    for (final task in newTasks) {
+      final old = oldMap[task.id];
+      if (old == null) continue;
+
+      task.status = old.status;
+      task.completedDate = old.completedDate;
+      task.notes = old.notes;
+      task.attachmentPaths
+        ..clear()
+        ..addAll(old.attachmentPaths);
+    }
+
+    return newTasks;
+  }
+
+  List<ProjectUnit> _mergeUnits(
+    List<ProjectUnit> newUnits,
+    List<ProjectUnit> oldUnits,
+  ) {
+    final oldMap = {for (final unit in oldUnits) unit.unitId: unit};
+
+    return newUnits.map((unit) {
+      final old = oldMap[unit.unitId];
+      if (old == null) return unit;
+
+      final mergedStatuses = Map<String, TaskStatus>.from(unit.taskStatuses);
+      for (final entry in old.taskStatuses.entries) {
+        if (mergedStatuses.containsKey(entry.key)) {
+          mergedStatuses[entry.key] = entry.value;
+        }
+      }
+
+      final mergedDates =
+          Map<String, DateTime?>.from(unit.taskCompletionDates);
+      for (final entry in old.taskCompletionDates.entries) {
+        if (mergedDates.containsKey(entry.key)) {
+          mergedDates[entry.key] = entry.value;
+        }
+      }
+
+      return unit.copyWith(
+        unitName: old.unitName,
+        isAlternateUnit: old.isAlternateUnit,
+        specificSystems: old.specificSystems,
+        taskStatuses: mergedStatuses,
+        taskCompletionDates: mergedDates,
+        photoPaths: old.photoPaths,
+        defectsNotes: old.defectsNotes,
+      );
+    }).toList();
   }
 
   /// Załaduj istniejący projekt
@@ -181,7 +256,9 @@ class ProjectManagerProvider extends ChangeNotifier {
     if (_currentProject == null) return;
 
     final taskIndex = _currentProject!.allTasks.indexWhere((t) => t.id == taskId);
-    if (taskIndex == -1) return;
+    if (taskIndex == -1) {
+      return;
+    }
 
     final task = _currentProject!.allTasks[taskIndex];
     task.status = newStatus;
@@ -205,7 +282,7 @@ class ProjectManagerProvider extends ChangeNotifier {
       orElse: () => throw Exception('Zadanie nie znalezione'),
     );
 
-    task.notes = (task.notes.isEmpty ? '' : task.notes + '\n') + note;
+    task.notes = (task.notes.isEmpty ? '' : '${task.notes}\n') + note;
 
     _updateProject();
     notifyListeners();
@@ -244,6 +321,17 @@ class ProjectManagerProvider extends ChangeNotifier {
     final unitIndex = _currentProject!.units.indexWhere((u) => u.unitId == unitId);
     if (unitIndex == -1) throw Exception('Mieszkanie nie znalezione');
     
+    // 1️⃣ Aktualizuj task.status w project.allTasks (dla PDF)
+    final taskInAllTasks = _currentProject!.allTasks.firstWhere(
+      (t) => t.id == taskId,
+      orElse: () => throw Exception('Zadanie nie znalezione'),
+    );
+    taskInAllTasks.status = newStatus;
+    if (newStatus == TaskStatus.completed) {
+      taskInAllTasks.completedDate = DateTime.now();
+    }
+    
+    // 2️⃣ Aktualizuj unit.taskStatuses (dla UI)
     final unit = _currentProject!.units[unitIndex];
     final updatedStatuses = Map<String, TaskStatus>.from(unit.taskStatuses);
     updatedStatuses[taskId] = newStatus;
@@ -262,6 +350,50 @@ class ProjectManagerProvider extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// Zmień nazwę mieszkania
+  void updateUnitName(String unitId, String newName) {
+    if (_currentProject == null) return;
+
+    final unitIndex =
+        _currentProject!.units.indexWhere((u) => u.unitId == unitId);
+    if (unitIndex == -1) throw Exception('Mieszkanie nie znalezione');
+
+    final unit = _currentProject!.units[unitIndex];
+    _currentProject!.units[unitIndex] = unit.copyWith(unitName: newName);
+
+    _updateProject();
+    notifyListeners();
+  }
+
+  /// Zmień status lokalu zamiennego
+  void updateUnitAlternateStatus(String unitId, bool isAlternate) {
+    if (_currentProject == null) return;
+
+    final unitIndex = _currentProject!.units.indexWhere((u) => u.unitId == unitId);
+    if (unitIndex == -1) throw Exception('Mieszkanie nie znalezione');
+
+    final unit = _currentProject!.units[unitIndex];
+    final updatedStatuses = Map<String, TaskStatus>.from(unit.taskStatuses);
+    final updatedDates = Map<String, DateTime?>.from(unit.taskCompletionDates);
+
+    if (isAlternate) {
+      updatedStatuses.putIfAbsent(kAlternateProjectTaskId, () => TaskStatus.pending);
+      updatedDates.putIfAbsent(kAlternateProjectTaskId, () => null);
+    } else {
+      updatedStatuses.remove(kAlternateProjectTaskId);
+      updatedDates.remove(kAlternateProjectTaskId);
+    }
+
+    _currentProject!.units[unitIndex] = unit.copyWith(
+      isAlternateUnit: isAlternate,
+      taskStatuses: updatedStatuses,
+      taskCompletionDates: updatedDates,
+    );
+
+    _updateProject();
+    notifyListeners();
+  }
+
   /// Dodaj notatkę do defektów mieszkania
   void addUnitDefectNote(String unitId, String defect) {
     if (_currentProject == null) return;
@@ -272,27 +404,10 @@ class ProjectManagerProvider extends ChangeNotifier {
     final unit = _currentProject!.units[unitIndex];
     final updatedNotes = unit.defectsNotes.isEmpty 
       ? defect 
-      : unit.defectsNotes + '\n' + defect;
+      : '${unit.defectsNotes}\n$defect';
     
     _currentProject!.units[unitIndex] = unit.copyWith(
       defectsNotes: updatedNotes,
-    );
-
-    _updateProject();
-    notifyListeners();
-  }
-
-  /// Zmień status lokalu zamiennego
-  void toggleUnitAlternateStatus(String unitId) {
-    if (_currentProject == null) return;
-
-    final unitIndex = _currentProject!.units.indexWhere((u) => u.unitId == unitId);
-    if (unitIndex == -1) throw Exception('Mieszkanie nie znalezione');
-    
-    final unit = _currentProject!.units[unitIndex];
-    
-    _currentProject!.units[unitIndex] = unit.copyWith(
-      isAlternateUnit: !unit.isAlternateUnit,
     );
 
     _updateProject();
@@ -473,8 +588,8 @@ class ProjectManagerProvider extends ChangeNotifier {
   }
 
   void _updateProject() {
-    // W realnym app -> zapisz do bazy danych
-    // _saveProjectToDb(_currentProject!);
+    // Zapisz do SharedPreferences przy każdej zmianie
+    _saveProjects();
     _currentProject!.lastModifiedAt = DateTime.now();
   }
 

@@ -14,7 +14,7 @@ import 'package:gridly/multitool/symbols/views/single_line_symbols_screen.dart';
 import 'package:gridly/multitool/uziemienie/views/grounding_screen.dart';
 import 'package:gridly/multitool/uziemienie/views/measurement_analyzer_screen.dart';
 import 'package:gridly/multitool/szyny_wyrownawcze/views/bonding_guide_screen.dart';
-import 'package:gridly/multitool/project_manager/views/project_manager_screen.dart';
+import 'package:gridly/multitool/project_manager/views/project_selector_screen.dart';
 import 'package:gridly/widgets/main_mobile_nav_bar.dart';
 
 class MultitoolScreen extends StatelessWidget {
@@ -224,8 +224,7 @@ class MultitoolScreen extends StatelessWidget {
                                 case 'manager_projektu':
                                   Navigator.of(context).push(
                                     MaterialPageRoute(
-                                      builder: (_) =>
-                                          const ProjectManagerScreen(),
+                                      builder: (context) => const ProjectSelectorScreen(),
                                     ),
                                   );
                                   break;

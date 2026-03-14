@@ -5,7 +5,6 @@ import 'package:gridly/multitool/project_manager/logic/project_manager_provider.
 import 'package:gridly/multitool/project_manager/views/unit_detail_screen.dart';
 import 'package:gridly/multitool/project_manager/views/configuration_wizard_screen.dart';
 import 'package:gridly/services/wykaz_zbiorczy_service.dart';
-import 'package:gridly/services/excel_service.dart';
 
 class ProjectManagerScreen extends StatefulWidget {
   const ProjectManagerScreen({super.key});
@@ -40,18 +39,13 @@ class _ProjectManagerScreenState extends State<ProjectManagerScreen>
             centerTitle: true,
             elevation: 0,
             actions: [
-              if (provider.currentProject != null) ...[
+              // Przycisk generowania Wykazuo dostępny zawsze gdy projekt istnieje
+              if (provider.currentProject != null)
                 IconButton(
-                  icon: const Icon(Icons.picture_as_pdf),
-                  tooltip: 'Zbiorczy Wykaz Lokali (PDF)',
+                  icon: const Icon(Icons.table_chart),
+                  tooltip: 'Drukuj Wykaz Zbiorczy',
                   onPressed: () => _generateWykazZbiorczy(context, provider),
                 ),
-                IconButton(
-                  icon: const Icon(Icons.table_chart, color: Colors.green),
-                  tooltip: 'Wykaz Lokali (Excel)',
-                  onPressed: () => _generateWykazExcel(context, provider),
-                ),
-              ],
             ],
             bottom: provider.currentProject == null
                 ? null
@@ -897,11 +891,6 @@ class _ProjectManagerScreenState extends State<ProjectManagerScreen>
                       ],
                     ),
                   ),
-                  IconButton(
-                    icon: const Icon(Icons.file_download),
-                    tooltip: 'Pobierz Wykaz Lokali (PDF)',
-                    onPressed: () => _generateWykazPdf(context, provider),
-                  ),
                 ],
               ),
             ),
@@ -1163,181 +1152,6 @@ class _ProjectManagerScreenState extends State<ProjectManagerScreen>
     );
   }
 
-  Future<void> _generateWykazPdf(
-    BuildContext context,
-    ProjectManagerProvider provider,
-  ) async {
-    try {
-      final project = provider.currentProject;
-      if (project == null || project.units.isEmpty) {
-        _showErrorSnackBar(context, 'Projekt nie ma żadnych lokali');
-        return;
-      }
-
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Generowanie Wykazu Lokali (PDF)...'),
-          duration: Duration(seconds: 2),
-        ),
-      );
-
-      final currentDate = DateTime.now().toString().split(' ')[0];
-
-      final List<String> stageNames = [
-        'Projekt zamienny',
-        'Ścianki działowe',
-        'Montaż okablowania',
-        'Montaż okablowania - balkony',
-        'Montaż puszek elektroinstalacyjnych',
-        'Dokumentacja fotograficzna okablowania',
-        'Doprowadzenie kabla WLZ',
-        'Odbiory inspektora I',
-        'Tynki',
-        'Wykonanie pomiaru Riso',
-        'Ułożenie rur osłonowych',
-        'Dokumentacja fotograficzna rur',
-        'Jastrych (wylewka)',
-        'Doprowadzenie okablowania teletechnicznego',
-        'Malowanie',
-        'Montaż tablicy TM',
-        'Podłączenie tablicy TM',
-        'Montaż skrzynki TSM',
-        'Montaż osprzętu',
-        'Montaż unifonu',
-        'Montaż czujnika dymu',
-        'Montaż oprawek',
-        'Uruchomienie domofonu',
-        'Pomiary teletechniczne',
-        'Pomiary elektryczne',
-        'Odbiory inspektora II termin',
-        'Odbiory inspektora III termin',
-        'Odbiory inspektora końcowe',
-      ];
-
-      final lokalEntries = <Map<String, dynamic>>[];
-
-      for (final unit in project.units) {
-        final entry = <String, dynamic>{
-          'nrLokalu': unit.unitId,
-        };
-
-        for (int i = 0; i < stageNames.length && i < project.allTasks.length; i++) {
-          final task = project.allTasks[i];
-          final status = task.status;
-          entry[stageNames[i]] = status == TaskStatus.completed ? true : false;
-        }
-
-        lokalEntries.add(entry);
-      }
-
-      await WykazGenerator.generateWykazPdf(
-        nazwaBudowy: project.name,
-        data: currentDate,
-        lokale: lokalEntries,
-      );
-
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Wykaz Lokali został wygenerowany.'),
-            backgroundColor: Colors.green,
-            duration: Duration(seconds: 3),
-          ),
-        );
-      }
-    } catch (e) {
-      _showErrorSnackBar(context, 'Błąd generowania PDF: $e');
-    }
-  }
-
-  Future<void> _generateWykazExcel(
-    BuildContext context,
-    ProjectManagerProvider provider,
-  ) async {
-    try {
-      final project = provider.currentProject;
-      if (project == null || project.units.isEmpty) {
-        _showErrorSnackBar(context, 'Projekt nie ma żadnych lokali');
-        return;
-      }
-
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Generowanie Wykazu Lokali (Excel)...'),
-          duration: Duration(seconds: 2),
-        ),
-      );
-
-      final currentDate = DateTime.now().toString().split(' ')[0];
-
-      final List<String> stageNames = [
-        'Projekt zamienny',
-        'Ścianki działowe',
-        'Montaż okablowania',
-        'Montaż okablowania - balkony',
-        'Montaż puszek elektroinstalacyjnych',
-        'Dokumentacja fotograficzna okablowania',
-        'Doprowadzenie kabla WLZ',
-        'Odbiory inspektora I',
-        'Tynki',
-        'Wykonanie pomiaru Riso',
-        'Ułożenie rur osłonowych',
-        'Dokumentacja fotograficzna rur',
-        'Jastrych (wylewka)',
-        'Doprowadzenie okablowania teletechnicznego',
-        'Malowanie',
-        'Montaż tablicy TM',
-        'Podłączenie tablicy TM',
-        'Montaż skrzynki TSM',
-        'Montaż osprzętu',
-        'Montaż unifonu',
-        'Montaż czujnika dymu',
-        'Montaż oprawek',
-        'Uruchomienie domofonu',
-        'Pomiary teletechniczne',
-        'Pomiary elektryczne',
-        'Odbiory inspektora II termin',
-        'Odbiory inspektora III termin',
-        'Odbiory inspektora końcowe',
-      ];
-
-      final lokalEntries = <Map<String, dynamic>>[];
-
-      for (final unit in project.units) {
-        final entry = <String, dynamic>{
-          'nrLokalu': unit.unitId,
-        };
-
-        for (int i = 0; i < stageNames.length && i < project.allTasks.length; i++) {
-          final task = project.allTasks[i];
-          final status = task.status;
-          entry[stageNames[i]] = status == TaskStatus.completed ? 'true' : 'false';
-        }
-
-        lokalEntries.add(entry);
-      }
-
-      await ExcelService.exportWykazExcel(
-        nazwaBudowy: project.name,
-        data: currentDate,
-        lokale: lokalEntries,
-        stages: stageNames,
-      );
-
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Wykaz Lokali (Excel) został wygenerowany i pobrany!'),
-            backgroundColor: Colors.green,
-            duration: Duration(seconds: 3),
-          ),
-        );
-      }
-    } catch (e) {
-      _showErrorSnackBar(context, 'Błąd generowania Excel: $e');
-    }
-  }
-
   // ═══════════════════════════════════════════════════════════════════════════
   // HELPERY
   // ═══════════════════════════════════════════════════════════════════════════
@@ -1364,10 +1178,6 @@ class _ProjectManagerScreenState extends State<ProjectManagerScreen>
         return '✅ Finalizacja';
       case BuildingStage.oddawanie:
         return '📋 Oddawanie';
-      case BuildingStage.ozeInstalacje:
-        return '☀️ OZE';
-      case BuildingStage.evInfrastruktura:
-        return '🔋 EV';
     }
   }
 

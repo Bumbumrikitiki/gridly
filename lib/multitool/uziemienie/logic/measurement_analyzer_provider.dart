@@ -125,7 +125,7 @@ class MeasurementAnalyzerProvider extends ChangeNotifier {
 
   /// Get trend (improving or deteriorating)
   String getTrend() {
-    if (_measurements.length < 2) return 'Brak tłedu (potrzeba min 2 pomiarów)';
+    if (_measurements.length < 2) return 'Brak trendu (potrzeba min. 2 pomiarów)';
 
     final recent = _measurements.sublist(
       (_measurements.length - 3).clamp(0, _measurements.length),
@@ -194,7 +194,7 @@ class MeasurementAnalyzerProvider extends ChangeNotifier {
     buffer.writeln('WYNIK POMIARU');
     buffer.writeln('─' * 60);
     buffer.writeln('Zmierzona rezystancja: ${measurement.measuredResistance.toStringAsFixed(2)} Ω');
-    buffer.writeln('Poprawiona rezystancja: ${analysis.correctedResistance.toStringAsFixed(2)} Ω');
+    buffer.writeln('Skorygowana rezystancja: ${analysis.correctedResistance.toStringAsFixed(2)} Ω');
     buffer.writeln();
 
     buffer.writeln('WARUNKI PODCZAS POMIARU');

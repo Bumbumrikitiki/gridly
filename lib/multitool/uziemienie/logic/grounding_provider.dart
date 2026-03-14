@@ -3,7 +3,7 @@ import 'package:gridly/multitool/uziemienie/models/grounding_models.dart';
 import 'dart:math';
 
 /// Provider for grounding system calculations
-/// Based on PN-IEC 60364-5-54 and Wenner method
+/// Based on PN-HD 60364-5-54 and simplified engineering formulas
 class GroundingProvider extends ChangeNotifier {
   GroundingInput? _input;
   GroundingResult? _result;
@@ -94,7 +94,7 @@ class GroundingProvider extends ChangeNotifier {
   }
 
   /// Calculate grounding system resistance
-  /// Using Wenner method: R = (ρ/2πL) × ln(2L/a) for single electrode
+  /// Using a simplified model for a vertical rod: R = (ρ/2πL) × ln(2L/d)
   Future<void> calculateGrounding(GroundingInput input) async {
     try {
       _errorMessage = null;
@@ -103,7 +103,7 @@ class GroundingProvider extends ChangeNotifier {
       // 1. Get soil resistivity
       final soilResistivity = input.getSoilResistivity();
 
-      // 2. Calculate single electrode resistance (Wenner formula)
+      // 2. Calculate single electrode resistance (simplified rod model)
       final singleResistance = _calculateElectrodeResistance(
         soilResistivity: soilResistivity,
         length: input.electrodeLength,
@@ -175,8 +175,8 @@ class GroundingProvider extends ChangeNotifier {
     }
   }
 
-  /// Calculate single electrode resistance using Wenner formula
-  /// R = (ρ/2πL) × ln(2L/a)
+  /// Calculate single electrode resistance using simplified engineering formulas
+  /// R = (ρ/2πL) × ln(2L/d) where d is diameter
   double _calculateElectrodeResistance({
     required double soilResistivity,
     required double length,
@@ -184,13 +184,13 @@ class GroundingProvider extends ChangeNotifier {
     required GroundingElectrodeType type,
   }) {
     // Convert diameter to length units (mm to m)
-    final radiusM = (diameter / 2) / 1000;
+    final diameterM = diameter / 1000;
 
     switch (type) {
       case GroundingElectrodeType.verticalRod:
-        // R = (ρ/2πL) × ln(2L/r)
+        // R = (ρ/2πL) × ln(2L/d) - simplified rod formula with diameter
         return (soilResistivity / (2 * pi * length)) *
-            log(2 * length / radiusM);
+            log(2 * length / diameterM);
 
       case GroundingElectrodeType.horizontalStrip:
         // Simplified: strip is 2m long by default, use rod-like formula
@@ -198,22 +198,22 @@ class GroundingProvider extends ChangeNotifier {
         return soilResistivity / (pi * length);
 
       case GroundingElectrodeType.groundingPlate:
-        // Square plate: R ≈ (ρ/π) × sqrt(A/4)
-        // Assume square with side = diameter
-        final area = (diameter / 1000) * (diameter / 1000);
-        return (soilResistivity / pi) * sqrt(area / 4);
+        // Simplified square plate model: R ≈ ρ / (4a), where a is plate side [m]
+        // Assume square plate with side approximated by input diameter.
+        final side = diameter / 1000;
+        return soilResistivity / (4 * side);
 
       case GroundingElectrodeType.pipeConcrete:
-        // Pipeline in concrete: R ≈ 0.5 × (ρ/2πL)
+        // Pipeline in concrete: R ≈ 0.5 × (ρ/2πL) × ln(2L/d)
         return 0.5 *
             (soilResistivity / (2 * pi * length)) *
-            log(2 * length / radiusM);
+            log(2 * length / diameterM);
 
       case GroundingElectrodeType.concreteFooting:
-        // Footing in concrete: R ≈ 0.7 × (ρ/2πL)
+        // Footing in concrete: R ≈ 0.7 × (ρ/2πL) × ln(2L/d)
         return 0.7 *
             (soilResistivity / (2 * pi * length)) *
-            log(2 * length / radiusM);
+            log(2 * length / diameterM);
     }
   }
 
@@ -251,7 +251,7 @@ class GroundingProvider extends ChangeNotifier {
       case GroundingSystemType.tnS:
       case GroundingSystemType.tnCS:
         // TN systems: typically 1Ω (for main earthing conductor)
-        // PN-IEC 60364: max 1Ω for urban areas, flexible for rural
+        // PN-HD 60364: max 1Ω for urban areas, flexible for rural
         return 1.0;
 
       case GroundingSystemType.tt:
@@ -265,9 +265,6 @@ class GroundingProvider extends ChangeNotifier {
         // IT systems: special requirements, typically 10-50Ω
         return 10.0;
     }
-    // Unreachable
-    assert(false, 'All GroundingSystemType cases should be handled');
-    return 0;
   }
 
   /// Generate detailed requirement checks
@@ -295,18 +292,13 @@ class GroundingProvider extends ChangeNotifier {
     switch (systemType) {
       case GroundingSystemType.tnS:
       case GroundingSystemType.tnCS:
-        checks.add(
-          'System ${systemType.code}: wymaga Rg ≤ 1Ω (przewodnik główny)',
-        );
-        checks.add(
-          'Bezpieczeństwo: ${(230 / designCurrent * actualResistance).toStringAsFixed(2)} V'
-          ' (max 50V)',
-        );
+        checks.add('System ${systemType.code}: projektowo zwykle dąży się do Rg ≤ 1 Ω');
+        checks.add('Warunek samoczynnego wyłączenia zasilania należy zweryfikować przez impedancję pętli zwarcia.');
 
       case GroundingSystemType.tt:
         final protectionVoltage = (30 / 1000) * actualResistance; // 30mA RCD
         checks.add(
-          'System TT: wymaga RCD 30mA oraz Rg ≤ 50Ω',
+          'System TT: wymaga RCD 30 mA, przyjęto kryterium projektowe Rg ≤ 50 Ω',
         );
         checks.add(
           'Napięcie ochronne: ${protectionVoltage.toStringAsFixed(2)} V'
@@ -322,9 +314,6 @@ class GroundingProvider extends ChangeNotifier {
         checks.add(
           'System IT: wymaga ciągłego monitorowania izolacji',
         );
-
-      default:
-        break;
     }
 
     return checks;
@@ -335,7 +324,7 @@ class GroundingProvider extends ChangeNotifier {
     GroundingSystemType systemType,
     double designCurrent,
   ) {
-    const standard = 'PN-IEC 60364-5-54';
+    const standard = 'PN-HD 60364-5-54';
 
     return [
       if (designCurrent <= 20)

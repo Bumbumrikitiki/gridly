@@ -30,7 +30,7 @@ enum SoilTemperature {
   );
 
   final String label;
-  final double correctionFactor; // mnoż do rezystywności
+  final double correctionFactor; // współczynnik korekcyjny
   final String description;
 
   const SoilTemperature(this.label, this.correctionFactor, this.description);
@@ -41,7 +41,7 @@ enum SoilHumidity {
   veryDry(
     'Bardzo sucho',
     5.0,
-    'Długa susza, opady nigdy',
+    'Długotrwała susza, brak opadów',
     'Rezystywność BARDZO wysoka!',
   ),
   dry(
@@ -63,7 +63,7 @@ enum SoilHumidity {
     'Rezystywność niższa',
   ),
   saturated(
-    'Nasycone (wysoko stół wody)',
+    'Nasycone (wysoki poziom wód gruntowych)',
     0.2,
     'Podtopienie, wysoki poziom wody gruntowej',
     'Rezystywność BARDZO niska!',
@@ -87,12 +87,12 @@ enum Season {
   winter(
     'Zima (XII-II)',
     2.5,
-    'Zamarzniętym grunt, wysoka rezystywność',
+    'Zamarznięty grunt, wysoka rezystywność',
   ),
   spring(
     'Wiosna (III-V)',
     1.3,
-    'Roztopy, melting snow',
+    'Roztopy, topniejący śnieg',
   ),
   summer(
     'Lato (VI-VIII)',
@@ -126,7 +126,7 @@ enum ElectrodeInstallation {
     'Płytkie (<1m)',
     1.5,
     'Za wysoko, niska efektywność',
-    'Przebiję głębiej, min 1.5-2m',
+    'Wbij głębiej, min. 1.5-2 m',
   ),
   standard(
     'Standardowe (1-2m)',
@@ -137,14 +137,14 @@ enum ElectrodeInstallation {
   deep(
     'Głębokie (>2m)',
     0.8,
-    'Doszcząetne osadzenie, lepsza rezystancja',
+    'Staranne osadzenie, lepsza rezystancja',
     'Doskonale',
   ),
   notDrivenProperly(
     'Źle osadzone',
     2.0,
-    'Wibo drażyć, zły kontakt z gruntem',
-    'Przebadać i przefasować',
+    'Niewłaściwe wbicie, słaby kontakt z gruntem',
+    'Sprawdź montaż i popraw osadzenie',
   );
 
   final String label;
@@ -170,7 +170,7 @@ enum ElectrodeMaterial {
   steel(
     'Stal/żelazo (Fe)',
     1.3,
-    'Może się okorsować w wilgotnym gruncie',
+    'Może korodować w wilgotnym gruncie',
   ),
   galvanized(
     'Stal ocynkowana',
@@ -256,7 +256,7 @@ class GroundingMeasurement {
     // Normalized to: temperature moderate, humidity normal, summer, standard install, copper
     double factor = getTotalCorrectionFactor();
     // Reverse correction to get normalized value
-    return measuredResistance * factor;
+    return factor == 0 ? measuredResistance : measuredResistance / factor;
   }
 }
 
@@ -309,7 +309,7 @@ class MeasurementAnalysis {
       if (measurement.humidity == SoilHumidity.veryDry ||
           measurement.humidity == SoilHumidity.dry) {
         recommendations.add(
-          '• Gruntę jest SUCHY - czekaj na opady i powtórz pomiar za kilka dni',
+          '• Grunt jest suchy - odczekaj na opady i powtórz pomiar za kilka dni',
         );
       }
 
@@ -329,12 +329,12 @@ class MeasurementAnalysis {
 
       if (measurement.numberOfElectrodes < 3) {
         recommendations.add(
-          '• Zsup liczby elektrod - dodaj co najmniej jedną dodatkową elektrodę',
+          '• Zwiększ liczbę elektrod - dodaj co najmniej jedną dodatkową elektrodę',
         );
       }
 
       recommendations.add(
-        '• Alternatywnie: zwiększ przekrój kabla uziemiającego na obliczenia bazując na zmierzonej wartości',
+        '• Alternatywnie: zwiększ przekrój przewodu uziemiającego i zweryfikuj obliczenia na podstawie pomiarów terenowych',
       );
     } else {
       recommendations.add(
@@ -436,4 +436,59 @@ class MeasurementComparison {
       return '➡️ Bez zmian';
     }
   }
+}
+
+/// Legal disclaimers and reference information
+class MeasurementAnalyzerReference {
+  static const String disclaimerText = '''
+WAŻNE OGRANICZENIE ODPOWIEDZIALNOŚCI:
+
+To narzędzie ma charakter WYŁĄCZNIE informacyjno-pomocniczy i edukacyjny. 
+NIE stanowi dokumentacji projektowej, ekspertyzy technicznej ani opinii rzeczoznawcy.
+
+Wyniki analizy:
+• Są orientacyjne i oparte na uproszczonych modelach obliczeniowych
+• Wymagają weryfikacji przez uprawnionego projektanta/inspektora
+• Nie zastępują pomiaru rezystancji uziemienia przez osobę uprawnioną
+• Nie zastępują badania rezystywności gruntu metodą Wennera lub Schlumbergera
+• Nie zwalniają z obowiązku przestrzegania norm (PN-HD 60364, PN-EN 61557)
+
+UŻYTKOWNIK PONOSI PEŁNĄ ODPOWIEDZIALNOŚĆ za:
+• Weryfikację wyników przez uprawnionego projektanta elektrycznego
+• Zgodność z aktualnymi przepisami i normami technicznymi
+• Konsultację z inspektorem nadzoru i organami UDT
+• Decyzje podjęte na podstawie wyników z aplikacji
+
+Twórcy aplikacji nie ponoszą odpowiedzialności za:
+• Szkody wynikłe z użycia aplikacji
+• Błędne interpretacje wyników
+• Decyzje podjęte bez weryfikacji przez specjalistę
+• Niezgodność z obowiązującymi przepisami
+
+ZAWSZE skonsultuj wyniki z uprawnionym projektantem instalacji elektrycznych.
+''';
+
+  static const String warningText = '''
+⚠️ OSTRZEŻENIE:
+Analiza uwzględnia czynniki środowiskowe, ale rzeczywista rezystancja może się różnić. 
+Pomiary należy wykonywać przy pomocy atestowanego sprzętu pomiarowego.
+Skorygowana rezystancja jest wartością SZACUNKOWĄ.
+''';
+
+  static const String measurementNotes = '''
+UWAGI TECHNICZNE:
+- Rezystancja uziemienia zmienia się sezonowo (1.5-3x w skrajnych warunkach)
+- Pomiar należy wykonać przyrządem zgodnym z PN-EN 61557
+- Częstotliwość pomiarów: zgodnie z dokumentacją obiektu i obowiązującymi przepisami
+- W systemach TN często przyjmuje się projektowo Rg ≤ 1 Ω (w zależności od warunków układu)
+- W systemie TT: wymagana Rg · IΔn ≤ 50V (zazwyczaj Rg ≤ 30-166Ω dla 30-300mA)
+''';
+
+  static const String legalNote = '''
+Korzystając z tej aplikacji, użytkownik potwierdza, że:
+1. Zapoznał się z powyższymi ograniczeniami odpowiedzialności
+2. Rozumie charakter informacyjno-pomocniczy narzędzia
+3. Zweryfikuje wszystkie wyniki z uprawnionym specjalistą
+4. Nie będzie dochodzić roszczeń wobec twórców aplikacji
+''';
 }

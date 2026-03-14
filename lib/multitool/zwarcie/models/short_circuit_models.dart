@@ -65,7 +65,7 @@ class ShortCircuitInput {
 class ShortCircuitResult {
   final double iscatPoint; // Calculated Isc at measurement point [kA]
   final double cableResistance; // [Ω]
-  final double cableReactance; // Estimated as 0.08 Ω/m per phase
+  final double cableReactance; // Estimated as 0.08 Ω/km per phase
   final double impedance; // [Ω]
 
   // Device checks
@@ -89,7 +89,7 @@ class DeviceCheck {
   final double ratedCurrent;
   final double breakingCapacity;
   final bool canWithstand;
-  final String status; // "✅ Wystarczająco", "⚠️ Granicznie", "❌ Niewystarczające"
+  final String status; // "✅ Wystarczająco", "⚠️ Granicznie", "❌ Niewystarczająca zdolność wyłączalna"
 
   const DeviceCheck({
     required this.deviceName,
@@ -134,14 +134,14 @@ class ReferenceTable {
   static const String disclaimerText =
       'Niniejsze narzędzie wspomagające jest przeznaczone wyłącznie do wstępnej oceny obwodów zwarciowych '
       'i nie stanowi projektu, opinii technicznej ani porady prawnej. Wszelkie obliczenia muszą być '
-      'weryfikowane przez uprawnionego projektanta zasilania elektrycznego zgodnie z normą PN-HD 60364. '
+      'weryfikowane przez uprawnionego projektanta instalacji elektrycznych zgodnie z normą PN-HD 60364. '
       'Odpowiedzialność za poprawność wyboru urządzeń ochronnych spoczywa na projektancie i inspektorze. '
       'Aplikacja nie uwzględnia wszystkich czynników wpływających na Isc (np. impedancja transformatora '
       'może być inna niż założona, długość kabla może być niedokładna, temperatura pracy zmienia rezystancję).';
 
   static const String standardsNote =
       'Obliczenia zgodne z:\n'
-      '• PN-EN 60909:2016 - Prąd zwarcia\n'
+      '• PN-EN IEC 60909 - Prądy zwarciowe w sieciach trójfazowych AC\n'
       '• PN-HD 60364 series - Instalacje elektryczne niskonapięciowe\n'
       '• Wytyczne producenta Twoich urządzeń ochronnych';
 }

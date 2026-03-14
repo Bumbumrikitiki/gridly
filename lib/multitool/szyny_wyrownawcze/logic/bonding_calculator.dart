@@ -6,7 +6,7 @@ import 'package:gridly/multitool/szyny_wyrownawcze/models/bonding_elements_model
 class BondingCalculatorProvider extends ChangeNotifier {
   static const String disclaimer =
       '''⚠️ OGRANICZENIE ODPOWIEDZIALNOŚCI CYWILNO-PRAWNEJ:
-• Wartości w tym narzędziu są ORIENTACYJNE i oparte na normach PN-IEC 60364-5-54, PN-EN 50164
+• Wartości w tym narzędziu są ORIENTACYJNE i oparte na normach PN-HD 60364-5-54, PN-EN 50164
 • Wartości stanowią WSPARCIE dla projektanta/inspektora, nie zastępko obliczeń szczegółowych
 • OBOWIĄZKOWA weryfikacja przez uprawnionych projektantów i inspektorów ds. bezpieczeństwa
 • Użytkownik aplikacji ponosi PEŁNĄ odpowiedzialność za prawidłowość wyboru parametrów
@@ -35,8 +35,8 @@ class BondingCalculatorProvider extends ChangeNotifier {
     _selectedElement = element;
     _ostrzezenie = '';
     notifyListeners();
-  }
 
+  }
   void ustawPrad(PradNominalny prad) {
     _selectedPrad = prad;
     notifyListeners();
@@ -116,7 +116,7 @@ class BondingCalculatorProvider extends ChangeNotifier {
         break;
 
       default:
-        _ostrzezenie = 'Patrz normy PN-IEC 60364-4-41 dla szczegółów.';
+        _ostrzezenie = 'Patrz normy PN-HD 60364-4-41 dla szczegółów.';
     }
   }
 
@@ -241,45 +241,5 @@ Data: ${DateTime.now().toString()}
       }
     }
     return null;
-  }
-
-  /// Pobierz tabelę przekrojów w zależności od prądu
-  Map<String, String> getTabelaPrzekrojow() {
-    return {
-      '16 A': 'min. 1.5 mm² Cu',
-      '20 A': 'min. 2.5 mm² Cu',
-      '25 A': 'min. 4 mm² Cu',
-      '32 A': 'min. 6 mm² Cu',
-      '50 A': 'min. 10 mm² Cu',
-      '63 A': 'min. 16 mm² Cu',
-      '100 A': 'min. 25 mm² Cu',
-      '125 A': 'min. 35 mm² Cu',
-      '160 A': 'min. 50 mm² Cu',
-      '200 A': 'min. 70 mm² Cu',
-    };
-  }
-
-  /// Pobierz normatywne wymogi dla głównej szyny wyrównawczej
-  Map<String, String> getWymagaSzynyWyrownawczej() {
-    return {
-      'Materiał': 'Mosiądz (TM02/CW617N) lub miedź',
-      'Minimalny rozmiar': '10 x 10 mm = 100 mm²',
-      'Rezystancja': '≤ 0.0175 Ω·mm²/m (dla miedzi)',
-      'Prąd dozwolony': 'Bez ograniczeń dla ≥100 mm²',
-      'Połączenia': 'Śrubowe M10+ lub spawanie, min. 200 A²s²',
-      'Norma': 'PN-IEC 60364-5-54, PN-EN 50164',
-    };
-  }
-
-  /// Pobierz wymogi dla podziału PEN
-  Map<String, String> getWymagaPodzialuPEN() {
-    return {
-      'Miejsce podziału': 'Główna rozdzielnica budowy (na wejściu)',
-      'Przekrój PE': '≥ 16 mm² Cu dla I≤63A, ≥25 mm² dla I>63A',
-      'Przekrój N': 'Odpowiada przekrojowi fazowemu, min. 16 mm² Cu',
-      'Połączenia': 'Oddzielne dla PE i N - BEZPOŚREDNIE z szyny',
-      'Odłącznik PEN': 'Zabrania się podziału PEN przed głównym wyłącznikiem',
-      'Norma': 'PN-IEC 60364-4-41',
-    };
   }
 }

@@ -1,5 +1,5 @@
 // Grounding system models
-// Based on PN-IEC 60364, PN-EN 60950, and TN-S/TN-C-S/TT systems
+// Based on PN-HD 60364, PN-EN 61557 and TN-S/TN-C-S/TT/IT systems
 
 /// Soil types and their characteristics
 enum SoilType {
@@ -58,7 +58,7 @@ enum GroundingElectrodeType {
     // L (m), diameter (mm), typical values
     1.5,
     15,
-    'Pręt, najmniej drogi, wymaga pęknięcia gruntu',
+    'Pręt, rozwiązanie ekonomiczne, wymaga wbicia w grunt',
   ),
   horizontalStrip(
     'Pas poziomy',
@@ -72,7 +72,7 @@ enum GroundingElectrodeType {
     'Grounding plate',
     0.8,
     30,
-    'Płyta (Cu/Fe), wysoka zmiana rezystancji ze stażem',
+    'Płyta (Cu/Fe), rezystancja zależna od warunków gruntowych i korozji',
   ),
   pipeConcrete(
     'Rura betonowa',
@@ -115,13 +115,13 @@ enum GroundingSystemType {
   tnCS(
     'TN-C-S',
     'Neutral and PE combined (PEN) then separated',
-    'Połączenie N i PE na rozdzielnica, wymaga ochrony',
+    'Połączenie N i PE (PEN) do punktu rozdziału w rozdzielnicy',
     true,
   ),
   tt(
     'TT',
     'Independent grounding at consumer',
-    'Elektrody na konsumencie, wymaga RCD 30mA',
+    'Niezależne uziemienie odbiorcy, zwykle wymaga RCD 30 mA',
     true,
   ),
   it(
@@ -174,7 +174,7 @@ class GroundableElement {
   final String id;
   final String name;
   final String description;
-  final bool required; // PN-IEC 60364 requirement
+  final bool required; // PN-HD 60364 requirement
   final String systemType; // TN-S, TN-C-S, TT, All
   bool isSelected;
 
@@ -268,7 +268,7 @@ class CableRequirement {
   final String material; // Cu, Al
   final double minCurrent; // [A]
   final String description;
-  final String standard; // PN-IEC 60364
+  final String standard; // PN-HD 60364
 
   CableRequirement({
     required this.minCrossSectionMm2,
@@ -296,24 +296,12 @@ class ProtectionDeviceCheck {
   });
 }
 
-/// Standards reference data
+/// Reference information
 class ReferenceTable {
-  static const String standardsNote = '''
-PN-IEC 60364-5-54: Ziemnie i urządzenia ochronne
-- TN-S/TN-C-S: Rg ≤ 1Ω (zwykle)
-- TT: Rg × IΔn ≤ 50V, typowo Rg ≤ 10-100Ω
-- Wzór Wenner'a dla pręta: R = (ρ/2πL) × ln(2L/a)
-  gdzie L = długość [m], a = promień [mm]
-
-PN-EN 60950: Bezpieczeństwo instalacji elektrycznych
-- Max U przy zwarciu: 50V (TN), 120V (TT)
-- RCD 30mA wymóg dla TT
-''';
-
   static const String disclaimerText = '''
 OGRANICZENIE ODPOWIEDZIALNOŚCI:
 Kalkulator wspomaga projektowanie systemu uziemienia, nie zastępuje:
-- Pomiaru rzeczywistej rezystywności gruntu (metoda Wennera)
+- Pomiaru rzeczywistej rezystywności gruntu (metoda Wennera lub Schlumbergera)
 - Pomiaru rezystancji uziemienia w terenie
 - Konsultacji z projektantem elektrycznym
 - Zatwierdzenia przez UDT/inspektora
@@ -328,6 +316,6 @@ Rezystywność gruntu zależy od:
 - Temperatury (zima zwiększa rezystywność, lato zmniejsza)
 - Głębokości (zmienia się z głębokością)
 
-Pomiar metodą Wennera lub Schlumberger jest wymagany dla projektów.
+Pomiar metodą Wennera lub Schlumbergera jest wymagany dla projektów.
 ''';
 }
