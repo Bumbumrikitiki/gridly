@@ -13,7 +13,7 @@ class MultitoolProvider extends ChangeNotifier {
     ),
     MultitoolItem(
       id: 'srednice',
-      title: 'Dobór rur termokurczliwych',
+      title: 'Kable - parametry techniczne',
       description: 'Dobór rur termokurczliwych do kabli i przekrojów.',
       icon: Icons.straighten,
       category: 'Multitool',
@@ -84,7 +84,16 @@ class MultitoolProvider extends ChangeNotifier {
   ];
   bool _torchEnabled = false;
 
-  List<MultitoolItem> get items => List.unmodifiable(_items);
+  // Keep the module in source but hide it from the visible menu.
+  List<MultitoolItem> get items => List.unmodifiable(
+        _items.where(
+          (item) =>
+              item.id != 'symbole' &&
+              item.id != 'manager_projektu' &&
+              item.id != 'uziemienia' &&
+              item.id != 'pomiary',
+        ),
+      );
 
   bool get torchEnabled => _torchEnabled;
 

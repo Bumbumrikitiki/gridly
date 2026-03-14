@@ -1029,6 +1029,30 @@ class _OSDAcceptanceCheckerScreenState extends State<OSDAcceptanceCheckerScreen>
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
+            DropdownButtonFormField<_OsdOperator>(
+              initialValue: _selectedOperator,
+              decoration: const InputDecoration(
+                labelText: 'Operator OSD',
+                border: OutlineInputBorder(),
+              ),
+              items: _checklists.entries
+                  .map(
+                    (entry) => DropdownMenuItem<_OsdOperator>(
+                      value: entry.key,
+                      child: Text(entry.value.name),
+                    ),
+                  )
+                  .toList(),
+              onChanged: (value) {
+                if (value == null) {
+                  return;
+                }
+                setState(() {
+                  _selectedOperator = value;
+                });
+              },
+            ),
+            const SizedBox(height: 12),
             Text(
               'Wybierz operatora OSD dla budowy i przejdź checklistę formalną, techniczną oraz odbiorową.',
               style: Theme.of(context).textTheme.bodyMedium,
@@ -1191,30 +1215,6 @@ class _OSDAcceptanceCheckerScreenState extends State<OSDAcceptanceCheckerScreen>
                   ],
                 ),
               ),
-            ),
-            const SizedBox(height: 12),
-            DropdownButtonFormField<_OsdOperator>(
-              initialValue: _selectedOperator,
-              decoration: const InputDecoration(
-                labelText: 'Operator OSD',
-                border: OutlineInputBorder(),
-              ),
-              items: _checklists.entries
-                  .map(
-                    (entry) => DropdownMenuItem<_OsdOperator>(
-                      value: entry.key,
-                      child: Text(entry.value.name),
-                    ),
-                  )
-                  .toList(),
-              onChanged: (value) {
-                if (value == null) {
-                  return;
-                }
-                setState(() {
-                  _selectedOperator = value;
-                });
-              },
             ),
             const SizedBox(height: 12),
             Wrap(

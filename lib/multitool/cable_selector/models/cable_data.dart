@@ -2,6 +2,7 @@ enum CableMaterial { cu, al }
 
 enum CableApplication {
   electrical,    // Elektryczne (instalacyjne)
+  mediumVoltage, // Średnie napięcie (SN)
   fireproof,     // Pożaroodporne
   control,       // Sterownicze
   telecom,       // Teletechniczne
@@ -215,6 +216,64 @@ class CableData {
     }
   }
 
+  static int typeGroupNumber(CableType type) {
+    switch (type) {
+      case CableType.ydy:
+      case CableType.ydyp:
+      case CableType.omy:
+        return 1;
+      case CableType.yky:
+      case CableType.yaky:
+      case CableType.n2xh:
+        return 2;
+      case CableType.hdgs:
+      case CableType.hlgs:
+      case CableType.nhxh:
+      case CableType.htksh:
+        return 3;
+      case CableType.utp5e:
+      case CableType.utp6:
+      case CableType.futp6:
+      case CableType.sftp7:
+      case CableType.rg6:
+      case CableType.rg11:
+      case CableType.ytnksy:
+      case CableType.xztkmxpwz:
+        return 4;
+      case CableType.liyy:
+      case CableType.liycyekaprn:
+      case CableType.ysly:
+      case CableType.bit500cy:
+      case CableType.h07rnf:
+        return 5;
+      case CableType.yhakxs:
+      case CableType.xhakxs:
+      case CableType.xruhakxs:
+      case CableType.a2xsy:
+      case CableType.na2xsy:
+        return 6;
+    }
+  }
+
+  static String typeGroupLabel(CableType type) {
+    switch (typeGroupNumber(type)) {
+      case 1:
+        return 'Grupa 1: Elektryczne i instalacyjne';
+      case 2:
+        return 'Grupa 2: Zasilające i ziemne';
+      case 3:
+        return 'Grupa 3: Pozarowe i bezpieczenstwa';
+      case 4:
+        return 'Grupa 4: Teletechniczne i DATA';
+      case 5:
+        return 'Grupa 5: Sterownicze i przemyslowe';
+      case 6:
+        return 'Grupa 6: Srednie napiecie';
+      default:
+        return 'Grupa: inne';
+    }
+  }
+
   static String wireConfigToString(WireConfiguration config) {
     switch (config) {
       case WireConfiguration.single:
@@ -253,6 +312,8 @@ class CableData {
     switch (app) {
       case CableApplication.electrical:
         return 'Elektryczne';
+      case CableApplication.mediumVoltage:
+        return 'Średnie napięcie';
       case CableApplication.fireproof:
         return 'Pożarowe';
       case CableApplication.control:

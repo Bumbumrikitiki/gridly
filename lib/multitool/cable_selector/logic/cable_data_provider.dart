@@ -62,7 +62,7 @@ class CableDataProvider {
           outerDiameter: 8.5,
           heatShrinkSleeve: '12/4',
           heatShrinkLabel: '4/1.5',
-          application: CableApplication.electrical,
+          application: CableApplication.mediumVoltage,
           maxVoltage: '0.6/1 kV',
           temperatureRange: '-30°C do +70°C',
         ),
@@ -74,7 +74,7 @@ class CableDataProvider {
           outerDiameter: 9.5,
           heatShrinkSleeve: '15/5',
           heatShrinkLabel: '6/2',
-          application: CableApplication.electrical,
+          application: CableApplication.mediumVoltage,
           maxVoltage: '0.6/1 kV',
           temperatureRange: '-30°C do +70°C',
         ),
@@ -86,7 +86,7 @@ class CableDataProvider {
           outerDiameter: 11.0,
           heatShrinkSleeve: '18/6',
           heatShrinkLabel: '8/2.5',
-          application: CableApplication.electrical,
+          application: CableApplication.mediumVoltage,
           maxVoltage: '0.6/1 kV',
           temperatureRange: '-30°C do +70°C',
         ),
@@ -98,7 +98,7 @@ class CableDataProvider {
           outerDiameter: 12.5,
           heatShrinkSleeve: '20/7',
           heatShrinkLabel: '10/3',
-          application: CableApplication.electrical,
+          application: CableApplication.mediumVoltage,
           maxVoltage: '0.6/1 kV',
           temperatureRange: '-30°C do +70°C',
         ),
@@ -110,7 +110,7 @@ class CableDataProvider {
           outerDiameter: 15.0,
           heatShrinkSleeve: '25/8',
           heatShrinkLabel: '12/4',
-          application: CableApplication.electrical,
+          application: CableApplication.mediumVoltage,
           maxVoltage: '0.6/1 kV',
           temperatureRange: '-30°C do +70°C',
         ),
@@ -186,7 +186,7 @@ class CableDataProvider {
           outerDiameter: 16.0,
           heatShrinkSleeve: '25/8',
           heatShrinkLabel: '12/4',
-          application: CableApplication.power,
+          application: CableApplication.electrical,
           maxVoltage: '0.6/1 kV',
           temperatureRange: '-40°C do +70°C',
         ),
@@ -198,7 +198,7 @@ class CableDataProvider {
           outerDiameter: 19.0,
           heatShrinkSleeve: '30/10',
           heatShrinkLabel: '15/5',
-          application: CableApplication.power,
+          application: CableApplication.electrical,
           maxVoltage: '0.6/1 kV',
           temperatureRange: '-40°C do +70°C',
         ),
@@ -210,7 +210,7 @@ class CableDataProvider {
           outerDiameter: 23.0,
           heatShrinkSleeve: '40/13',
           heatShrinkLabel: '20/6',
-          application: CableApplication.power,
+          application: CableApplication.electrical,
           maxVoltage: '0.6/1 kV',
           temperatureRange: '-40°C do +70°C',
         ),
@@ -274,7 +274,7 @@ class CableDataProvider {
           outerDiameter: 19.0,
           heatShrinkSleeve: '30/10',
           heatShrinkLabel: '15/5',
-          application: CableApplication.power,
+          application: CableApplication.electrical,
           maxVoltage: '0.6/1 kV',
           temperatureRange: '-40°C do +70°C',
         ),
@@ -286,7 +286,7 @@ class CableDataProvider {
           outerDiameter: 23.0,
           heatShrinkSleeve: '40/13',
           heatShrinkLabel: '20/6',
-          application: CableApplication.power,
+          application: CableApplication.electrical,
           maxVoltage: '0.6/1 kV',
           temperatureRange: '-40°C do +70°C',
         ),
@@ -298,7 +298,7 @@ class CableDataProvider {
           outerDiameter: 26.0,
           heatShrinkSleeve: '45/15',
           heatShrinkLabel: '25/8',
-          application: CableApplication.power,
+          application: CableApplication.electrical,
           maxVoltage: '0.6/1 kV',
           temperatureRange: '-40°C do +70°C',
         ),
@@ -318,7 +318,7 @@ class CableDataProvider {
           outerDiameter: 48.0,
           heatShrinkSleeve: '70/25',
           heatShrinkLabel: '40/13',
-          application: CableApplication.power,
+          application: CableApplication.electrical,
           maxVoltage: '18/30 kV',
           temperatureRange: '-40°C do +90°C',
           wireConfiguration: WireConfiguration.single,
@@ -734,7 +734,7 @@ class CableDataProvider {
           outerDiameter: 26.0,
           heatShrinkSleeve: '40/13',
           heatShrinkLabel: '19.1/9.5',
-          application: CableApplication.power,
+          application: CableApplication.electrical,
           maxVoltage: '12/20 kV',
           temperatureRange: '-40°C do +70°C',
           wireConfiguration: WireConfiguration.single,
@@ -757,7 +757,7 @@ class CableDataProvider {
           outerDiameter: 34.0,
           heatShrinkSleeve: '55/15',
           heatShrinkLabel: '24.0/8',
-          application: CableApplication.power,
+          application: CableApplication.electrical,
           maxVoltage: '12/20 kV',
           temperatureRange: '-40°C do +70°C',
           wireConfiguration: WireConfiguration.single,
@@ -780,7 +780,7 @@ class CableDataProvider {
           outerDiameter: 38.0,
           heatShrinkSleeve: '55/15',
           heatShrinkLabel: '24.0/8',
-          application: CableApplication.power,
+          application: CableApplication.electrical,
           maxVoltage: '12/20 kV',
           temperatureRange: '-40°C do +70°C',
           wireConfiguration: WireConfiguration.single,
@@ -803,7 +803,7 @@ class CableDataProvider {
           outerDiameter: 43.0,
           heatShrinkSleeve: '55/15',
           heatShrinkLabel: '24.0/8',
-          application: CableApplication.power,
+          application: CableApplication.electrical,
           maxVoltage: '18/30 kV',
           temperatureRange: '-40°C do +70°C',
           wireConfiguration: WireConfiguration.single,
@@ -837,7 +837,17 @@ class CableDataProvider {
 
   // Nowa metoda: pobierz dostępne zastosowania
   static List<CableApplication> getAvailableApplications() {
-    return CableApplication.values;
+    final apps = <CableApplication>{};
+    for (final materialEntry in _data.entries) {
+      for (final typeEntry in materialEntry.value.entries) {
+        final firstCable = typeEntry.value.values.first;
+        apps.add(firstCable.application);
+      }
+    }
+
+    final result = apps.toList();
+    result.sort((a, b) => a.index.compareTo(b.index));
+    return result;
   }
 
   // Nowa metoda: filtrowanie po zastosowaniu
@@ -887,6 +897,15 @@ class CableDataProvider {
   ) {
     final standard = CableData.suggestTubeStandard(condition);
     return CableData.suggestTubesForCableDiameter(cableDiameter, standard);
+  }
+
+  // Sugerowane srednice rur sztywnych (orientacyjnie) dla pojedynczego kabla.
+  // Przyjeto zapas montazowy ok. 30% srednicy zewnetrznej kabla.
+  static List<int> suggestRigidConduitDiameters(double outerDiameter) {
+    const standardDiameters = <int>[16, 20, 25, 32, 40, 50, 63, 75, 90, 110];
+    final minimum = outerDiameter * 1.3;
+    final fits = standardDiameters.where((d) => d >= minimum).toList();
+    return fits.take(3).toList();
   }
 
   // Pobierz dostępne warianty warunków pracy
