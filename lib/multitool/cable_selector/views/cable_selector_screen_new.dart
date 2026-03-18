@@ -601,51 +601,67 @@ class _CableSelectorScreenState extends State<CableSelectorScreen>
   Future<void> _copyResultToClipboard(CableData data) async {
     final dimensionLabel =
         _isFlatCable(data) ? 'Wymiary zewnetrzne' : 'Srednica zewnetrzna';
+    final tubeStandard = CableDataProvider.suggestTubeStandardForCondition(
+      _selectedWorkingCondition,
+    );
+    final suggestedTubes = CableDataProvider.suggestTubesForCable(
+      data.outerDiameter,
+      _selectedWorkingCondition,
+    );
+    final rigidConduits = CableDataProvider.suggestRigidConduitDiameters(
+      data.outerDiameter,
+    );
 
-    final textParts = [
-      'Typ: ${CableData.typeToString(data.type)}',
+    final textParts = <String>[
+      'Parametry techniczne',
       'Grupa: ${CableData.typeGroupLabel(data.type)}',
+      'Typ kabla: ${CableData.typeToString(data.type)}',
       'Zastosowanie: ${CableData.applicationToString(data.application)}',
-      'Material: ${CableData.materialToString(data.material)}',
-      'Ilosc zyl: ${CableData.wireConfigToString(data.wireConfiguration)}',
+      'Material zyly: ${CableData.materialToString(data.material)}',
       'Przekroj: ${data.crossSection} mm2',
+      'Ilosc zyl: ${CableData.wireConfigToString(data.wireConfiguration)}',
+      'Typ zyly: ${CableData.coreTypeToString(data.coreType)}',
       '$dimensionLabel: ${_externalDimensionValue(data)}',
-      'Termokurcz oslonowy: ${data.heatShrinkSleeve}',
-      'Termokurcz znacznikowy: ${data.heatShrinkLabel}',
+      'Napiecie max: ${data.maxVoltage}',
+      'Zakres temperatur: ${data.temperatureRange}',
     ];
 
-    if (_hasValue(data.sourceCategory)) {
-      textParts.add('Kategoria bazy: ${data.sourceCategory}');
-    }
-    if (_hasValue(data.sourceType)) {
-      textParts.add('Typ z bazy: ${data.sourceType}');
-    }
-    if (_hasValue(data.sourceSize)) {
-      textParts.add('Rozmiar z bazy: ${data.sourceSize}');
-    }
-    if (_hasValue(data.sourceDiameter)) {
-      textParts.add('Wymiar z kolumny d: ${data.sourceDiameter}');
-    }
-    if (_hasValue(data.manufacturer)) {
-      textParts.add('Producent: ${data.manufacturer}');
-    }
     if (_hasValue(data.cpr)) {
-      textParts.add('CPR/Ognioodpornosc: ${data.cpr}');
+      textParts.add('CPR/Ognioodpornosc: ${data.cpr!.trim()}');
     }
     if (_hasValue(data.insulation)) {
-      textParts.add('Izolacja/plaszcz: ${data.insulation}');
+      textParts.add('Izolacja/plaszcz: ${data.insulation!.trim()}');
     }
     if (_hasValue(data.halogenFree)) {
-      textParts.add('Halogen free: ${data.halogenFree}');
-    }
-    if (_hasValue(data.notes)) {
-      textParts.add('Uwagi: ${data.notes}');
+      textParts.add('Halogen free: ${data.halogenFree!.trim()}');
     }
     if (_hasValue(data.usage)) {
-      textParts.add('Zastosowanie (baza): ${data.usage}');
+      textParts.add('Zastosowanie (zrodlo): ${data.usage!.trim()}');
     }
-    if (_hasValue(data.source)) {
-      textParts.add('Zrodlo: ${data.source}');
+    if (_hasValue(data.notes)) {
+      textParts.add('Uwagi: ${data.notes!.trim()}');
+    }
+
+    textParts.addAll([
+      '',
+      'Zalecane materialy',
+      'Warunki pracy: ${CableData.workingConditionToString(_selectedWorkingCondition)}',
+      'Standard rury: ${HeatShrinkTube.standardToString(tubeStandard)}',
+      'Oslona (3:1): ${data.heatShrinkSleeve}',
+      'Znacznik (2:1): ${data.heatShrinkLabel}',
+    ]);
+
+    if (suggestedTubes.isNotEmpty) {
+      final tubeValues = suggestedTubes
+          .take(4)
+          .map((tube) => tube.description)
+          .join(', ');
+      textParts.add('Dopasowane srednice (z zapasem 20%): $tubeValues');
+    }
+
+    if (rigidConduits.isNotEmpty) {
+      final conduitValues = rigidConduits.map((d) => 'DN $d mm').join(', ');
+      textParts.add('Sugerowane rury sztywne (orientacyjnie): $conduitValues');
     }
 
     final text = textParts.join('\n');
@@ -1517,7 +1533,7 @@ class _CableSelectorScreenState extends State<CableSelectorScreen>
                     const SizedBox(width: 12),
                     Expanded(
                       child: Text(
-                        'Wynik doboru',
+                        'Parametry techniczne',
                         style: Theme.of(context).textTheme.titleLarge?.copyWith(
                               color: _amber,
                               fontWeight: FontWeight.bold,
@@ -1638,67 +1654,12 @@ class _CableSelectorScreenState extends State<CableSelectorScreen>
                     }).toList(),
                   ),
                 ],
-                if (_hasValue(_result!.source) ||
-                    _hasValue(_result!.sourceCategory) ||
-                    _hasValue(_result!.sourceType) ||
-                    _hasValue(_result!.sourceSize) ||
-                    _hasValue(_result!.sourceDiameter) ||
-                    _hasValue(_result!.manufacturer) ||
-                    _hasValue(_result!.cpr) ||
+                if (_hasValue(_result!.cpr) ||
                     _hasValue(_result!.insulation) ||
                     _hasValue(_result!.halogenFree) ||
                     _hasValue(_result!.notes) ||
-                    _hasValue(_result!.usage) ||
-                    _hasValue(_result!.importedAt)) ...[
+                    _hasValue(_result!.usage)) ...[
                   const SizedBox(height: 20),
-                  Text(
-                    'Dane z bazy',
-                    style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                          color: _amber,
-                          fontWeight: FontWeight.bold,
-                        ),
-                  ),
-                  const SizedBox(height: 12),
-                  if (_hasValue(_result!.sourceCategory)) ...[
-                    _buildResultRow(
-                      'Kategoria (zrodlo)',
-                      _result!.sourceCategory!.trim(),
-                      Icons.category,
-                    ),
-                    const SizedBox(height: 12),
-                  ],
-                  if (_hasValue(_result!.sourceType)) ...[
-                    _buildResultRow(
-                      'Typ (zrodlo)',
-                      _result!.sourceType!.trim(),
-                      Icons.tune,
-                    ),
-                    const SizedBox(height: 12),
-                  ],
-                  if (_hasValue(_result!.sourceSize)) ...[
-                    _buildResultRow(
-                      'Rozmiar (zrodlo)',
-                      _result!.sourceSize!.trim(),
-                      Icons.straighten,
-                    ),
-                    const SizedBox(height: 12),
-                  ],
-                  if (_hasValue(_result!.sourceDiameter)) ...[
-                    _buildResultRow(
-                      'Wymiar z kolumny d',
-                      _result!.sourceDiameter!.trim(),
-                      Icons.open_with,
-                    ),
-                    const SizedBox(height: 12),
-                  ],
-                  if (_hasValue(_result!.manufacturer)) ...[
-                    _buildResultRow(
-                      'Producent',
-                      _result!.manufacturer!.trim(),
-                      Icons.factory,
-                    ),
-                    const SizedBox(height: 12),
-                  ],
                   if (_hasValue(_result!.cpr)) ...[
                     _buildResultRow(
                       'CPR/Ognioodpornosc',
@@ -1739,26 +1700,10 @@ class _CableSelectorScreenState extends State<CableSelectorScreen>
                     ),
                     const SizedBox(height: 12),
                   ],
-                  if (_hasValue(_result!.source)) ...[
-                    _buildResultRow(
-                      'Zrodlo danych',
-                      _result!.source!.trim(),
-                      Icons.source,
-                    ),
-                    const SizedBox(height: 12),
-                  ],
-                  if (_hasValue(_result!.importedAt)) ...[
-                    _buildResultRow(
-                      'Data importu',
-                      _result!.importedAt!.trim(),
-                      Icons.calendar_today,
-                    ),
-                    const SizedBox(height: 12),
-                  ],
                 ],
                 const Divider(height: 32, color: Colors.grey),
                 Text(
-                  'Warunki pracy',
+                  'Zalecane materiały',
                   style: Theme.of(context).textTheme.titleMedium?.copyWith(
                         color: _amber,
                         fontWeight: FontWeight.bold,
