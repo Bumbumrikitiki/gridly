@@ -129,6 +129,7 @@ class CableData {
     this.sourceCategory,
     this.sourceType,
     this.sourceSize,
+    this.sourceDiameter,
     this.manufacturer,
     this.cpr,
     this.insulation,
@@ -155,6 +156,7 @@ class CableData {
   final String? sourceCategory;
   final String? sourceType;
   final String? sourceSize;
+  final String? sourceDiameter;
   final String? manufacturer;
   final String? cpr;
   final String? insulation;

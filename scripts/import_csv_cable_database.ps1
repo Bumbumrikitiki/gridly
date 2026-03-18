@@ -41,6 +41,19 @@ function ToDouble([string]$v) {
   return $null
 }
 
+function DiameterForSizing([string]$v) {
+  if ([string]::IsNullOrWhiteSpace($v)) { return $null }
+  $raw = $v.Trim().Replace(',', '.').Replace('×', 'x').Replace('X', 'x')
+  if ($raw -match '([0-9]+(?:\.[0-9]+)?)\s*x\s*([0-9]+(?:\.[0-9]+)?)') {
+    $a = ToDouble $Matches[1]
+    $b = ToDouble $Matches[2]
+    if ($null -ne $a -and $null -ne $b) {
+      return [Math]::Max([double]$a, [double]$b)
+    }
+  }
+  return ToDouble $raw
+}
+
 function Cross([string]$s) {
   if ([string]::IsNullOrWhiteSpace($s)) { return $null }
   if ($s -match '^[0-9]+x[0-9]+x([0-9]+(?:[\.,][0-9]+)?)$') { return ToDouble $Matches[1] }
@@ -308,7 +321,8 @@ foreach ($r in $rows) {
     continue
   }
 
-  $diameter = ToDouble ([string]$diameterLabel)
+  $diameterRaw = [string]$diameterLabel
+  $diameter = DiameterForSizing $diameterRaw
   $cross = Cross ([string]$sizeLabel)
   if ($null -eq $cross) { $cross = 1.0 }
 
@@ -346,6 +360,7 @@ foreach ($r in $rows) {
     sourceCategory = [string]$category
     sourceType = [string]$typeLabel
     sourceSize = [string]$sizeLabel
+    sourceDiameter = [string]$diameterRaw
     manufacturer = [string]$producer
     cpr = ''
     insulation = ''
