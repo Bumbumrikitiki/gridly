@@ -1,8 +1,264 @@
+import 'dart:convert';
+
+import 'package:flutter/services.dart' show rootBundle;
 import 'package:gridly/multitool/cable_selector/models/cable_data.dart';
 
 class CableDataProvider {
   static final Map<CableMaterial, Map<CableType, Map<double, CableData>>>
       _data = _buildData();
+  static Map<CableMaterial, Map<CableType, List<CableData>>> _runtimeVariants =
+      _buildVariantData(_data);
+  static Map<CableMaterial, Map<CableType, Map<double, CableData>>>
+      _runtimeData = _cloneDataMap(_data);
+  static bool _localDatabaseInitialized = false;
+  static int _localImportedRecords = 0;
+  static const List<String> _localDatabaseAssets = [
+    'assets/data/cables/local_cable_database.json',
+    'assets/data/cables/local_cable_database_verified.json',
+  ];
+
+  static Future<void> initializeLocalDatabase() async {
+    if (_localDatabaseInitialized) {
+      return;
+    }
+
+    _runtimeData = _cloneDataMap(_data);
+    _runtimeVariants = _buildVariantData(_data);
+    var imported = 0;
+
+    for (final assetPath in _localDatabaseAssets) {
+      try {
+        final jsonRaw = await rootBundle.loadString(assetPath);
+        final decoded = json.decode(jsonRaw);
+
+        if (decoded is List) {
+          for (final item in decoded) {
+            if (item is! Map<String, dynamic>) {
+              continue;
+            }
+
+            final record = _parseLocalCableRecord(item);
+            if (record == null) {
+              continue;
+            }
+
+            _upsertCableData(record);
+            imported += 1;
+          }
+        }
+      } catch (_) {
+        // Preserve built-in data when one of assets is missing or malformed.
+      }
+    }
+
+    _localImportedRecords = imported;
+    _localDatabaseInitialized = true;
+  }
+
+  static Map<String, int> getDatabaseStats() {
+    var totalRecords = 0;
+    for (final materialEntry in _runtimeVariants.values) {
+      for (final typeEntry in materialEntry.values) {
+        totalRecords += typeEntry.length;
+      }
+    }
+
+    return {
+      'totalRecords': totalRecords,
+      'localImportedRecords': _localImportedRecords,
+      'materials': _runtimeVariants.length,
+    };
+  }
+
+  static Map<CableMaterial, Map<CableType, Map<double, CableData>>>
+      _cloneDataMap(
+    Map<CableMaterial, Map<CableType, Map<double, CableData>>> source,
+  ) {
+    final clone = <CableMaterial, Map<CableType, Map<double, CableData>>>{};
+    for (final materialEntry in source.entries) {
+      final typeMap = <CableType, Map<double, CableData>>{};
+      for (final typeEntry in materialEntry.value.entries) {
+        typeMap[typeEntry.key] = Map<double, CableData>.from(typeEntry.value);
+      }
+      clone[materialEntry.key] = typeMap;
+    }
+    return clone;
+  }
+
+  static Map<CableMaterial, Map<CableType, List<CableData>>> _buildVariantData(
+    Map<CableMaterial, Map<CableType, Map<double, CableData>>> source,
+  ) {
+    final variants = <CableMaterial, Map<CableType, List<CableData>>>{};
+    for (final materialEntry in source.entries) {
+      final typeMap = <CableType, List<CableData>>{};
+      for (final typeEntry in materialEntry.value.entries) {
+        typeMap[typeEntry.key] = typeEntry.value.values.toList();
+      }
+      variants[materialEntry.key] = typeMap;
+    }
+    return variants;
+  }
+
+  static String _cableCompositeKey(CableData cable) {
+    return [
+      cable.crossSection,
+      cable.wireConfiguration.name,
+      cable.outerDiameter,
+      cable.maxVoltage,
+      cable.sourceType ?? '',
+      cable.sourceSize ?? '',
+      cable.manufacturer ?? '',
+      cable.cpr ?? '',
+      cable.insulation ?? '',
+      cable.halogenFree ?? '',
+      cable.notes ?? '',
+      cable.usage ?? '',
+      cable.importedAt ?? '',
+    ].join(':');
+  }
+
+  static void _upsertCableData(CableData cable) {
+    final materialMap = _runtimeData.putIfAbsent(
+      cable.material,
+      () => <CableType, Map<double, CableData>>{},
+    );
+    final typeMap = materialMap.putIfAbsent(
+      cable.type,
+      () => <double, CableData>{},
+    );
+    typeMap[cable.crossSection] = cable;
+
+    final variantMaterialMap = _runtimeVariants.putIfAbsent(
+      cable.material,
+      () => <CableType, List<CableData>>{},
+    );
+    final variants = variantMaterialMap.putIfAbsent(
+      cable.type,
+      () => <CableData>[],
+    );
+    final newKey = _cableCompositeKey(cable);
+    final existingIndex = variants.indexWhere(
+      (item) => _cableCompositeKey(item) == newKey,
+    );
+    if (existingIndex >= 0) {
+      variants[existingIndex] = cable;
+    } else {
+      variants.add(cable);
+    }
+  }
+
+  static CableData? _parseLocalCableRecord(Map<String, dynamic> jsonMap) {
+    final material =
+        _parseEnumByName(CableMaterial.values, jsonMap['material']);
+    final type = _parseEnumByName(CableType.values, jsonMap['type']);
+    final coreType = _parseEnumByName(CoreType.values, jsonMap['coreType']);
+    final application =
+        _parseEnumByName(CableApplication.values, jsonMap['application']);
+
+    if (material == null ||
+        type == null ||
+        coreType == null ||
+        application == null) {
+      return null;
+    }
+
+    final crossSection = _parseNum(jsonMap['crossSection']);
+    final outerDiameter = _parseNum(jsonMap['outerDiameter']);
+    final maxVoltage = _parseString(jsonMap['maxVoltage']);
+    final temperatureRange = _parseString(jsonMap['temperatureRange']);
+
+    if (crossSection == null ||
+        outerDiameter == null ||
+        maxVoltage == null ||
+        temperatureRange == null) {
+      return null;
+    }
+
+    final wireConfiguration = _parseEnumByName(
+          WireConfiguration.values,
+          jsonMap['wireConfiguration'],
+        ) ??
+        WireConfiguration.single;
+
+    final recommendedTubeStandard = _parseEnumByName(
+          HeatShrinkStandard.values,
+          jsonMap['recommendedTubeStandard'],
+        ) ??
+        HeatShrinkStandard.rck;
+
+    var groupNumber = 1;
+    final groupRaw = jsonMap['groupNumber'];
+    if (groupRaw is int) {
+      groupNumber = groupRaw;
+    }
+
+    final heatShrinkSleeve = _parseString(jsonMap['heatShrinkSleeve']) ??
+        getRecommendedHeatShrink3to1(outerDiameter);
+    final heatShrinkLabel = _parseString(jsonMap['heatShrinkLabel']) ??
+        getRecommendedHeatShrink2to1(outerDiameter);
+
+    return CableData(
+      material: material,
+      type: type,
+      crossSection: crossSection,
+      coreType: coreType,
+      outerDiameter: outerDiameter,
+      heatShrinkSleeve: heatShrinkSleeve,
+      heatShrinkLabel: heatShrinkLabel,
+      application: application,
+      maxVoltage: maxVoltage,
+      temperatureRange: temperatureRange,
+      wireConfiguration: wireConfiguration,
+      groupNumber: groupNumber,
+      recommendedTubeStandard: recommendedTubeStandard,
+      source: _parseString(jsonMap['source']),
+      sourceCategory: _parseString(jsonMap['sourceCategory']),
+      sourceType: _parseString(jsonMap['sourceType']),
+      sourceSize: _parseString(jsonMap['sourceSize']),
+      manufacturer: _parseString(jsonMap['manufacturer']),
+      cpr: _parseString(jsonMap['cpr']),
+      insulation: _parseString(jsonMap['insulation']),
+      halogenFree: _parseString(jsonMap['halogenFree']),
+      notes: _parseString(jsonMap['notes']),
+      usage: _parseString(jsonMap['usage']),
+      importedAt: _parseString(jsonMap['importedAt']),
+    );
+  }
+
+  static T? _parseEnumByName<T extends Enum>(
+    List<T> values,
+    dynamic raw,
+  ) {
+    if (raw is! String) {
+      return null;
+    }
+
+    final normalized = raw.trim().toLowerCase();
+    for (final item in values) {
+      if (item.name.toLowerCase() == normalized) {
+        return item;
+      }
+    }
+    return null;
+  }
+
+  static double? _parseNum(dynamic raw) {
+    if (raw is num) {
+      return raw.toDouble();
+    }
+    if (raw is String) {
+      final normalized = raw.replaceAll(',', '.').trim();
+      return double.tryParse(normalized);
+    }
+    return null;
+  }
+
+  static String? _parseString(dynamic raw) {
+    if (raw is String && raw.trim().isNotEmpty) {
+      return raw.trim();
+    }
+    return null;
+  }
 
   static Map<CableMaterial, Map<CableType, Map<double, CableData>>>
       _buildData() {
@@ -821,27 +1077,104 @@ class CableDataProvider {
     CableType type,
     double crossSection,
   ) {
-    return _data[material]?[type]?[crossSection];
+    final variants = _runtimeVariants[material]?[type];
+    if (variants == null) {
+      return null;
+    }
+    for (final cable in variants) {
+      if (cable.crossSection == crossSection) {
+        return cable;
+      }
+    }
+    return null;
+  }
+
+  static CableData? getCableDataByConfiguration(
+    CableMaterial material,
+    CableType type,
+    double crossSection,
+    WireConfiguration wireConfiguration,
+  ) {
+    final variants = _runtimeVariants[material]?[type];
+    if (variants == null) {
+      return null;
+    }
+    for (final cable in variants) {
+      if (cable.crossSection == crossSection &&
+          cable.wireConfiguration == wireConfiguration) {
+        return cable;
+      }
+    }
+    return null;
+  }
+
+  static List<CableData> getCableVariants(
+    CableMaterial material,
+    CableType type,
+  ) {
+    return List<CableData>.from(
+      _runtimeVariants[material]?[type] ?? const <CableData>[],
+    );
+  }
+
+  static List<CableData> getCableVariantsByConfiguration(
+    CableMaterial material,
+    CableType type,
+    double crossSection,
+    WireConfiguration wireConfiguration,
+  ) {
+    final variants = _runtimeVariants[material]?[type] ?? const <CableData>[];
+    return variants
+        .where(
+          (cable) =>
+              cable.crossSection == crossSection &&
+              cable.wireConfiguration == wireConfiguration,
+        )
+        .toList();
   }
 
   static List<CableType> getAvailableTypes(CableMaterial material) {
-    return _data[material]?.keys.toList() ?? [];
+    return _runtimeVariants[material]?.keys.toList() ?? [];
   }
 
   static List<double> getAvailableCrossSections(
     CableMaterial material,
+    CableType type, {
+    WireConfiguration? wireConfiguration,
+  }) {
+    final variants = _runtimeVariants[material]?[type] ?? const <CableData>[];
+    final crossSections = variants
+        .where(
+          (cable) =>
+              wireConfiguration == null ||
+              cable.wireConfiguration == wireConfiguration,
+        )
+        .map((cable) => cable.crossSection)
+        .toSet()
+        .toList();
+    crossSections.sort();
+    return crossSections;
+  }
+
+  static List<WireConfiguration> getAvailableWireConfigurations(
+    CableMaterial material,
     CableType type,
   ) {
-    return _data[material]?[type]?.keys.toList() ?? [];
+    final variants = _runtimeVariants[material]?[type] ?? const <CableData>[];
+    final configs =
+        variants.map((cable) => cable.wireConfiguration).toSet().toList();
+    configs.sort((a, b) => a.index.compareTo(b.index));
+    return configs;
   }
 
   // Nowa metoda: pobierz dostępne zastosowania
   static List<CableApplication> getAvailableApplications() {
     final apps = <CableApplication>{};
-    for (final materialEntry in _data.entries) {
+    for (final materialEntry in _runtimeVariants.entries) {
       for (final typeEntry in materialEntry.value.entries) {
-        final firstCable = typeEntry.value.values.first;
-        apps.add(firstCable.application);
+        for (final cable in typeEntry.value) {
+          apps.add(cable.application);
+        }
       }
     }
 
@@ -853,11 +1186,9 @@ class CableDataProvider {
   // Nowa metoda: filtrowanie po zastosowaniu
   static List<CableType> getTypesByApplication(CableApplication app) {
     final types = <CableType>[];
-    for (final materialEntry in _data.entries) {
+    for (final materialEntry in _runtimeVariants.entries) {
       for (final typeEntry in materialEntry.value.entries) {
-        // Sprawdź pierwsze wpisy każdego typu
-        final firstCable = typeEntry.value.values.first;
-        if (firstCable.application == app) {
+        if (typeEntry.value.any((cable) => cable.application == app)) {
           types.add(typeEntry.key);
         }
       }
@@ -871,11 +1202,10 @@ class CableDataProvider {
     CableMaterial material,
   ) {
     final types = <CableType>[];
-    final materialData = _data[material];
+    final materialData = _runtimeVariants[material];
     if (materialData != null) {
       for (final typeEntry in materialData.entries) {
-        final firstCable = typeEntry.value.values.first;
-        if (firstCable.application == app) {
+        if (typeEntry.value.any((cable) => cable.application == app)) {
           types.add(typeEntry.key);
         }
       }

@@ -1,81 +1,81 @@
 enum CableMaterial { cu, al }
 
 enum CableApplication {
-  electrical,    // Elektryczne (instalacyjne)
+  electrical, // Elektryczne (instalacyjne)
   mediumVoltage, // Średnie napięcie (SN)
-  fireproof,     // Pożaroodporne
-  control,       // Sterownicze
-  telecom,       // Teletechniczne
-  power,         // Zasilające (energetyczne)
-  industrial,    // Przemysłowe
+  fireproof, // Pożaroodporne
+  control, // Sterownicze
+  telecom, // Teletechniczne
+  power, // Zasilające (energetyczne)
+  industrial, // Przemysłowe
 }
 
 enum CableType {
   // Grupa 1: Elektryczne i instalacyjne (nN 450/750V)
-  ydy,          // YDY (okrągły Cu, PVC)
-  ydyp,         // YDYp (płaski Cu, PVC)
-  omy,          // OMY / OWY (warsztatowe)
-  
+  ydy, // YDY (okrągły Cu, PVC)
+  ydyp, // YDYp (płaski Cu, PVC)
+  omy, // OMY / OWY (warsztatowe)
+
   // Grupa 2: Zasilające i ziemne (0.6/1kV)
-  yky,          // YKY (Cu, PVC)
-  yaky,         // YAKY (Al, PVC)
-  n2xh,         // N2XH (Cu, bezhalogenowy)
-  
+  yky, // YKY (Cu, PVC)
+  yaky, // YAKY (Al, PVC)
+  n2xh, // N2XH (Cu, bezhalogenowy)
+
   // Grupa 3: Pożarowe i bezpieczeństwa (E90/PH90)
-  hdgs,         // HDGs (pożarowy)
-  hlgs,         // HLGs (pożarowy)
-  nhxh,         // NHXH E90 (pożarowy, CPR)
-  htksh,        // HTKSH (pożarowy, ekranowany)
-  
+  hdgs, // HDGs (pożarowy)
+  hlgs, // HLGs (pożarowy)
+  nhxh, // NHXH E90 (pożarowy, CPR)
+  htksh, // HTKSH (pożarowy, ekranowany)
+
   // Grupa 4: Teletechniczne i DATA
-  utp5e,        // U/UTP 5e (LAN)
-  utp6,         // U/UTP 6 (LAN)
-  futp6,        // F/UTP 6 (ekranowany)
-  sftp7,        // S/FTP 7 (podwójny ekran)
-  rg6,          // RG6 (koncentryczny SAT)
-  rg11,         // RG11 (koncentryczny SAT)
-  ytnksy,       // YnTKSY (teletechniczny)
-  xztkmxpwz,    // XzTKMXpwZ (światłowód)
-  
+  utp5e, // U/UTP 5e (LAN)
+  utp6, // U/UTP 6 (LAN)
+  futp6, // F/UTP 6 (ekranowany)
+  sftp7, // S/FTP 7 (podwójny ekran)
+  rg6, // RG6 (koncentryczny SAT)
+  rg11, // RG11 (koncentryczny SAT)
+  ytnksy, // YnTKSY (teletechniczny)
+  xztkmxpwz, // XzTKMXpwZ (światłowód)
+
   // Grupa 5: Sterownicze i przemysłowe
-  liyy,         // LiYY (sterowniczy)
-  liycyekaprn,  // LiYCY ekranowany
-  ysly,         // YSLY / JZ-500 (sterowniczy)
-  bit500cy,     // BiT 500 CY (ekranowany)
-  h07rnf,       // H07RN-F (OnPD, guma)
-  
+  liyy, // LiYY (sterowniczy)
+  liycyekaprn, // LiYCY ekranowany
+  ysly, // YSLY / JZ-500 (sterowniczy)
+  bit500cy, // BiT 500 CY (ekranowany)
+  h07rnf, // H07RN-F (OnPD, guma)
+
   // Grupa 6: Średnie napięcie (12/20kV, 18/30kV)
-  yhakxs,       // YHAKXS (Al, XLPE)
-  xhakxs,       // XHAKXS (Cu, XLPE)
-  xruhakxs,     // XRUHAKXS (Cu, XLPE, pancerz)
-  a2xsy,        // A2XSY (Al, XLPE)
-  na2xsy,       // NA2XSY (Al, XLPE, bezhalogen)
+  yhakxs, // YHAKXS (Al, XLPE)
+  xhakxs, // XHAKXS (Cu, XLPE)
+  xruhakxs, // XRUHAKXS (Cu, XLPE, pancerz)
+  a2xsy, // A2XSY (Al, XLPE)
+  na2xsy, // NA2XSY (Al, XLPE, bezhalogen)
 }
 
 enum CoreType { re, sm }
 
 enum WireConfiguration {
-  single,       // Pojedyncza żyła
-  pair,         // Para
-  twoWire,      // 2 żyły
-  threeWire,    // 3 żyły
-  fourWire,     // 4 żyły
-  fiveWire,     // 5 żyły
-  sevenWire,    // 7 żył
-  twelvWire,    // 12 żył
+  single, // Pojedyncza żyła
+  pair, // Para
+  twoWire, // 2 żyły
+  threeWire, // 3 żyły
+  fourWire, // 4 żyły
+  fiveWire, // 5 żyły
+  sevenWire, // 7 żył
+  twelvWire, // 12 żył
   twentyFiveWire, // 25 żył
 }
 
 enum WorkingCondition {
-  interior,         // Wnętrze / szafa / puszka
-  humid,           // Wilgoć / agresywne środowisko
-  ground,          // Ziemia / przyłącze / SN / duże siły
+  interior, // Wnętrze / szafa / puszka
+  humid, // Wilgoć / agresywne środowisko
+  ground, // Ziemia / przyłącze / SN / duże siły
 }
 
 enum HeatShrinkStandard {
-  rc,   // Cienkościenne (bez kleju) 2:1
-  rck,  // Cienkościenne z klejem 3:1 / 4:1
-  rgk,  // Grubościenne z klejem 3:1 / 4:1
+  rc, // Cienkościenne (bez kleju) 2:1
+  rck, // Cienkościenne z klejem 3:1 / 4:1
+  rgk, // Grubościenne z klejem 3:1 / 4:1
 }
 
 class HeatShrinkTube {
@@ -124,6 +124,17 @@ class CableData {
     this.wireConfiguration = WireConfiguration.single,
     this.groupNumber = 1,
     this.recommendedTubeStandard = HeatShrinkStandard.rck,
+    this.source,
+    this.sourceCategory,
+    this.sourceType,
+    this.sourceSize,
+    this.manufacturer,
+    this.cpr,
+    this.insulation,
+    this.halogenFree,
+    this.notes,
+    this.usage,
+    this.importedAt,
   });
 
   final CableMaterial material;
@@ -139,6 +150,17 @@ class CableData {
   final WireConfiguration wireConfiguration;
   final int groupNumber; // 1-6 grupy
   final HeatShrinkStandard recommendedTubeStandard;
+  final String? source;
+  final String? sourceCategory;
+  final String? sourceType;
+  final String? sourceSize;
+  final String? manufacturer;
+  final String? cpr;
+  final String? insulation;
+  final String? halogenFree;
+  final String? notes;
+  final String? usage;
+  final String? importedAt;
 
   static String materialToString(CableMaterial material) {
     return material == CableMaterial.cu ? 'Cu' : 'Al';
@@ -153,7 +175,7 @@ class CableData {
         return 'YDYp (Cu, PVC, płaski)';
       case CableType.omy:
         return 'OMY / OWY (Cu, warsztatowy)';
-      
+
       // Grupa 2: Zasilające i ziemne
       case CableType.yky:
         return 'YKY (Cu, PVC, ziemny)';
@@ -161,7 +183,7 @@ class CableData {
         return 'YAKY (Al, PVC, ziemny)';
       case CableType.n2xh:
         return 'N2XH (Cu, bezhalogenowy)';
-      
+
       // Grupa 3: Pożarowe
       case CableType.hdgs:
         return 'HDGs (pożarowy Si)';
@@ -171,7 +193,7 @@ class CableData {
         return 'NHXH E90 (pożarowy CPR)';
       case CableType.htksh:
         return 'HTKSH (pożarowy ekranowany)';
-      
+
       // Grupa 4: Teletechniczne
       case CableType.utp5e:
         return 'U/UTP 5e (LAN Cat.5e)';
@@ -189,7 +211,7 @@ class CableData {
         return 'YnTKSY (telecom)';
       case CableType.xztkmxpwz:
         return 'XzTKMXpwZ (światłowód)';
-      
+
       // Grupa 5: Sterownicze
       case CableType.liyy:
         return 'LiYY (sterowniczy)';
@@ -201,7 +223,7 @@ class CableData {
         return 'BiT 500 CY (sterowniczy ekranowany)';
       case CableType.h07rnf:
         return 'H07RN-F (gumowy, OnPD)';
-      
+
       // Grupa 6: Średnie napięcie
       case CableType.yhakxs:
         return 'YHAKXS (Al, XLPE, SN)';
@@ -527,4 +549,3 @@ class CableData {
         .toList();
   }
 }
-

@@ -20,6 +20,7 @@ class _CableSelectorScreenState extends State<CableSelectorScreen>
   CableApplication? _selectedApplication;
   CableMaterial? _selectedMaterial;
   int? _selectedGroupNumber;
+  String? _selectedVoltageFilter;
   String _typeSearchQuery = '';
   CableType? _selectedType;
   WireConfiguration? _selectedWireConfiguration;
@@ -28,6 +29,13 @@ class _CableSelectorScreenState extends State<CableSelectorScreen>
   CableData? _result;
   final Set<CableType> _favoriteTypes = <CableType>{};
   final List<CableType> _recentTypes = <CableType>[];
+  bool _databaseInitialized = false;
+  Map<String, int> _databaseStats = const {
+    'totalRecords': 0,
+    'localImportedRecords': 0,
+    'materials': 0,
+  };
+  final TextEditingController _typeSearchController = TextEditingController();
 
   late AnimationController _animationController;
   late Animation<double> _scaleAnimation;
@@ -42,37 +50,68 @@ class _CableSelectorScreenState extends State<CableSelectorScreen>
     _scaleAnimation = Tween<double>(begin: 0.95, end: 1.0).animate(
       CurvedAnimation(parent: _animationController, curve: Curves.easeOut),
     );
+    _initializeLocalDatabase();
+  }
+
+  Future<void> _initializeLocalDatabase() async {
+    await CableDataProvider.initializeLocalDatabase();
+    if (!mounted) {
+      return;
+    }
+
+    setState(() {
+      _databaseStats = CableDataProvider.getDatabaseStats();
+      _databaseInitialized = true;
+    });
   }
 
   @override
   void dispose() {
     _animationController.dispose();
+    _typeSearchController.dispose();
     super.dispose();
   }
 
   void _onApplicationSelected(CableApplication app) {
+    final availableMaterials = _getAvailableMaterialsForApplication(app);
     setState(() {
       _selectedApplication = app;
-      _selectedMaterial = null;
+      _selectedMaterial =
+          availableMaterials.length == 1 ? availableMaterials.first : null;
       _selectedGroupNumber = null;
+      _selectedVoltageFilter = null;
       _typeSearchQuery = '';
       _selectedType = null;
       _selectedWireConfiguration = null;
       _selectedCrossSection = null;
       _result = null;
+      _typeSearchController.clear();
     });
     _animationController.forward(from: 0);
+  }
+
+  List<CableMaterial> _getAvailableMaterialsForApplication(
+    CableApplication app,
+  ) {
+    final materials = CableMaterial.values.where((material) {
+      return CableDataProvider.getTypesByApplicationAndMaterial(app, material)
+          .isNotEmpty;
+    }).toList();
+    materials.sort((a, b) => a.index.compareTo(b.index));
+    return materials;
   }
 
   void _onMaterialSelected(CableMaterial material) {
     setState(() {
       _selectedMaterial = material;
       _selectedGroupNumber = null;
+      _selectedVoltageFilter = null;
       _typeSearchQuery = '';
       _selectedType = null;
       _selectedWireConfiguration = null;
       _selectedCrossSection = null;
       _result = null;
+      _typeSearchController.clear();
     });
     _animationController.forward(from: 0);
   }
@@ -122,10 +161,16 @@ class _CableSelectorScreenState extends State<CableSelectorScreen>
   }
 
   List<CableType> _getFilteredTypes() {
-    final query = _typeSearchQuery.trim().toLowerCase();
-    return _getBaseTypesForCurrentSelection().where((type) {
+    final query = _normalizeToken(_typeSearchQuery);
+    final tokens = _extractSearchTokens(query);
+    final filtered = _getBaseTypesForCurrentSelection().where((type) {
       if (_selectedGroupNumber != null &&
           CableData.typeGroupNumber(type) != _selectedGroupNumber) {
+        return false;
+      }
+
+      if (_selectedVoltageFilter != null &&
+          !_typeMatchesVoltage(type, _selectedVoltageFilter!)) {
         return false;
       }
 
@@ -133,20 +178,384 @@ class _CableSelectorScreenState extends State<CableSelectorScreen>
         return true;
       }
 
-      final haystack = [
-        CableData.typeToString(type),
-        CableData.typeGroupLabel(type),
-        type.name,
-      ].join(' ').toLowerCase();
-      return haystack.contains(query);
+      final haystack = _buildTypeSearchIndex(type);
+      if (haystack.contains(query)) {
+        return true;
+      }
+      return tokens.every(haystack.contains);
     }).toList();
+
+    if (query.isEmpty) {
+      filtered.sort((a, b) =>
+          CableData.typeToString(a).compareTo(CableData.typeToString(b)));
+      return filtered;
+    }
+
+    filtered.sort(
+      (a, b) =>
+          _scoreTypeForQuery(b, query).compareTo(_scoreTypeForQuery(a, query)),
+    );
+    return filtered;
+  }
+
+  String _buildTypeSearchIndex(CableType type) {
+    final tokens = <String>[
+      CableData.typeToString(type).toLowerCase(),
+      CableData.typeGroupLabel(type).toLowerCase(),
+      type.name.toLowerCase(),
+    ];
+
+    tokens.addAll(_getTypeAliases(type));
+
+    if (_selectedMaterial != null) {
+      final variants = CableDataProvider.getCableVariants(
+        _selectedMaterial!,
+        type,
+      );
+      for (final data in variants) {
+        final wireCount = _wireCountForConfig(data.wireConfiguration);
+        final csLabel = data.crossSection.toString().replaceAll('.0', '');
+        if (wireCount != null) {
+          tokens.add('${wireCount}x$csLabel');
+          tokens.add('${wireCount}x${csLabel.replaceAll('.', ',')}');
+          tokens.add('$wireCount x $csLabel');
+          tokens.add('$wireCount x ${csLabel.replaceAll('.', ',')}');
+        }
+        tokens.add(data.maxVoltage.toLowerCase());
+        tokens.add(_normalizeToken(data.maxVoltage));
+      }
+    }
+
+    return tokens.map(_normalizeToken).join(' ');
+  }
+
+  int _scoreTypeForQuery(CableType type, String query) {
+    final normalized = _normalizeToken(query);
+    final typeName = CableData.typeToString(type).toLowerCase();
+    final shortName = type.name.toLowerCase();
+    final searchIndex = _buildTypeSearchIndex(type);
+    var score = 0;
+
+    if (shortName == normalized || typeName == normalized) {
+      score += 120;
+    }
+    if (shortName.startsWith(normalized) || typeName.startsWith(normalized)) {
+      score += 80;
+    }
+    if (searchIndex.contains(normalized)) {
+      score += 40;
+    }
+
+    final parts = _extractSearchTokens(normalized);
+    for (final part in parts) {
+      if (shortName.startsWith(part)) {
+        score += 20;
+      }
+      if (searchIndex.contains(part)) {
+        score += 12;
+      }
+    }
+
+    return score;
+  }
+
+  List<String> _getTypeAliases(CableType type) {
+    switch (type) {
+      case CableType.yky:
+        return ['yky', 'ziemny', 'power'];
+      case CableType.n2xh:
+        return ['n2xh', 'bezhalogen', 'halogenfree', 'b2ca'];
+      case CableType.utp5e:
+        return ['utp5e', 'uutp', 'u/utp', 'kat5e', 'cat5e'];
+      case CableType.utp6:
+        return ['utp6', 'uutp', 'u/utp', 'kat6', 'cat6'];
+      case CableType.futp6:
+        return ['futp6', 'f/utp', 'kat6', 'cat6'];
+      case CableType.sftp7:
+        return ['sftp7', 's/ftp', 'kat7', 'cat7'];
+      default:
+        return [type.name.toLowerCase()];
+    }
+  }
+
+  String _normalizeToken(String value) {
+    return value
+        .toLowerCase()
+        .replaceAll(',', '.')
+        .replaceAll(' ', '')
+        .replaceAll('kv', 'kv')
+        .trim();
+  }
+
+  List<String> _extractSearchTokens(String query) {
+    final expanded = query
+        .toLowerCase()
+        .replaceAll(',', '.')
+        .replaceAll('/', ' ')
+        .replaceAll('-', ' ')
+        .replaceAll('x', ' x ')
+        .replaceAll(RegExp(r'\s+'), ' ')
+        .trim();
+
+    if (expanded.isEmpty) {
+      return const [];
+    }
+
+    final parts = expanded
+        .split(' ')
+        .where((part) => part.isNotEmpty)
+        .map(_normalizeToken)
+        .toSet()
+        .toList();
+
+    final compact = _normalizeToken(expanded);
+    if (compact.isNotEmpty) {
+      parts.add(compact);
+    }
+    return parts;
+  }
+
+  int? _wireCountForConfig(WireConfiguration config) {
+    switch (config) {
+      case WireConfiguration.single:
+        return 1;
+      case WireConfiguration.pair:
+        return 2;
+      case WireConfiguration.twoWire:
+        return 2;
+      case WireConfiguration.threeWire:
+        return 3;
+      case WireConfiguration.fourWire:
+        return 4;
+      case WireConfiguration.fiveWire:
+        return 5;
+      case WireConfiguration.sevenWire:
+        return 7;
+      case WireConfiguration.twelvWire:
+        return 12;
+      case WireConfiguration.twentyFiveWire:
+        return 25;
+    }
+  }
+
+  int _activeFilterCount() {
+    var count = 0;
+    if (_selectedGroupNumber != null) {
+      count += 1;
+    }
+    if (_selectedVoltageFilter != null) {
+      count += 1;
+    }
+    if (_typeSearchQuery.trim().isNotEmpty) {
+      count += 1;
+    }
+    return count;
+  }
+
+  void _applyQuickSearchChip(String value) {
+    setState(() {
+      _typeSearchQuery = value;
+      _typeSearchController.text = value;
+      _typeSearchController.selection =
+          TextSelection.collapsed(offset: value.length);
+    });
+  }
+
+  void _clearTypeFilters() {
+    setState(() {
+      _selectedGroupNumber = null;
+      _selectedVoltageFilter = null;
+      _typeSearchQuery = '';
+      _typeSearchController.clear();
+    });
+  }
+
+  void _openMobileFilterSheet(List<int> groups, List<String> voltages) {
+    var tempGroup = _selectedGroupNumber;
+    var tempVoltage = _selectedVoltageFilter;
+
+    showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: _cardNavy,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(18)),
+      ),
+      builder: (context) {
+        return StatefulBuilder(
+          builder: (context, setModalState) {
+            return SafeArea(
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(16, 14, 16, 20),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        const Icon(Icons.tune, color: Colors.white),
+                        const SizedBox(width: 8),
+                        const Expanded(
+                          child: Text(
+                            'Filtry',
+                            style: TextStyle(
+                              color: Colors.white,
+                              fontSize: 18,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                        ),
+                        TextButton(
+                          onPressed: () {
+                            setModalState(() {
+                              tempGroup = null;
+                              tempVoltage = null;
+                            });
+                          },
+                          child: const Text('Wyczysc'),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 10),
+                    const Text('Grupa',
+                        style: TextStyle(color: Colors.white70)),
+                    const SizedBox(height: 8),
+                    Wrap(
+                      spacing: 8,
+                      runSpacing: 8,
+                      children: [
+                        ChoiceChip(
+                          label: const Text('Wszystkie'),
+                          selected: tempGroup == null,
+                          onSelected: (_) =>
+                              setModalState(() => tempGroup = null),
+                        ),
+                        for (final group in groups)
+                          ChoiceChip(
+                            label: Text('Grupa $group'),
+                            selected: tempGroup == group,
+                            onSelected: (_) =>
+                                setModalState(() => tempGroup = group),
+                          ),
+                      ],
+                    ),
+                    const SizedBox(height: 14),
+                    const Text('Napiecie',
+                        style: TextStyle(color: Colors.white70)),
+                    const SizedBox(height: 8),
+                    Wrap(
+                      spacing: 8,
+                      runSpacing: 8,
+                      children: [
+                        ChoiceChip(
+                          label: const Text('Wszystkie'),
+                          selected: tempVoltage == null,
+                          onSelected: (_) =>
+                              setModalState(() => tempVoltage = null),
+                        ),
+                        for (final voltage in voltages)
+                          ChoiceChip(
+                            label: Text(voltage),
+                            selected: tempVoltage == voltage,
+                            onSelected: (_) =>
+                                setModalState(() => tempVoltage = voltage),
+                          ),
+                      ],
+                    ),
+                    const SizedBox(height: 16),
+                    SizedBox(
+                      width: double.infinity,
+                      child: ElevatedButton.icon(
+                        onPressed: () {
+                          setState(() {
+                            _selectedGroupNumber = tempGroup;
+                            _selectedVoltageFilter = tempVoltage;
+                          });
+                          Navigator.of(context).pop();
+                        },
+                        icon: const Icon(Icons.check),
+                        label: const Text('Zastosuj'),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: _electricBlue,
+                          foregroundColor: Colors.white,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            );
+          },
+        );
+      },
+    );
+  }
+
+  List<String> _getAvailableVoltagesForCurrentSelection() {
+    final values = <String>{};
+    for (final type in _getBaseTypesForCurrentSelection()) {
+      if (_selectedMaterial == null) {
+        continue;
+      }
+      final variants = CableDataProvider.getCableVariants(
+        _selectedMaterial!,
+        type,
+      );
+      if (variants.isEmpty) {
+        continue;
+      }
+      for (final data in variants) {
+        values.add(data.maxVoltage);
+      }
+    }
+    final list = values.toList();
+    list.sort();
+    return list;
+  }
+
+  bool _typeMatchesVoltage(CableType type, String voltage) {
+    if (_selectedMaterial == null) {
+      return false;
+    }
+    final variants = CableDataProvider.getCableVariants(
+      _selectedMaterial!,
+      type,
+    );
+    return variants.any((data) => data.maxVoltage == voltage);
   }
 
   String _qualityLabel(CableData data) {
+    if ((data.source ?? '').isNotEmpty) {
+      return 'Katalogowe';
+    }
     if (data.groupNumber >= 6) {
       return 'Do weryfikacji';
     }
     return 'Przyblizone';
+  }
+
+  bool _hasValue(String? value) {
+    if (value == null) {
+      return false;
+    }
+    final normalized = value.trim();
+    return normalized.isNotEmpty && normalized != '---';
+  }
+
+  String _variantTitle(CableData data) {
+    final parts = <String>[];
+    if (_hasValue(data.sourceType)) {
+      parts.add(data.sourceType!.trim());
+    }
+    if (_hasValue(data.sourceSize)) {
+      parts.add(data.sourceSize!.trim());
+    } else {
+      parts.add('${data.crossSection} mm²');
+    }
+    if (_hasValue(data.manufacturer)) {
+      parts.add(data.manufacturer!.trim());
+    }
+    return parts.join(' • ');
   }
 
   Color _qualityColor(String quality) {
@@ -161,7 +570,7 @@ class _CableSelectorScreenState extends State<CableSelectorScreen>
   }
 
   Future<void> _copyResultToClipboard(CableData data) async {
-    final text = [
+    final textParts = [
       'Typ: ${CableData.typeToString(data.type)}',
       'Grupa: ${CableData.typeGroupLabel(data.type)}',
       'Zastosowanie: ${CableData.applicationToString(data.application)}',
@@ -171,7 +580,40 @@ class _CableSelectorScreenState extends State<CableSelectorScreen>
       'Srednica zewnetrzna: ~${data.outerDiameter} mm',
       'Termokurcz oslonowy: ${data.heatShrinkSleeve}',
       'Termokurcz znacznikowy: ${data.heatShrinkLabel}',
-    ].join('\n');
+    ];
+
+    if (_hasValue(data.sourceCategory)) {
+      textParts.add('Kategoria bazy: ${data.sourceCategory}');
+    }
+    if (_hasValue(data.sourceType)) {
+      textParts.add('Typ z bazy: ${data.sourceType}');
+    }
+    if (_hasValue(data.sourceSize)) {
+      textParts.add('Rozmiar z bazy: ${data.sourceSize}');
+    }
+    if (_hasValue(data.manufacturer)) {
+      textParts.add('Producent: ${data.manufacturer}');
+    }
+    if (_hasValue(data.cpr)) {
+      textParts.add('CPR/Ognioodpornosc: ${data.cpr}');
+    }
+    if (_hasValue(data.insulation)) {
+      textParts.add('Izolacja/plaszcz: ${data.insulation}');
+    }
+    if (_hasValue(data.halogenFree)) {
+      textParts.add('Halogen free: ${data.halogenFree}');
+    }
+    if (_hasValue(data.notes)) {
+      textParts.add('Uwagi: ${data.notes}');
+    }
+    if (_hasValue(data.usage)) {
+      textParts.add('Zastosowanie (baza): ${data.usage}');
+    }
+    if (_hasValue(data.source)) {
+      textParts.add('Zrodlo: ${data.source}');
+    }
+
+    final text = textParts.join('\n');
 
     await Clipboard.setData(ClipboardData(text: text));
     if (!mounted) {
@@ -199,14 +641,13 @@ class _CableSelectorScreenState extends State<CableSelectorScreen>
     setState(() {
       _selectedCrossSection = crossSection;
       if (_selectedMaterial != null && _selectedType != null) {
-        final data = CableDataProvider.getCableData(
+        final data = CableDataProvider.getCableDataByConfiguration(
           _selectedMaterial!,
           _selectedType!,
           crossSection,
+          _selectedWireConfiguration!,
         );
-        _result = data?.wireConfiguration == _selectedWireConfiguration
-            ? data
-            : null;
+        _result = data;
       }
     });
     _animationController.forward(from: 0);
@@ -217,25 +658,10 @@ class _CableSelectorScreenState extends State<CableSelectorScreen>
       return const [];
     }
 
-    final crossSections = CableDataProvider.getAvailableCrossSections(
+    return CableDataProvider.getAvailableWireConfigurations(
       _selectedMaterial!,
       type,
     );
-
-    final configurations = crossSections
-        .map(
-          (cs) => CableDataProvider.getCableData(
-            _selectedMaterial!,
-            type,
-            cs,
-          )?.wireConfiguration,
-        )
-        .whereType<WireConfiguration>()
-        .toSet()
-        .toList();
-
-    configurations.sort((a, b) => a.index.compareTo(b.index));
-    return configurations;
   }
 
   List<double> _getFilteredCrossSections() {
@@ -246,20 +672,25 @@ class _CableSelectorScreenState extends State<CableSelectorScreen>
     final crossSections = CableDataProvider.getAvailableCrossSections(
       _selectedMaterial!,
       _selectedType!,
+      wireConfiguration: _selectedWireConfiguration,
     );
+    return crossSections;
+  }
 
-    if (_selectedWireConfiguration == null) {
+  List<CableData> _getMatchingVariants() {
+    if (_selectedMaterial == null ||
+        _selectedType == null ||
+        _selectedWireConfiguration == null ||
+        _selectedCrossSection == null) {
       return const [];
     }
 
-    return crossSections.where((cs) {
-      final data = CableDataProvider.getCableData(
-        _selectedMaterial!,
-        _selectedType!,
-        cs,
-      );
-      return data?.wireConfiguration == _selectedWireConfiguration;
-    }).toList();
+    return CableDataProvider.getCableVariantsByConfiguration(
+      _selectedMaterial!,
+      _selectedType!,
+      _selectedCrossSection!,
+      _selectedWireConfiguration!,
+    );
   }
 
   void _onWorkingConditionSelected(WorkingCondition condition) {
@@ -290,6 +721,8 @@ class _CableSelectorScreenState extends State<CableSelectorScreen>
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
+                _buildDatabaseInfoBanner(),
+                const SizedBox(height: 12),
                 Text(
                   'Baza kabli: szybkie wyszukiwanie',
                   style: Theme.of(context).textTheme.headlineSmall?.copyWith(
@@ -339,16 +772,48 @@ class _CableSelectorScreenState extends State<CableSelectorScreen>
     );
   }
 
+  Widget _buildDatabaseInfoBanner() {
+    final total = _databaseStats['totalRecords'] ?? 0;
+    final imported = _databaseStats['localImportedRecords'] ?? 0;
+
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: _cardNavy,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: _amber.withOpacity(0.4)),
+      ),
+      child: Row(
+        children: [
+          Icon(
+            _databaseInitialized ? Icons.storage : Icons.hourglass_top,
+            color: _amber,
+          ),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Text(
+              _databaseInitialized
+                  ? 'Lokalna baza aktywna: $total rekordow (dodatkowe z assets: $imported).'
+                  : 'Inicjalizacja lokalnej bazy danych...',
+              style: const TextStyle(color: Colors.white),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   Widget _buildApplicationSelection() {
     final applications = CableDataProvider.getAvailableApplications();
-    
+
     return Wrap(
       spacing: 12,
       runSpacing: 12,
       children: applications.map((app) {
         final isSelected = _selectedApplication == app;
         return ScaleTransition(
-          scale: isSelected ? _scaleAnimation : const AlwaysStoppedAnimation(1.0),
+          scale:
+              isSelected ? _scaleAnimation : const AlwaysStoppedAnimation(1.0),
           child: InkWell(
             onTap: () => _onApplicationSelected(app),
             borderRadius: BorderRadius.circular(12),
@@ -385,7 +850,8 @@ class _CableSelectorScreenState extends State<CableSelectorScreen>
                     CableData.applicationToString(app),
                     style: TextStyle(
                       color: isSelected ? Colors.white : Colors.grey[300],
-                      fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+                      fontWeight:
+                          isSelected ? FontWeight.bold : FontWeight.normal,
                       fontSize: 16,
                     ),
                   ),
@@ -399,6 +865,67 @@ class _CableSelectorScreenState extends State<CableSelectorScreen>
   }
 
   Widget _buildMaterialSelection() {
+    if (_selectedApplication == null) {
+      return const SizedBox.shrink();
+    }
+
+    final availableMaterials =
+        _getAvailableMaterialsForApplication(_selectedApplication!);
+
+    if (availableMaterials.isEmpty) {
+      return Card(
+        color: _cardNavy,
+        child: Padding(
+          padding: const EdgeInsets.all(14),
+          child: Text(
+            'Brak dostepnych materialow dla wybranego zastosowania.',
+            style: TextStyle(color: Colors.grey[300]),
+          ),
+        ),
+      );
+    }
+
+    if (availableMaterials.length == 1) {
+      final onlyMaterial = availableMaterials.first;
+      final label =
+          onlyMaterial == CableMaterial.cu ? 'Miedz (Cu)' : 'Aluminium (Al)';
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'Material zyly',
+            style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                  color: _amber,
+                  fontWeight: FontWeight.bold,
+                ),
+          ),
+          const SizedBox(height: 12),
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+            decoration: BoxDecoration(
+              color: _cardNavy,
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: Colors.grey[700]!),
+            ),
+            child: Row(
+              children: [
+                Icon(
+                  onlyMaterial == CableMaterial.cu ? Icons.eco : Icons.hardware,
+                  color: _amber,
+                ),
+                const SizedBox(width: 10),
+                Text(
+                  '$label (jedyny dostepny)',
+                  style: const TextStyle(color: Colors.white),
+                ),
+              ],
+            ),
+          ),
+        ],
+      );
+    }
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -411,15 +938,17 @@ class _CableSelectorScreenState extends State<CableSelectorScreen>
         ),
         const SizedBox(height: 12),
         Row(
-          children: [
-            Expanded(
-              child: _buildMaterialCard(CableMaterial.cu),
-            ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: _buildMaterialCard(CableMaterial.al),
-            ),
-          ],
+          children: availableMaterials.map((material) {
+            return Expanded(
+              child: Padding(
+                padding: EdgeInsets.only(
+                  right: material == availableMaterials.first ? 6 : 0,
+                  left: material == availableMaterials.last ? 6 : 0,
+                ),
+                child: _buildMaterialCard(material),
+              ),
+            );
+          }).toList(),
         ),
       ],
     );
@@ -427,7 +956,8 @@ class _CableSelectorScreenState extends State<CableSelectorScreen>
 
   Widget _buildMaterialCard(CableMaterial material) {
     final isSelected = _selectedMaterial == material;
-    final label = material == CableMaterial.cu ? 'Miedź (Cu)' : 'Aluminium (Al)';
+    final label =
+        material == CableMaterial.cu ? 'Miedź (Cu)' : 'Aluminium (Al)';
     final icon = material == CableMaterial.cu ? Icons.eco : Icons.hardware;
 
     return ScaleTransition(
@@ -546,7 +1076,18 @@ class _CableSelectorScreenState extends State<CableSelectorScreen>
 
   Widget _buildTypeSelection() {
     final groups = _getAvailableGroupNumbersForCurrentSelection();
+    final voltages = _getAvailableVoltagesForCurrentSelection();
     final types = _getFilteredTypes();
+    final activeFilters = _activeFilterCount();
+    final quickSearches = const <String>[
+      'yky',
+      'n2xh',
+      'utp6',
+      'futp6',
+      'kat6',
+      '0.6/1kv',
+      'b2ca',
+    ];
 
     if (types.isEmpty) {
       return Card(
@@ -565,41 +1106,33 @@ class _CableSelectorScreenState extends State<CableSelectorScreen>
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(
-          'Filtr grupy',
-          style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                color: Colors.grey[300],
-                fontWeight: FontWeight.w700,
-              ),
-        ),
-        const SizedBox(height: 8),
-        Wrap(
-          spacing: 8,
-          runSpacing: 8,
+        Row(
           children: [
-            ChoiceChip(
-              label: const Text('Wszystkie'),
-              selected: _selectedGroupNumber == null,
-              onSelected: (_) {
-                setState(() {
-                  _selectedGroupNumber = null;
-                });
-              },
+            Expanded(
+              child: Text(
+                'Wyszukiwanie i filtry',
+                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                      color: Colors.grey[300],
+                      fontWeight: FontWeight.w700,
+                    ),
+              ),
             ),
-            for (final group in groups)
-              ChoiceChip(
-                label: Text('Grupa $group'),
-                selected: _selectedGroupNumber == group,
-                onSelected: (_) {
-                  setState(() {
-                    _selectedGroupNumber = group;
-                  });
-                },
+            TextButton.icon(
+              onPressed: () => _openMobileFilterSheet(groups, voltages),
+              icon: const Icon(Icons.tune, size: 18),
+              label: Text(
+                  activeFilters > 0 ? 'Filtry ($activeFilters)' : 'Filtry'),
+            ),
+            if (activeFilters > 0)
+              TextButton(
+                onPressed: _clearTypeFilters,
+                child: const Text('Wyczysc'),
               ),
           ],
         ),
         const SizedBox(height: 12),
         TextField(
+          controller: _typeSearchController,
           onChanged: (value) {
             setState(() {
               _typeSearchQuery = value;
@@ -607,17 +1140,48 @@ class _CableSelectorScreenState extends State<CableSelectorScreen>
           },
           style: const TextStyle(color: Colors.white),
           decoration: InputDecoration(
-            labelText: 'Szukaj typu (np. YKY, NHXH, UTP)',
+            labelText: 'Szukaj (np. yky 3x2.5, n2xh b2ca, utp6)',
             labelStyle: TextStyle(color: Colors.grey[300]),
             prefixIcon: const Icon(Icons.search, color: Colors.white70),
+            suffixIcon: _typeSearchQuery.isEmpty
+                ? null
+                : IconButton(
+                    tooltip: 'Wyczysc wyszukiwanie',
+                    icon: const Icon(Icons.close, color: Colors.white70),
+                    onPressed: () {
+                      setState(() {
+                        _typeSearchQuery = '';
+                        _typeSearchController.clear();
+                      });
+                    },
+                  ),
             filled: true,
             fillColor: _cardNavy,
             border: const OutlineInputBorder(),
           ),
         ),
+        const SizedBox(height: 10),
+        SizedBox(
+          height: 36,
+          child: ListView.separated(
+            scrollDirection: Axis.horizontal,
+            itemCount: quickSearches.length,
+            separatorBuilder: (_, __) => const SizedBox(width: 8),
+            itemBuilder: (context, index) {
+              final value = quickSearches[index];
+              final selected =
+                  _normalizeToken(_typeSearchQuery) == _normalizeToken(value);
+              return ChoiceChip(
+                label: Text(value),
+                selected: selected,
+                onSelected: (_) => _applyQuickSearchChip(value),
+              );
+            },
+          ),
+        ),
         const SizedBox(height: 16),
         Text(
-          'Wybierz typ kabla',
+          'Wybierz typ kabla (${types.length})',
           style: Theme.of(context).textTheme.titleMedium?.copyWith(
                 color: _amber,
                 fontWeight: FontWeight.bold,
@@ -630,14 +1194,17 @@ class _CableSelectorScreenState extends State<CableSelectorScreen>
           children: types.map((type) {
             final isSelected = _selectedType == type;
             return ScaleTransition(
-              scale: isSelected ? _scaleAnimation : const AlwaysStoppedAnimation(1.0),
+              scale: isSelected
+                  ? _scaleAnimation
+                  : const AlwaysStoppedAnimation(1.0),
               child: InkWell(
                 onTap: () => _onTypeSelected(type),
                 borderRadius: BorderRadius.circular(12),
                 child: AnimatedContainer(
                   duration: const Duration(milliseconds: 200),
                   constraints: const BoxConstraints(minWidth: 280),
-                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
                   decoration: BoxDecoration(
                     color: isSelected ? _electricBlue : _cardNavy,
                     borderRadius: BorderRadius.circular(12),
@@ -663,9 +1230,12 @@ class _CableSelectorScreenState extends State<CableSelectorScreen>
                             Text(
                               CableData.typeToString(type),
                               style: TextStyle(
-                                color: isSelected ? Colors.white : Colors.grey[300],
-                                fontWeight:
-                                    isSelected ? FontWeight.bold : FontWeight.normal,
+                                color: isSelected
+                                    ? Colors.white
+                                    : Colors.grey[300],
+                                fontWeight: isSelected
+                                    ? FontWeight.bold
+                                    : FontWeight.normal,
                                 fontSize: 14,
                               ),
                             ),
@@ -673,8 +1243,9 @@ class _CableSelectorScreenState extends State<CableSelectorScreen>
                             Text(
                               CableData.typeGroupLabel(type),
                               style: TextStyle(
-                                color:
-                                    isSelected ? Colors.white70 : Colors.grey[500],
+                                color: isSelected
+                                    ? Colors.white70
+                                    : Colors.grey[500],
                                 fontSize: 12,
                               ),
                             ),
@@ -739,8 +1310,9 @@ class _CableSelectorScreenState extends State<CableSelectorScreen>
           children: configurations.map((configuration) {
             final isSelected = _selectedWireConfiguration == configuration;
             return ScaleTransition(
-              scale:
-                  isSelected ? _scaleAnimation : const AlwaysStoppedAnimation(1.0),
+              scale: isSelected
+                  ? _scaleAnimation
+                  : const AlwaysStoppedAnimation(1.0),
               child: InkWell(
                 onTap: () => _onWireConfigurationSelected(configuration),
                 borderRadius: BorderRadius.circular(10),
@@ -815,13 +1387,16 @@ class _CableSelectorScreenState extends State<CableSelectorScreen>
           children: crossSections.map((cs) {
             final isSelected = _selectedCrossSection == cs;
             return ScaleTransition(
-              scale: isSelected ? _scaleAnimation : const AlwaysStoppedAnimation(1.0),
+              scale: isSelected
+                  ? _scaleAnimation
+                  : const AlwaysStoppedAnimation(1.0),
               child: InkWell(
                 onTap: () => _onCrossSectionSelected(cs),
                 borderRadius: BorderRadius.circular(10),
                 child: AnimatedContainer(
                   duration: const Duration(milliseconds: 200),
-                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
                   decoration: BoxDecoration(
                     color: isSelected ? _electricBlue : _cardNavy,
                     borderRadius: BorderRadius.circular(10),
@@ -842,7 +1417,8 @@ class _CableSelectorScreenState extends State<CableSelectorScreen>
                     cs.toString(),
                     style: TextStyle(
                       color: isSelected ? Colors.white : Colors.grey[300],
-                      fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+                      fontWeight:
+                          isSelected ? FontWeight.bold : FontWeight.normal,
                       fontSize: 16,
                     ),
                   ),
@@ -857,6 +1433,8 @@ class _CableSelectorScreenState extends State<CableSelectorScreen>
 
   Widget _buildResult() {
     if (_result == null) return const SizedBox.shrink();
+
+    final matchingVariants = _getMatchingVariants();
 
     final tubeStandard = CableDataProvider.suggestTubeStandardForCondition(
       _selectedWorkingCondition,
@@ -931,6 +1509,11 @@ class _CableSelectorScreenState extends State<CableSelectorScreen>
                         ),
                       ),
                     ),
+                    IconButton(
+                      tooltip: 'Kopiuj parametry',
+                      onPressed: () => _copyResultToClipboard(_result!),
+                      icon: const Icon(Icons.copy_all, color: Colors.white),
+                    ),
                   ],
                 ),
                 const Divider(height: 32, color: Colors.grey),
@@ -993,6 +1576,142 @@ class _CableSelectorScreenState extends State<CableSelectorScreen>
                   _result!.temperatureRange,
                   Icons.thermostat,
                 ),
+                if (matchingVariants.length > 1) ...[
+                  const SizedBox(height: 16),
+                  Text(
+                    'Wariant z bazy danych',
+                    style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                          color: _amber,
+                          fontWeight: FontWeight.bold,
+                        ),
+                  ),
+                  const SizedBox(height: 10),
+                  Wrap(
+                    spacing: 8,
+                    runSpacing: 8,
+                    children: matchingVariants.map((variant) {
+                      final selected = identical(variant, _result!);
+                      return ChoiceChip(
+                        label: Text(_variantTitle(variant)),
+                        selected: selected,
+                        onSelected: (_) {
+                          setState(() {
+                            _result = variant;
+                          });
+                        },
+                      );
+                    }).toList(),
+                  ),
+                ],
+                if (_hasValue(_result!.source) ||
+                    _hasValue(_result!.sourceCategory) ||
+                    _hasValue(_result!.sourceType) ||
+                    _hasValue(_result!.sourceSize) ||
+                    _hasValue(_result!.manufacturer) ||
+                    _hasValue(_result!.cpr) ||
+                    _hasValue(_result!.insulation) ||
+                    _hasValue(_result!.halogenFree) ||
+                    _hasValue(_result!.notes) ||
+                    _hasValue(_result!.usage) ||
+                    _hasValue(_result!.importedAt)) ...[
+                  const SizedBox(height: 20),
+                  Text(
+                    'Dane z bazy',
+                    style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                          color: _amber,
+                          fontWeight: FontWeight.bold,
+                        ),
+                  ),
+                  const SizedBox(height: 12),
+                  if (_hasValue(_result!.sourceCategory)) ...[
+                    _buildResultRow(
+                      'Kategoria (zrodlo)',
+                      _result!.sourceCategory!.trim(),
+                      Icons.category,
+                    ),
+                    const SizedBox(height: 12),
+                  ],
+                  if (_hasValue(_result!.sourceType)) ...[
+                    _buildResultRow(
+                      'Typ (zrodlo)',
+                      _result!.sourceType!.trim(),
+                      Icons.tune,
+                    ),
+                    const SizedBox(height: 12),
+                  ],
+                  if (_hasValue(_result!.sourceSize)) ...[
+                    _buildResultRow(
+                      'Rozmiar (zrodlo)',
+                      _result!.sourceSize!.trim(),
+                      Icons.straighten,
+                    ),
+                    const SizedBox(height: 12),
+                  ],
+                  if (_hasValue(_result!.manufacturer)) ...[
+                    _buildResultRow(
+                      'Producent',
+                      _result!.manufacturer!.trim(),
+                      Icons.factory,
+                    ),
+                    const SizedBox(height: 12),
+                  ],
+                  if (_hasValue(_result!.cpr)) ...[
+                    _buildResultRow(
+                      'CPR/Ognioodpornosc',
+                      _result!.cpr!.trim(),
+                      Icons.local_fire_department,
+                    ),
+                    const SizedBox(height: 12),
+                  ],
+                  if (_hasValue(_result!.insulation)) ...[
+                    _buildResultRow(
+                      'Izolacja/plaszcz',
+                      _result!.insulation!.trim(),
+                      Icons.layers,
+                    ),
+                    const SizedBox(height: 12),
+                  ],
+                  if (_hasValue(_result!.halogenFree)) ...[
+                    _buildResultRow(
+                      'Halogen free',
+                      _result!.halogenFree!.trim(),
+                      Icons.shield,
+                    ),
+                    const SizedBox(height: 12),
+                  ],
+                  if (_hasValue(_result!.usage)) ...[
+                    _buildResultRow(
+                      'Zastosowanie (zrodlo)',
+                      _result!.usage!.trim(),
+                      Icons.build,
+                    ),
+                    const SizedBox(height: 12),
+                  ],
+                  if (_hasValue(_result!.notes)) ...[
+                    _buildResultRow(
+                      'Uwagi',
+                      _result!.notes!.trim(),
+                      Icons.notes,
+                    ),
+                    const SizedBox(height: 12),
+                  ],
+                  if (_hasValue(_result!.source)) ...[
+                    _buildResultRow(
+                      'Zrodlo danych',
+                      _result!.source!.trim(),
+                      Icons.source,
+                    ),
+                    const SizedBox(height: 12),
+                  ],
+                  if (_hasValue(_result!.importedAt)) ...[
+                    _buildResultRow(
+                      'Data importu',
+                      _result!.importedAt!.trim(),
+                      Icons.calendar_today,
+                    ),
+                    const SizedBox(height: 12),
+                  ],
+                ],
                 const Divider(height: 32, color: Colors.grey),
                 Text(
                   'Warunki pracy',
@@ -1116,15 +1835,7 @@ class _CableSelectorScreenState extends State<CableSelectorScreen>
                         .toList(),
                   ),
                 ],
-                const SizedBox(height: 18),
-                Align(
-                  alignment: Alignment.centerRight,
-                  child: OutlinedButton.icon(
-                    onPressed: () => _copyResultToClipboard(_result!),
-                    icon: const Icon(Icons.copy_all),
-                    label: const Text('Kopiuj parametry'),
-                  ),
-                ),
+                const SizedBox(height: 8),
               ],
             ),
           ),
