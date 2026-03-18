@@ -558,6 +558,31 @@ class _CableSelectorScreenState extends State<CableSelectorScreen>
     return parts.join(' • ');
   }
 
+  bool _isFlatCable(CableData data) {
+    if (data.type == CableType.ydyp) {
+      return true;
+    }
+    final sourceType = (data.sourceType ?? '').toLowerCase();
+    return sourceType.contains('plaski') || sourceType.contains('płaski');
+  }
+
+  String _externalDimensionLabel(CableData data) {
+    return _isFlatCable(data) ? 'Wymiary zewnętrzne' : 'Średnica zewnętrzna';
+  }
+
+  String _externalDimensionValue(CableData data) {
+    if (_isFlatCable(data) && _hasValue(data.sourceDiameter)) {
+      final raw =
+          data.sourceDiameter!.replaceAll('×', 'x').replaceAll('X', 'x').trim();
+      if (raw.contains('x')) {
+        return '$raw mm';
+      }
+    }
+
+    // Wymiar zewnętrzny pobieramy z kolumny d zaimportowanej do outerDiameter.
+    return '${data.outerDiameter} mm';
+  }
+
   Color _qualityColor(String quality) {
     switch (quality) {
       case 'Do weryfikacji':
@@ -570,6 +595,9 @@ class _CableSelectorScreenState extends State<CableSelectorScreen>
   }
 
   Future<void> _copyResultToClipboard(CableData data) async {
+    final dimensionLabel =
+        _isFlatCable(data) ? 'Wymiary zewnetrzne' : 'Srednica zewnetrzna';
+
     final textParts = [
       'Typ: ${CableData.typeToString(data.type)}',
       'Grupa: ${CableData.typeGroupLabel(data.type)}',
@@ -577,7 +605,7 @@ class _CableSelectorScreenState extends State<CableSelectorScreen>
       'Material: ${CableData.materialToString(data.material)}',
       'Ilosc zyl: ${CableData.wireConfigToString(data.wireConfiguration)}',
       'Przekroj: ${data.crossSection} mm2',
-      'Srednica zewnetrzna: ~${data.outerDiameter} mm',
+      '$dimensionLabel: ${_externalDimensionValue(data)}',
       'Termokurcz oslonowy: ${data.heatShrinkSleeve}',
       'Termokurcz znacznikowy: ${data.heatShrinkLabel}',
     ];
@@ -590,6 +618,9 @@ class _CableSelectorScreenState extends State<CableSelectorScreen>
     }
     if (_hasValue(data.sourceSize)) {
       textParts.add('Rozmiar z bazy: ${data.sourceSize}');
+    }
+    if (_hasValue(data.sourceDiameter)) {
+      textParts.add('Wymiar z kolumny d: ${data.sourceDiameter}');
     }
     if (_hasValue(data.manufacturer)) {
       textParts.add('Producent: ${data.manufacturer}');
@@ -1560,8 +1591,8 @@ class _CableSelectorScreenState extends State<CableSelectorScreen>
                 ),
                 const SizedBox(height: 16),
                 _buildResultRow(
-                  'Średnica zewnętrzna',
-                  '${_result!.outerDiameter} mm',
+                  _externalDimensionLabel(_result!),
+                  _externalDimensionValue(_result!),
                   Icons.circle_outlined,
                 ),
                 const SizedBox(height: 16),
@@ -1607,6 +1638,7 @@ class _CableSelectorScreenState extends State<CableSelectorScreen>
                     _hasValue(_result!.sourceCategory) ||
                     _hasValue(_result!.sourceType) ||
                     _hasValue(_result!.sourceSize) ||
+                    _hasValue(_result!.sourceDiameter) ||
                     _hasValue(_result!.manufacturer) ||
                     _hasValue(_result!.cpr) ||
                     _hasValue(_result!.insulation) ||
@@ -1644,6 +1676,14 @@ class _CableSelectorScreenState extends State<CableSelectorScreen>
                       'Rozmiar (zrodlo)',
                       _result!.sourceSize!.trim(),
                       Icons.straighten,
+                    ),
+                    const SizedBox(height: 12),
+                  ],
+                  if (_hasValue(_result!.sourceDiameter)) ...[
+                    _buildResultRow(
+                      'Wymiar z kolumny d',
+                      _result!.sourceDiameter!.trim(),
+                      Icons.open_with,
                     ),
                     const SizedBox(height: 12),
                   ],

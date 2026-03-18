@@ -6,10 +6,10 @@ import 'package:gridly/multitool/cable_selector/models/cable_data.dart';
 class CableDataProvider {
   static final Map<CableMaterial, Map<CableType, Map<double, CableData>>>
       _data = _buildData();
-  static Map<CableMaterial, Map<CableType, List<CableData>>> _runtimeVariants =
-      _buildVariantData(_data);
   static Map<CableMaterial, Map<CableType, Map<double, CableData>>>
       _runtimeData = _cloneDataMap(_data);
+  static Map<CableMaterial, Map<CableType, List<CableData>>> _runtimeVariants =
+      _buildVariantData(_runtimeData);
   static bool _localDatabaseInitialized = false;
   static int _localImportedRecords = 0;
   static const List<String> _localDatabaseAssets = [
@@ -23,7 +23,7 @@ class CableDataProvider {
     }
 
     _runtimeData = _cloneDataMap(_data);
-    _runtimeVariants = _buildVariantData(_data);
+    _runtimeVariants = _buildVariantData(_runtimeData);
     var imported = 0;
 
     for (final assetPath in _localDatabaseAssets) {
@@ -78,7 +78,12 @@ class CableDataProvider {
     for (final materialEntry in source.entries) {
       final typeMap = <CableType, Map<double, CableData>>{};
       for (final typeEntry in materialEntry.value.entries) {
-        typeMap[typeEntry.key] = Map<double, CableData>.from(typeEntry.value);
+        final normalizedEntry = <double, CableData>{};
+        for (final cableEntry in typeEntry.value.entries) {
+          normalizedEntry[cableEntry.key] =
+              _normalizeCableApplication(cableEntry.value);
+        }
+        typeMap[typeEntry.key] = normalizedEntry;
       }
       clone[materialEntry.key] = typeMap;
     }
@@ -107,6 +112,7 @@ class CableDataProvider {
       cable.maxVoltage,
       cable.sourceType ?? '',
       cable.sourceSize ?? '',
+      cable.sourceDiameter ?? '',
       cable.manufacturer ?? '',
       cable.cpr ?? '',
       cable.insulation ?? '',
@@ -118,49 +124,62 @@ class CableDataProvider {
   }
 
   static void _upsertCableData(CableData cable) {
+    final normalizedCable = _normalizeCableApplication(cable);
     final materialMap = _runtimeData.putIfAbsent(
-      cable.material,
+      normalizedCable.material,
       () => <CableType, Map<double, CableData>>{},
     );
     final typeMap = materialMap.putIfAbsent(
-      cable.type,
+      normalizedCable.type,
       () => <double, CableData>{},
     );
-    typeMap[cable.crossSection] = cable;
+    typeMap[normalizedCable.crossSection] = normalizedCable;
 
     final variantMaterialMap = _runtimeVariants.putIfAbsent(
-      cable.material,
+      normalizedCable.material,
       () => <CableType, List<CableData>>{},
     );
     final variants = variantMaterialMap.putIfAbsent(
-      cable.type,
+      normalizedCable.type,
       () => <CableData>[],
     );
-    final newKey = _cableCompositeKey(cable);
+    final newKey = _cableCompositeKey(normalizedCable);
     final existingIndex = variants.indexWhere(
       (item) => _cableCompositeKey(item) == newKey,
     );
     if (existingIndex >= 0) {
-      variants[existingIndex] = cable;
+      variants[existingIndex] = normalizedCable;
     } else {
-      variants.add(cable);
+      variants.add(normalizedCable);
     }
   }
 
   static CableData? _parseLocalCableRecord(Map<String, dynamic> jsonMap) {
     final material =
         _parseEnumByName(CableMaterial.values, jsonMap['material']);
-    final type = _parseEnumByName(CableType.values, jsonMap['type']);
+    final parsedType = _parseEnumByName(CableType.values, jsonMap['type']);
     final coreType = _parseEnumByName(CoreType.values, jsonMap['coreType']);
     final application =
         _parseEnumByName(CableApplication.values, jsonMap['application']);
+    final sourceCategory = _parseString(jsonMap['sourceCategory']);
+    final sourceType = _parseString(jsonMap['sourceType']);
+    var type = parsedType;
+    var resolvedMaterial = material;
 
-    if (material == null ||
-        type == null ||
-        coreType == null ||
-        application == null) {
+    if (type == CableType.hdgs && _isHdhpSource(sourceCategory, sourceType)) {
+      type = CableType.hdhp;
+    }
+
+    if (type == CableType.n2xh && _isN2axsySource(sourceCategory, sourceType)) {
+      type = CableType.na2xsy;
+      resolvedMaterial = CableMaterial.al;
+    }
+
+    if (resolvedMaterial == null || type == null || coreType == null) {
       return null;
     }
+
+    final resolvedApplication = _expectedApplicationForType(type);
 
     final crossSection = _parseNum(jsonMap['crossSection']);
     final outerDiameter = _parseNum(jsonMap['outerDiameter']);
@@ -186,11 +205,19 @@ class CableDataProvider {
         ) ??
         HeatShrinkStandard.rck;
 
-    var groupNumber = 1;
+    var groupNumber = CableData.typeGroupNumber(type);
     final groupRaw = jsonMap['groupNumber'];
     if (groupRaw is int) {
       groupNumber = groupRaw;
+    } else if (groupRaw is String) {
+      final parsedGroup = int.tryParse(groupRaw.trim());
+      if (parsedGroup != null) {
+        groupNumber = parsedGroup;
+      }
     }
+
+    final resolvedMaxVoltage =
+        type == CableType.xztkmxpwz ? '300V' : maxVoltage;
 
     final heatShrinkSleeve = _parseString(jsonMap['heatShrinkSleeve']) ??
         getRecommendedHeatShrink3to1(outerDiameter);
@@ -198,23 +225,24 @@ class CableDataProvider {
         getRecommendedHeatShrink2to1(outerDiameter);
 
     return CableData(
-      material: material,
+      material: resolvedMaterial,
       type: type,
       crossSection: crossSection,
       coreType: coreType,
       outerDiameter: outerDiameter,
       heatShrinkSleeve: heatShrinkSleeve,
       heatShrinkLabel: heatShrinkLabel,
-      application: application,
-      maxVoltage: maxVoltage,
+      application: resolvedApplication,
+      maxVoltage: resolvedMaxVoltage,
       temperatureRange: temperatureRange,
       wireConfiguration: wireConfiguration,
       groupNumber: groupNumber,
       recommendedTubeStandard: recommendedTubeStandard,
       source: _parseString(jsonMap['source']),
-      sourceCategory: _parseString(jsonMap['sourceCategory']),
-      sourceType: _parseString(jsonMap['sourceType']),
+      sourceCategory: sourceCategory,
+      sourceType: sourceType,
       sourceSize: _parseString(jsonMap['sourceSize']),
+      sourceDiameter: _parseString(jsonMap['sourceDiameter']),
       manufacturer: _parseString(jsonMap['manufacturer']),
       cpr: _parseString(jsonMap['cpr']),
       insulation: _parseString(jsonMap['insulation']),
@@ -223,6 +251,86 @@ class CableDataProvider {
       usage: _parseString(jsonMap['usage']),
       importedAt: _parseString(jsonMap['importedAt']),
     );
+  }
+
+  static CableData _normalizeCableApplication(CableData cable) {
+    final expectedApplication = _expectedApplicationForType(cable.type);
+    final expectedGroup = CableData.typeGroupNumber(cable.type);
+    final expectedMaxVoltage =
+        cable.type == CableType.xztkmxpwz ? '300V' : cable.maxVoltage;
+
+    if (cable.application == expectedApplication &&
+        cable.groupNumber == expectedGroup &&
+        cable.maxVoltage == expectedMaxVoltage) {
+      return cable;
+    }
+
+    return CableData(
+      material: cable.material,
+      type: cable.type,
+      crossSection: cable.crossSection,
+      coreType: cable.coreType,
+      outerDiameter: cable.outerDiameter,
+      heatShrinkSleeve: cable.heatShrinkSleeve,
+      heatShrinkLabel: cable.heatShrinkLabel,
+      application: expectedApplication,
+      maxVoltage: expectedMaxVoltage,
+      temperatureRange: cable.temperatureRange,
+      wireConfiguration: cable.wireConfiguration,
+      groupNumber: expectedGroup,
+      recommendedTubeStandard: cable.recommendedTubeStandard,
+      source: cable.source,
+      sourceCategory: cable.sourceCategory,
+      sourceType: cable.sourceType,
+      sourceSize: cable.sourceSize,
+      sourceDiameter: cable.sourceDiameter,
+      manufacturer: cable.manufacturer,
+      cpr: cable.cpr,
+      insulation: cable.insulation,
+      halogenFree: cable.halogenFree,
+      notes: cable.notes,
+      usage: cable.usage,
+      importedAt: cable.importedAt,
+    );
+  }
+
+  static CableApplication _expectedApplicationForType(CableType type) {
+    switch (type) {
+      case CableType.ydy:
+      case CableType.ydyp:
+      case CableType.omy:
+      case CableType.hdhp:
+      case CableType.yky:
+      case CableType.yaky:
+      case CableType.n2xh:
+        return CableApplication.electrical;
+      case CableType.hdgs:
+      case CableType.hlgs:
+      case CableType.nhxh:
+      case CableType.htksh:
+        return CableApplication.fireproof;
+      case CableType.utp5e:
+      case CableType.utp6:
+      case CableType.futp6:
+      case CableType.sftp7:
+      case CableType.rg6:
+      case CableType.rg11:
+      case CableType.ytnksy:
+      case CableType.xztkmxpwz:
+        return CableApplication.telecom;
+      case CableType.liyy:
+      case CableType.liycyekaprn:
+      case CableType.ysly:
+      case CableType.bit500cy:
+      case CableType.h07rnf:
+        return CableApplication.control;
+      case CableType.yhakxs:
+      case CableType.xhakxs:
+      case CableType.xruhakxs:
+      case CableType.a2xsy:
+      case CableType.na2xsy:
+        return CableApplication.mediumVoltage;
+    }
   }
 
   static T? _parseEnumByName<T extends Enum>(
@@ -258,6 +366,21 @@ class CableDataProvider {
       return raw.trim();
     }
     return null;
+  }
+
+  static bool _isHdhpSource(String? sourceCategory, String? sourceType) {
+    final category = sourceCategory?.toLowerCase() ?? '';
+    final type = sourceType?.toLowerCase() ?? '';
+    return category.contains('hdhp') || type.contains('hdhp');
+  }
+
+  static bool _isN2axsySource(String? sourceCategory, String? sourceType) {
+    final category = sourceCategory?.toLowerCase() ?? '';
+    final type = sourceType?.toLowerCase() ?? '';
+    return category.contains('n2axsy') ||
+        category.contains('na2xsy') ||
+        type.contains('n2axsy') ||
+        type.contains('na2xsy');
   }
 
   static Map<CableMaterial, Map<CableType, Map<double, CableData>>>
