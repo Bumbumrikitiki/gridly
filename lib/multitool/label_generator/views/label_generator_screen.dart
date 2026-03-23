@@ -4,15 +4,119 @@ import 'package:gridly/multitool/label_generator/logic/label_provider.dart';
 import 'package:gridly/multitool/label_generator/models/label_models.dart';
 import 'package:gridly/multitool/label_generator/services/label_pdf_service.dart';
 
-class LabelGeneratorScreen extends StatelessWidget {
+class LabelGeneratorScreen extends StatefulWidget {
   const LabelGeneratorScreen({super.key});
+
+  @override
+  State<LabelGeneratorScreen> createState() => _LabelGeneratorScreenState();
+}
+
+class _LabelGeneratorScreenState extends State<LabelGeneratorScreen> {
 
   static const Color _deepNavy = Color(0xFF102A43);
   static const Color _amber = Color(0xFFF7B500);
   static const Color _cardNavy = Color(0xFF243B53);
 
+  final FocusNode _textFocusNode = FocusNode();
+  final GlobalKey _editorKey = GlobalKey();
+
+  @override
+  void dispose() {
+    _textFocusNode.dispose();
+    super.dispose();
+  }
+
+  void _handleBlockSelected(
+    BuildContext context,
+    LabelProvider provider,
+    String blockId,
+  ) {
+    provider.selectBlock(blockId);
+
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+
+      final editorContext = _editorKey.currentContext;
+      if (editorContext != null) {
+        Scrollable.ensureVisible(
+          editorContext,
+          duration: const Duration(milliseconds: 220),
+          curve: Curves.easeOut,
+          alignment: 0.2,
+        );
+      }
+
+      _textFocusNode.requestFocus();
+    });
+  }
+
   void _showInfo(BuildContext context, String message) {
     ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(message)));
+  }
+
+  void _showOverflowDialog(
+    BuildContext context,
+    LabelProvider provider,
+    ModuleWidth width,
+  ) {
+    final remaining =
+        LabelProvider.maxLabelLengthMm - provider.label.totalWidthMm;
+    showDialog<void>(
+      context: context,
+      builder: (dialogContext) {
+        return AlertDialog(
+          backgroundColor: const Color(0xFF1E3A5F),
+          shape:
+              RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          title: const Text(
+            'Blok się nie mieści',
+            style: TextStyle(color: Color(0xFFF7B500), fontWeight: FontWeight.bold),
+          ),
+          content: Text(
+            'Blok ${width.label} (${width.widthMm.toStringAsFixed(1)} mm) przekracza '
+            'dostępne miejsce.\n\n'
+            'Pozostało: ${remaining.toStringAsFixed(1)} mm '
+            '(limit: ${LabelProvider.maxLabelLengthMm.toStringAsFixed(0)} mm).\n\n'
+            'Utwórz nową stronę, aby dodać blok na osobnej etykiecie.',
+            style: const TextStyle(color: Colors.white70),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(dialogContext).pop(),
+              child: const Text(
+                'Anuluj',
+                style: TextStyle(color: Colors.white54),
+              ),
+            ),
+            if (provider.canAddPage)
+              ElevatedButton(
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: const Color(0xFFF7B500),
+                  foregroundColor: const Color(0xFF102A43),
+                ),
+                onPressed: () {
+                  Navigator.of(dialogContext).pop();
+                  final pageAdded = provider.addPage();
+                  if (pageAdded) {
+                    provider.addBlock(width);
+                  } else {
+                    _showInfo(context, 'Nie można dodać więcej stron.');
+                  }
+                },
+                child: const Text('Utwórz nową stronę'),
+              )
+            else
+              const Padding(
+                padding: EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+                child: Text(
+                  'Osiągnięto limit stron.',
+                  style: TextStyle(color: Colors.red, fontSize: 12),
+                ),
+              ),
+          ],
+        );
+      },
+    );
   }
 
   @override
@@ -321,13 +425,21 @@ class LabelGeneratorScreen extends StatelessWidget {
                         child: _buildPreviewLabel(
                           provider.label,
                           provider.selectedBlockId,
-                          onSelect: provider.selectBlock,
+                          onSelect: (blockId) => _handleBlockSelected(
+                            context,
+                            provider,
+                            blockId,
+                          ),
                         ),
                       )
                     : _buildPreviewLabel(
                         provider.label,
                         provider.selectedBlockId,
-                        onSelect: provider.selectBlock,
+                        onSelect: (blockId) => _handleBlockSelected(
+                          context,
+                          provider,
+                          blockId,
+                        ),
                       ),
               ),
             ),
@@ -335,7 +447,16 @@ class LabelGeneratorScreen extends StatelessWidget {
             _buildSharedTextEditor(context, provider),
             const SizedBox(height: 12),
             ...provider.label.blocks.map((block) {
-              return _buildBlockEditor(context, provider, block);
+              return _buildBlockEditor(
+                context,
+                provider,
+                block,
+                onSelect: (blockId) => _handleBlockSelected(
+                  context,
+                  provider,
+                  blockId,
+                ),
+              );
             }),
           ],
         );
@@ -424,13 +545,15 @@ class LabelGeneratorScreen extends StatelessWidget {
   Widget _buildBlockEditor(
     BuildContext context,
     LabelProvider provider,
-    LabelBlock block,
+    LabelBlock block, {
+    required ValueChanged<String> onSelect,
+  }
   ) {
     final index = provider.label.blocks.indexOf(block);
     final isSelected = provider.selectedBlockId == block.id;
 
     return GestureDetector(
-      onTap: () => provider.selectBlock(block.id),
+      onTap: () => onSelect(block.id),
       behavior: HitTestBehavior.opaque,
       child: Container(
         margin: const EdgeInsets.only(bottom: 12),
@@ -493,6 +616,7 @@ class LabelGeneratorScreen extends StatelessWidget {
         : provider.label.blocks.indexWhere((block) => block.id == selected.id);
 
     return Container(
+      key: _editorKey,
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
         color: _cardNavy,
@@ -587,6 +711,8 @@ class LabelGeneratorScreen extends StatelessWidget {
           TextFormField(
             key: ValueKey(selectedId ?? 'none'),
             enabled: isEnabled,
+            focusNode: _textFocusNode,
+            autofocus: isEnabled,
             initialValue: text,
             style: const TextStyle(color: Colors.white),
             decoration: InputDecoration(
@@ -753,10 +879,7 @@ class LabelGeneratorScreen extends StatelessWidget {
                     onPressed: () {
                       final added = provider.addBlock(width);
                       if (!added) {
-                        _showInfo(
-                          context,
-                          'Limit długości: ${LabelProvider.maxLabelLengthMm.toStringAsFixed(0)} mm (A4).',
-                        );
+                        _showOverflowDialog(context, provider, width);
                       }
                     },
                     style: ElevatedButton.styleFrom(

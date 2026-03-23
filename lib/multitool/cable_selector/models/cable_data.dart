@@ -17,6 +17,7 @@ enum CableType {
   omy, // OMY / OWY (warsztatowe)
 
   // Grupa 2: Zasilające i ziemne (0.6/1kV)
+  hdhp, // HDHp (specjalny)
   yky, // YKY (Cu, PVC)
   yaky, // YAKY (Al, PVC)
   n2xh, // N2XH (Cu, bezhalogenowy)
@@ -179,6 +180,8 @@ class CableData {
         return 'OMY / OWY (Cu, warsztatowy)';
 
       // Grupa 2: Zasilające i ziemne
+      case CableType.hdhp:
+        return 'HDHp (specjalny)';
       case CableType.yky:
         return 'YKY (Cu, PVC, ziemny)';
       case CableType.yaky:
@@ -246,6 +249,7 @@ class CableData {
       case CableType.ydyp:
       case CableType.omy:
         return 1;
+      case CableType.hdhp:
       case CableType.yky:
       case CableType.yaky:
       case CableType.n2xh:

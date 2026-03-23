@@ -872,6 +872,117 @@ class ProjectUnit {
   }
 }
 
+// ═══════════════════════════════════════════════════════════════════════════
+// POSTĘP PRAC DLA OBSZARÓW BUDYNKU
+// ═══════════════════════════════════════════════════════════════════════════
+
+enum BuildingAreaType { pomieszczenie, klatka, winda, garaz, dach }
+
+/// Postęp prac, zdjęcia i notatki dla obszaru budynku (klatka, winda, garaż, dach, pomieszczenie)
+class BuildingAreaProgress {
+  final String areaId;
+  final BuildingAreaType areaType;
+  List<String> photoPaths;
+  String notes;
+  Map<String, bool> taskStatuses;
+
+  BuildingAreaProgress({
+    required this.areaId,
+    required this.areaType,
+    List<String>? photoPaths,
+    this.notes = '',
+    Map<String, bool>? taskStatuses,
+  })  : photoPaths = photoPaths ?? [],
+        taskStatuses = taskStatuses ?? {};
+
+  static List<String> defaultTasksFor(BuildingAreaType type) {
+    switch (type) {
+      case BuildingAreaType.pomieszczenie:
+        return [
+          'Projekt',
+          'Okablowanie',
+          'Montaż osprzętu',
+          'Pomiary',
+          'Uruchomienie',
+          'Odbiór',
+        ];
+      case BuildingAreaType.klatka:
+        return [
+          'Projekt',
+          'Okablowanie klatki',
+          'Oprawy klatki',
+          'Domofonowa / SSP',
+          'CCTV',
+          'Pomiary',
+          'Odbiór',
+        ];
+      case BuildingAreaType.winda:
+        return [
+          'Projekt',
+          'Okablowanie maszynowni',
+          'Instalacja elektryczna kabiny',
+          'Podłączenie sterownika',
+          'Uruchomienie',
+          'Pomiary',
+          'Odbiór techniczny',
+        ];
+      case BuildingAreaType.garaz:
+        return [
+          'Projekt',
+          'Okablowanie',
+          'Oświetlenie',
+          'Bramy i napędy',
+          'CCTV',
+          'Ładowarki EV',
+          'Pomiary',
+          'Odbiór',
+        ];
+      case BuildingAreaType.dach:
+        return [
+          'Projekt',
+          'Instalacja odgromowa',
+          'Panele PV',
+          'Okablowanie DC/AC',
+          'Podłączenie falownika',
+          'Pomiary i certyfikacja',
+          'Odbiór',
+        ];
+    }
+  }
+
+  double get completionPercent {
+    final tasks = defaultTasksFor(areaType);
+    if (tasks.isEmpty) return 0;
+    final done = tasks.where((t) => taskStatuses[t] == true).length;
+    return (done / tasks.length) * 100;
+  }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'areaId': areaId,
+      'areaType': areaType.name,
+      'photoPaths': photoPaths,
+      'notes': notes,
+      'taskStatuses': taskStatuses,
+    };
+  }
+
+  factory BuildingAreaProgress.fromJson(Map<String, dynamic> json) {
+    return BuildingAreaProgress(
+      areaId: json['areaId'] as String,
+      areaType: BuildingAreaType.values.firstWhere(
+        (e) => e.name == json['areaType'],
+        orElse: () => BuildingAreaType.pomieszczenie,
+      ),
+      photoPaths: (json['photoPaths'] as List?)?.cast<String>() ?? [],
+      notes: json['notes'] as String? ?? '',
+      taskStatuses: (json['taskStatuses'] as Map<String, dynamic>?)
+              ?.map((k, v) => MapEntry(k, v as bool)) ??
+          {},
+    );
+  }
+}
+
 /// Pełny projekt budowy
 class ConstructionProject {
   final String projectId;
@@ -880,6 +991,7 @@ class ConstructionProject {
   final List<ChecklistTask> allTasks;
   final List<ProjectAlert> alerts;
   final List<ProjectUnit> units; // Dla projektów wielolokalowych
+  final List<BuildingAreaProgress> buildingAreas; // Postęp obszarów budynku
   
   // Metadata
   final DateTime createdAt;
@@ -892,9 +1004,11 @@ class ConstructionProject {
     required this.allTasks,
     this.alerts = const [],
     this.units = const [],
+    List<BuildingAreaProgress>? buildingAreas,
     DateTime? createdAt,
     this.lastModifiedAt,
-  }) : createdAt = createdAt ?? DateTime.now();
+  })  : buildingAreas = buildingAreas ?? [],
+        createdAt = createdAt ?? DateTime.now();
   
   // Oblicz ogólny postęp projektu
   double get overallProgress {
@@ -948,6 +1062,7 @@ class ConstructionProject {
       'allTasks': allTasks.map((t) => t.toJson()).toList(),
       'alerts': alerts.map((a) => a.toJson()).toList(),
       'units': units.map((u) => u.toJson()).toList(),
+      'buildingAreas': buildingAreas.map((a) => a.toJson()).toList(),
       'createdAt': createdAt.toIso8601String(),
       'lastModifiedAt': lastModifiedAt?.toIso8601String(),
     };
@@ -969,6 +1084,10 @@ class ConstructionProject {
       units: (json['units'] as List?)?.map(
             (u) => ProjectUnit.fromJson(u as Map<String, dynamic>),
           ).toList() ?? [],
+      buildingAreas: (json['buildingAreas'] as List?)
+              ?.map((a) => BuildingAreaProgress.fromJson(a as Map<String, dynamic>))
+              .toList() ??
+          [],
       createdAt: DateTime.parse(json['createdAt'] as String),
       lastModifiedAt: json['lastModifiedAt'] != null
           ? DateTime.parse(json['lastModifiedAt'] as String)

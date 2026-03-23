@@ -434,6 +434,56 @@ class ProjectManagerProvider extends ChangeNotifier {
   }
 
   // ═══════════════════════════════════════════════════════════════════════════
+  // ZARZĄDZANIE OBSZARAMI BUDYNKU (KLATKI, WINDY, GARAŻ, DACH, POMIESZCZENIA)
+  // ═══════════════════════════════════════════════════════════════════════════
+
+  BuildingAreaProgress _getOrCreateBuildingArea(
+      String areaId, BuildingAreaType areaType) {
+    final index =
+        _currentProject!.buildingAreas.indexWhere((a) => a.areaId == areaId);
+    if (index != -1) return _currentProject!.buildingAreas[index];
+    final area =
+        BuildingAreaProgress(areaId: areaId, areaType: areaType);
+    _currentProject!.buildingAreas.add(area);
+    return area;
+  }
+
+  BuildingAreaProgress getBuildingArea(
+      String areaId, BuildingAreaType areaType) {
+    if (_currentProject == null) {
+      return BuildingAreaProgress(areaId: areaId, areaType: areaType);
+    }
+    return _getOrCreateBuildingArea(areaId, areaType);
+  }
+
+  void toggleBuildingAreaTask(
+      String areaId, BuildingAreaType areaType, String taskName, bool done) {
+    if (_currentProject == null) return;
+    final area = _getOrCreateBuildingArea(areaId, areaType);
+    area.taskStatuses[taskName] = done;
+    _updateProject();
+    notifyListeners();
+  }
+
+  void addBuildingAreaPhoto(
+      String areaId, BuildingAreaType areaType, String photoPath) {
+    if (_currentProject == null) return;
+    final area = _getOrCreateBuildingArea(areaId, areaType);
+    area.photoPaths.add(photoPath);
+    _updateProject();
+    notifyListeners();
+  }
+
+  void addBuildingAreaNote(
+      String areaId, BuildingAreaType areaType, String text) {
+    if (_currentProject == null) return;
+    final area = _getOrCreateBuildingArea(areaId, areaType);
+    area.notes = area.notes.isEmpty ? text : '${area.notes}\n$text';
+    _updateProject();
+    notifyListeners();
+  }
+
+  // ═══════════════════════════════════════════════════════════════════════════
   // ZARZĄDZANIE ALERTAMI
   // ═══════════════════════════════════════════════════════════════════════════
 

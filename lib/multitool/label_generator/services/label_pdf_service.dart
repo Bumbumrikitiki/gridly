@@ -181,17 +181,28 @@ class LabelPdfService {
     double widthPoints,
     double heightPoints,
   ) {
+    // Stack + Positioned zamiast Row – gwarantuje dokładne rozmiary bloków
+    double currentLeft = 0;
+    final positionedBlocks = <pw.Widget>[];
+    for (final block in label.blocks) {
+      final blockWidth = block.widthMm * mmToPoints;
+      positionedBlocks.add(
+        pw.Positioned(
+          left: currentLeft,
+          top: 0,
+          child: _buildBlock(block, heightPoints),
+        ),
+      );
+      currentLeft += blockWidth;
+    }
+
     return pw.Container(
       width: widthPoints,
       height: heightPoints,
       decoration: pw.BoxDecoration(
         border: pw.Border.all(color: PdfColors.black, width: 1.0),
       ),
-      child: pw.Row(
-        children: label.blocks.map((block) {
-          return _buildBlock(block, heightPoints);
-        }).toList(),
-      ),
+      child: pw.Stack(children: positionedBlocks),
     );
   }
 

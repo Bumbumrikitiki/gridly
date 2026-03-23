@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 import 'package:gridly/multitool/project_manager/models/project_models.dart';
 import 'package:gridly/multitool/project_manager/logic/project_manager_provider.dart';
 import 'package:gridly/multitool/project_manager/views/unit_detail_screen.dart';
+import 'package:gridly/multitool/project_manager/views/building_element_detail_screen.dart';
 import 'package:gridly/multitool/project_manager/views/configuration_wizard_screen.dart';
 import 'package:gridly/services/wykaz_zbiorczy_service.dart';
 import 'package:gridly/services/excel_service.dart';
@@ -21,7 +22,7 @@ class _ProjectManagerScreenState extends State<ProjectManagerScreen>
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: 4, vsync: this);
+    _tabController = TabController(length: 9, vsync: this);
   }
 
   @override
@@ -63,6 +64,11 @@ class _ProjectManagerScreenState extends State<ProjectManagerScreen>
                       Tab(icon: Icon(Icons.timeline), text: 'Timeline'),
                       Tab(icon: Icon(Icons.notifications), text: 'Alerty'),
                       Tab(icon: Icon(Icons.apartment), text: 'Mieszkania'),
+                      Tab(icon: Icon(Icons.meeting_room), text: 'Pomieszczenia'),
+                      Tab(icon: Icon(Icons.stairs), text: 'Klatki'),
+                      Tab(icon: Icon(Icons.elevator), text: 'Windy'),
+                      Tab(icon: Icon(Icons.garage), text: 'Garaż'),
+                      Tab(icon: Icon(Icons.roofing), text: 'Dach'),
                     ],
                   ),
           ),
@@ -75,6 +81,11 @@ class _ProjectManagerScreenState extends State<ProjectManagerScreen>
                     _buildTimelineTab(context, provider),
                     _buildAlertsTab(context, provider),
                     _buildUnitsTab(context, provider),
+                    _buildPomieszczeniaTab(context, provider),
+                    _buildKlatkiTab(context, provider),
+                    _buildWindyTab(context, provider),
+                    _buildGarazTab(context, provider),
+                    _buildDachTab(context, provider),
                   ],
                 ),
         );
@@ -1058,7 +1069,341 @@ class _ProjectManagerScreenState extends State<ProjectManagerScreen>
   }
 
   // ═══════════════════════════════════════════════════════════════════════════
-  // GENEROWANIE WYKAZUO ZBIORCZEGO (PDF)
+  // TAB 5: POMIESZCZENIA
+  // ═══════════════════════════════════════════════════════════════════════════
+
+  Widget _buildPomieszczeniaTab(
+    BuildContext context,
+    ProjectManagerProvider provider,
+  ) {
+    final project = provider.currentProject;
+    if (project == null) return const SizedBox();
+    final rooms = project.config.additionalRooms;
+
+    if (rooms.isEmpty) {
+      return const Center(
+        child: Padding(
+          padding: EdgeInsets.all(32),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(Icons.meeting_room, size: 64, color: Colors.grey),
+              SizedBox(height: 16),
+              Text(
+                'Brak pomieszczeń dodatkowych w projekcie.\nDodaj je w konfiguracji projektu.',
+                textAlign: TextAlign.center,
+                style: TextStyle(color: Colors.grey),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+
+    if (rooms.length == 1) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        _openBuildingElement(
+          context,
+          elementId: 'room_${rooms.first.id}',
+          elementName: rooms.first.name,
+          areaType: BuildingAreaType.pomieszczenie,
+        );
+      });
+      return const Center(child: CircularProgressIndicator());
+    }
+
+    return _buildElementList(
+      context: context,
+      items: rooms
+          .map((r) => _AreaItem(
+                id: 'room_${r.id}',
+                name: r.name,
+                subtitle:
+                    'Piętro ${r.floorNumber == 0 ? "Parter" : r.floorNumber}',
+                icon: Icons.meeting_room,
+                areaType: BuildingAreaType.pomieszczenie,
+              ))
+          .toList(),
+      provider: provider,
+    );
+  }
+
+  // ═══════════════════════════════════════════════════════════════════════════
+  // TAB 6: KLATKI SCHODOWE
+  // ═══════════════════════════════════════════════════════════════════════════
+
+  Widget _buildKlatkiTab(
+    BuildContext context,
+    ProjectManagerProvider provider,
+  ) {
+    final project = provider.currentProject;
+    if (project == null) return const SizedBox();
+
+    final items = <_AreaItem>[];
+    for (final building in project.config.buildings) {
+      for (final sc in building.stairCases) {
+        final id = 'staircase_${building.buildingName}_${sc.stairCaseName}';
+        final name = project.config.buildings.length > 1
+            ? 'Klatka ${sc.stairCaseName} – ${building.buildingName}'
+            : 'Klatka ${sc.stairCaseName}';
+        items.add(_AreaItem(
+          id: id,
+          name: name,
+          subtitle: '${sc.numberOfLevels} pięter',
+          icon: Icons.stairs,
+          areaType: BuildingAreaType.klatka,
+        ));
+      }
+    }
+
+    if (items.isEmpty) {
+      return const Center(
+        child: Padding(
+          padding: EdgeInsets.all(32),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(Icons.stairs, size: 64, color: Colors.grey),
+              SizedBox(height: 16),
+              Text(
+                'Brak klatek schodowych w projekcie.',
+                textAlign: TextAlign.center,
+                style: TextStyle(color: Colors.grey),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+
+    if (items.length == 1) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        _openBuildingElement(
+          context,
+          elementId: items.first.id,
+          elementName: items.first.name,
+          areaType: BuildingAreaType.klatka,
+        );
+      });
+      return const Center(child: CircularProgressIndicator());
+    }
+
+    return _buildElementList(
+        context: context, items: items, provider: provider);
+  }
+
+  // ═══════════════════════════════════════════════════════════════════════════
+  // TAB 7: WINDY
+  // ═══════════════════════════════════════════════════════════════════════════
+
+  Widget _buildWindyTab(
+    BuildContext context,
+    ProjectManagerProvider provider,
+  ) {
+    final project = provider.currentProject;
+    if (project == null) return const SizedBox();
+
+    final items = <_AreaItem>[];
+    for (final building in project.config.buildings) {
+      for (final sc in building.stairCases) {
+        for (int i = 1; i <= sc.numberOfElevators; i++) {
+          final id =
+              'elevator_${building.buildingName}_${sc.stairCaseName}_$i';
+          final name = sc.numberOfElevators > 1
+              ? 'Winda $i – Klatka ${sc.stairCaseName}'
+              : 'Winda – Klatka ${sc.stairCaseName}';
+          items.add(_AreaItem(
+            id: id,
+            name: name,
+            subtitle: building.buildingName,
+            icon: Icons.elevator,
+            areaType: BuildingAreaType.winda,
+          ));
+        }
+      }
+    }
+
+    if (items.isEmpty) {
+      return const Center(
+        child: Padding(
+          padding: EdgeInsets.all(32),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(Icons.elevator, size: 64, color: Colors.grey),
+              SizedBox(height: 16),
+              Text(
+                'Brak wind w projekcie.\nSkonfiguruj windy w konfiguracji projektu.',
+                textAlign: TextAlign.center,
+                style: TextStyle(color: Colors.grey),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+
+    if (items.length == 1) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        _openBuildingElement(
+          context,
+          elementId: items.first.id,
+          elementName: items.first.name,
+          areaType: BuildingAreaType.winda,
+        );
+      });
+      return const Center(child: CircularProgressIndicator());
+    }
+
+    return _buildElementList(
+        context: context, items: items, provider: provider);
+  }
+
+  // ═══════════════════════════════════════════════════════════════════════════
+  // TAB 8: GARAŻ
+  // ═══════════════════════════════════════════════════════════════════════════
+
+  Widget _buildGarazTab(
+    BuildContext context,
+    ProjectManagerProvider provider,
+  ) {
+    final project = provider.currentProject;
+    if (project == null) return const SizedBox();
+
+    if (!project.config.hasGarage) {
+      return const Center(
+        child: Padding(
+          padding: EdgeInsets.all(32),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(Icons.garage, size: 64, color: Colors.grey),
+              SizedBox(height: 16),
+              Text(
+                'Projekt nie posiada garażu.',
+                textAlign: TextAlign.center,
+                style: TextStyle(color: Colors.grey),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _openBuildingElement(
+        context,
+        elementId: 'garaz_main',
+        elementName: 'Garaż',
+        areaType: BuildingAreaType.garaz,
+      );
+    });
+    return const Center(child: CircularProgressIndicator());
+  }
+
+  // ═══════════════════════════════════════════════════════════════════════════
+  // TAB 9: DACH
+  // ═══════════════════════════════════════════════════════════════════════════
+
+  Widget _buildDachTab(
+    BuildContext context,
+    ProjectManagerProvider provider,
+  ) {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _openBuildingElement(
+        context,
+        elementId: 'dach_main',
+        elementName: 'Dach',
+        areaType: BuildingAreaType.dach,
+      );
+    });
+    return const Center(child: CircularProgressIndicator());
+  }
+
+  // ─────────────────────────────────────────────────────────────────────────
+  // LISTY I NAWIGACJA (HELPER)
+  // ─────────────────────────────────────────────────────────────────────────
+
+  void _openBuildingElement(
+    BuildContext context, {
+    required String elementId,
+    required String elementName,
+    required BuildingAreaType areaType,
+  }) {
+    if (!mounted) return;
+    Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => BuildingElementDetailScreen(
+          elementId: elementId,
+          elementName: elementName,
+          areaType: areaType,
+        ),
+      ),
+    );
+  }
+
+  Widget _buildElementList({
+    required BuildContext context,
+    required List<_AreaItem> items,
+    required ProjectManagerProvider provider,
+  }) {
+    return ListView.builder(
+      padding: const EdgeInsets.all(16),
+      itemCount: items.length,
+      itemBuilder: (context, index) {
+        final item = items[index];
+        final area =
+            provider.getBuildingArea(item.id, item.areaType);
+        final completion = area.completionPercent;
+
+        return Card(
+          margin: const EdgeInsets.symmetric(vertical: 6),
+          child: ListTile(
+            leading: CircleAvatar(
+              backgroundColor: completion >= 100
+                  ? Colors.green.shade100
+                  : Colors.blue.shade50,
+              child: Icon(item.icon,
+                  color: completion >= 100 ? Colors.green : Colors.blue),
+            ),
+            title: Text(
+              item.name,
+              style: const TextStyle(fontWeight: FontWeight.w600),
+            ),
+            subtitle: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                if (item.subtitle.isNotEmpty)
+                  Text(item.subtitle,
+                      style: const TextStyle(fontSize: 12)),
+                const SizedBox(height: 4),
+                LinearProgressIndicator(
+                  value: completion / 100,
+                  backgroundColor: Colors.grey.shade300,
+                  color: completion >= 100 ? Colors.green : Colors.blue,
+                ),
+                Text(
+                  '${completion.toStringAsFixed(0)}%',
+                  style: TextStyle(
+                      fontSize: 11, color: Colors.grey.shade600),
+                ),
+              ],
+            ),
+            trailing: const Icon(Icons.chevron_right),
+            onTap: () => _openBuildingElement(
+              context,
+              elementId: item.id,
+              elementName: item.name,
+              areaType: item.areaType,
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  // ═══════════════════════════════════════════════════════════════════════════
+  // GENEROWANIE WYKAZU ZBIORCZEGO (PDF)
   // ═══════════════════════════════════════════════════════════════════════════
 
   Future<void> _generateWykazZbiorczy(
@@ -1409,4 +1754,24 @@ class _ProjectManagerScreenState extends State<ProjectManagerScreen>
       ),
     );
   }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Helper data class for area list items
+// ─────────────────────────────────────────────────────────────────────────────
+
+class _AreaItem {
+  final String id;
+  final String name;
+  final String subtitle;
+  final IconData icon;
+  final BuildingAreaType areaType;
+
+  const _AreaItem({
+    required this.id,
+    required this.name,
+    required this.subtitle,
+    required this.icon,
+    required this.areaType,
+  });
 }

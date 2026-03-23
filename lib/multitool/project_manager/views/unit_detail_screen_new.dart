@@ -58,8 +58,8 @@ class _UnitDetailScreenState extends State<UnitDetailScreen>
             elevation: 0,
             actions: [
               IconButton(
-                icon: const Icon(Icons.print),
-                tooltip: 'Drukuj kartę lokalową',
+                icon: const Icon(Icons.picture_as_pdf),
+                tooltip: 'Generuj kartę lokalową',
                 onPressed: () => _generateUnitCard(context, provider, currentUnit, project),
               ),
             ],

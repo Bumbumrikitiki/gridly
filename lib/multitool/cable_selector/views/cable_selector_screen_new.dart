@@ -1,7 +1,99 @@
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:gridly/multitool/cable_selector/logic/cable_data_provider.dart';
 import 'package:gridly/multitool/cable_selector/models/cable_data.dart';
+
+enum _MaterialProfile {
+  interior,
+  outdoorUv,
+  underground,
+  highTemp,
+  chemical,
+}
+
+enum _MountingSubstrate {
+  concrete,
+  steel,
+  masonry,
+}
+
+class _RecommendationSnapshot {
+  const _RecommendationSnapshot({
+    required this.condition,
+    required this.reservePercent,
+    required this.standard,
+    required this.sleeve,
+    required this.label,
+    required this.topTube,
+    required this.topRigidConduit,
+  });
+
+  final WorkingCondition condition;
+  final double reservePercent;
+  final String standard;
+  final String sleeve;
+  final String label;
+  final String topTube;
+  final String topRigidConduit;
+}
+
+class _CableTrayPreset {
+  const _CableTrayPreset({
+    required this.heightMm,
+    required this.widthMm,
+  });
+
+  final double heightMm;
+  final double widthMm;
+
+  String get label => '${widthMm.toInt()}x${heightMm.toInt()}';
+}
+
+class _TrayCapacityResult {
+  const _TrayCapacityResult({
+    required this.maxByFill,
+    required this.maxByLoad,
+    required this.maxByThermal,
+    required this.finalCount,
+    required this.cableMassKgPerM,
+    required this.cableAreaMm2,
+    required this.thermalFactor,
+    required this.isPowerCable,
+    required this.massFromDatabase,
+    required this.tempCorrection,
+    required this.groupingCorrection,
+    required this.ventilationCorrection,
+  });
+
+  final int maxByFill;
+  final int maxByLoad;
+  final int maxByThermal;
+  final int finalCount;
+  final double cableMassKgPerM;
+  final double cableAreaMm2;
+  final double thermalFactor;
+  final bool isPowerCable;
+  final bool massFromDatabase;
+  final double tempCorrection;
+  final double groupingCorrection;
+  final double ventilationCorrection;
+}
+
+class _OfferRecommendationGroup {
+  const _OfferRecommendationGroup({
+    required this.title,
+    required this.icon,
+    required this.items,
+    this.note,
+  });
+
+  final String title;
+  final IconData icon;
+  final List<String> items;
+  final String? note;
+}
 
 class CableSelectorScreen extends StatefulWidget {
   const CableSelectorScreen({super.key});
@@ -19,13 +111,24 @@ class _CableSelectorScreenState extends State<CableSelectorScreen>
 
   CableApplication? _selectedApplication;
   CableMaterial? _selectedMaterial;
-  int? _selectedGroupNumber;
-  String? _selectedVoltageFilter;
+  // Removed group and voltage filters
   String _typeSearchQuery = '';
   CableType? _selectedType;
   WireConfiguration? _selectedWireConfiguration;
   double? _selectedCrossSection;
   WorkingCondition _selectedWorkingCondition = WorkingCondition.interior;
+  _MaterialProfile _selectedMaterialProfile = _MaterialProfile.interior;
+  double _materialReservePercent = 20;
+  _RecommendationSnapshot? _previousRecommendation;
+  String? _recommendationChangeReason;
+  _MountingSubstrate _mountingSubstrate = _MountingSubstrate.concrete;
+  double _trayHeightMm = 50;
+  double _trayWidthMm = 200;
+  double _trayMaxFillPercent = 40;
+  double _trayMaxLoadKgPerM = 25;
+  double _trayAmbientTempC = 30;
+  int _trayGroupedPowerCircuits = 1;
+  bool _trayVentilated = true;
   CableData? _result;
   final Set<CableType> _favoriteTypes = <CableType>{};
   final List<CableType> _recentTypes = <CableType>[];
@@ -36,6 +139,19 @@ class _CableSelectorScreenState extends State<CableSelectorScreen>
     'materials': 0,
   };
   final TextEditingController _typeSearchController = TextEditingController();
+
+  static const List<_CableTrayPreset> _trayPresets = [
+    _CableTrayPreset(heightMm: 50, widthMm: 50),
+    _CableTrayPreset(heightMm: 50, widthMm: 100),
+    _CableTrayPreset(heightMm: 50, widthMm: 150),
+    _CableTrayPreset(heightMm: 50, widthMm: 200),
+    _CableTrayPreset(heightMm: 50, widthMm: 300),
+    _CableTrayPreset(heightMm: 50, widthMm: 400),
+    _CableTrayPreset(heightMm: 50, widthMm: 600),
+  ];
+
+  static const String _trayNormReference =
+      'Model referencyjny: IEC 60364/PN-HD (zajetosc, grupowanie, temperatura)';
 
   late AnimationController _animationController;
   late Animation<double> _scaleAnimation;
@@ -78,8 +194,6 @@ class _CableSelectorScreenState extends State<CableSelectorScreen>
       _selectedApplication = app;
       _selectedMaterial =
           availableMaterials.length == 1 ? availableMaterials.first : null;
-      _selectedGroupNumber = null;
-      _selectedVoltageFilter = null;
       _typeSearchQuery = '';
       _selectedType = null;
       _selectedWireConfiguration = null;
@@ -104,8 +218,6 @@ class _CableSelectorScreenState extends State<CableSelectorScreen>
   void _onMaterialSelected(CableMaterial material) {
     setState(() {
       _selectedMaterial = material;
-      _selectedGroupNumber = null;
-      _selectedVoltageFilter = null;
       _typeSearchQuery = '';
       _selectedType = null;
       _selectedWireConfiguration = null;
@@ -164,20 +276,9 @@ class _CableSelectorScreenState extends State<CableSelectorScreen>
     final query = _normalizeToken(_typeSearchQuery);
     final tokens = _extractSearchTokens(query);
     final filtered = _getBaseTypesForCurrentSelection().where((type) {
-      if (_selectedGroupNumber != null &&
-          CableData.typeGroupNumber(type) != _selectedGroupNumber) {
-        return false;
-      }
-
-      if (_selectedVoltageFilter != null &&
-          !_typeMatchesVoltage(type, _selectedVoltageFilter!)) {
-        return false;
-      }
-
       if (query.isEmpty) {
         return true;
       }
-
       final haystack = _buildTypeSearchIndex(type);
       if (haystack.contains(query)) {
         return true;
@@ -338,19 +439,7 @@ class _CableSelectorScreenState extends State<CableSelectorScreen>
     }
   }
 
-  int _activeFilterCount() {
-    var count = 0;
-    if (_selectedGroupNumber != null) {
-      count += 1;
-    }
-    if (_selectedVoltageFilter != null) {
-      count += 1;
-    }
-    if (_typeSearchQuery.trim().isNotEmpty) {
-      count += 1;
-    }
-    return count;
-  }
+  // Removed _activeFilterCount (no filters)
 
   void _applyQuickSearchChip(String value) {
     setState(() {
@@ -361,135 +450,14 @@ class _CableSelectorScreenState extends State<CableSelectorScreen>
     });
   }
 
-  void _clearTypeFilters() {
+  void _clearTypeSearch() {
     setState(() {
-      _selectedGroupNumber = null;
-      _selectedVoltageFilter = null;
       _typeSearchQuery = '';
       _typeSearchController.clear();
     });
   }
 
-  void _openMobileFilterSheet(List<int> groups, List<String> voltages) {
-    var tempGroup = _selectedGroupNumber;
-    var tempVoltage = _selectedVoltageFilter;
-
-    showModalBottomSheet<void>(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: _cardNavy,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(18)),
-      ),
-      builder: (context) {
-        return StatefulBuilder(
-          builder: (context, setModalState) {
-            return SafeArea(
-              child: Padding(
-                padding: const EdgeInsets.fromLTRB(16, 14, 16, 20),
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(
-                      children: [
-                        const Icon(Icons.tune, color: Colors.white),
-                        const SizedBox(width: 8),
-                        const Expanded(
-                          child: Text(
-                            'Filtry',
-                            style: TextStyle(
-                              color: Colors.white,
-                              fontSize: 18,
-                              fontWeight: FontWeight.bold,
-                            ),
-                          ),
-                        ),
-                        TextButton(
-                          onPressed: () {
-                            setModalState(() {
-                              tempGroup = null;
-                              tempVoltage = null;
-                            });
-                          },
-                          child: const Text('Wyczysc'),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 10),
-                    const Text('Grupa',
-                        style: TextStyle(color: Colors.white70)),
-                    const SizedBox(height: 8),
-                    Wrap(
-                      spacing: 8,
-                      runSpacing: 8,
-                      children: [
-                        ChoiceChip(
-                          label: const Text('Wszystkie'),
-                          selected: tempGroup == null,
-                          onSelected: (_) =>
-                              setModalState(() => tempGroup = null),
-                        ),
-                        for (final group in groups)
-                          ChoiceChip(
-                            label: Text('Grupa $group'),
-                            selected: tempGroup == group,
-                            onSelected: (_) =>
-                                setModalState(() => tempGroup = group),
-                          ),
-                      ],
-                    ),
-                    const SizedBox(height: 14),
-                    const Text('Napiecie',
-                        style: TextStyle(color: Colors.white70)),
-                    const SizedBox(height: 8),
-                    Wrap(
-                      spacing: 8,
-                      runSpacing: 8,
-                      children: [
-                        ChoiceChip(
-                          label: const Text('Wszystkie'),
-                          selected: tempVoltage == null,
-                          onSelected: (_) =>
-                              setModalState(() => tempVoltage = null),
-                        ),
-                        for (final voltage in voltages)
-                          ChoiceChip(
-                            label: Text(voltage),
-                            selected: tempVoltage == voltage,
-                            onSelected: (_) =>
-                                setModalState(() => tempVoltage = voltage),
-                          ),
-                      ],
-                    ),
-                    const SizedBox(height: 16),
-                    SizedBox(
-                      width: double.infinity,
-                      child: ElevatedButton.icon(
-                        onPressed: () {
-                          setState(() {
-                            _selectedGroupNumber = tempGroup;
-                            _selectedVoltageFilter = tempVoltage;
-                          });
-                          Navigator.of(context).pop();
-                        },
-                        icon: const Icon(Icons.check),
-                        label: const Text('Zastosuj'),
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: _electricBlue,
-                          foregroundColor: Colors.white,
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            );
-          },
-        );
-      },
-    );
-  }
+  // Removed filter modal
 
   List<String> _getAvailableVoltagesForCurrentSelection() {
     final values = <String>{};
@@ -594,72 +562,846 @@ class _CableSelectorScreenState extends State<CableSelectorScreen>
     }
   }
 
+  String _profileTitle(_MaterialProfile profile) {
+    switch (profile) {
+      case _MaterialProfile.interior:
+        return 'Wnetrze';
+      case _MaterialProfile.outdoorUv:
+        return 'Zewnatrz UV';
+      case _MaterialProfile.underground:
+        return 'Ziemia';
+      case _MaterialProfile.highTemp:
+        return 'Wysoka temp.';
+      case _MaterialProfile.chemical:
+        return 'Chemia';
+    }
+  }
+
+  String _profileHint(_MaterialProfile profile) {
+    switch (profile) {
+      case _MaterialProfile.interior:
+        return 'Szafa/puszka, standardowe warunki';
+      case _MaterialProfile.outdoorUv:
+        return 'Ekspozycja UV i wilgoc';
+      case _MaterialProfile.underground:
+        return 'Trasa w ziemi i ochrona mechaniczna';
+      case _MaterialProfile.highTemp:
+        return 'Podwyzszona temperatura pracy';
+      case _MaterialProfile.chemical:
+        return 'Agresywne srodowisko przemyslowe';
+    }
+  }
+
+  WorkingCondition _profileCondition(_MaterialProfile profile) {
+    switch (profile) {
+      case _MaterialProfile.interior:
+        return WorkingCondition.interior;
+      case _MaterialProfile.outdoorUv:
+      case _MaterialProfile.highTemp:
+      case _MaterialProfile.chemical:
+        return WorkingCondition.humid;
+      case _MaterialProfile.underground:
+        return WorkingCondition.ground;
+    }
+  }
+
+  double _profileReservePercent(_MaterialProfile profile) {
+    switch (profile) {
+      case _MaterialProfile.interior:
+        return 15;
+      case _MaterialProfile.outdoorUv:
+        return 25;
+      case _MaterialProfile.underground:
+        return 30;
+      case _MaterialProfile.highTemp:
+        return 25;
+      case _MaterialProfile.chemical:
+        return 30;
+    }
+  }
+
+  double _reserveAdjustedDiameter(double outerDiameter, double reservePercent) {
+    final delta = (reservePercent - 20) / 100;
+    return outerDiameter * (1 + delta);
+  }
+
+  List<HeatShrinkTube> _tubeRecommendationsForReserve(CableData data) {
+    final adjustedDiameter = _reserveAdjustedDiameter(
+      data.outerDiameter,
+      _materialReservePercent,
+    );
+    final options = CableDataProvider.suggestTubesForCable(
+      adjustedDiameter,
+      _selectedWorkingCondition,
+    );
+    return options.take(4).toList();
+  }
+
+  List<int> _rigidConduitsForReserve(CableData data) {
+    final adjustedDiameter = _reserveAdjustedDiameter(
+      data.outerDiameter,
+      _materialReservePercent,
+    );
+    return CableDataProvider.suggestRigidConduitDiameters(adjustedDiameter);
+  }
+
+  String _confidenceLabel(
+    CableData data,
+    List<HeatShrinkTube> tubes,
+    List<int> conduits,
+  ) {
+    if (_qualityLabel(data) == 'Do weryfikacji' ||
+        data.groupNumber >= 6 ||
+        tubes.isEmpty) {
+      return 'Do weryfikacji';
+    }
+    if (_qualityLabel(data) == 'Katalogowe' && conduits.isNotEmpty) {
+      return 'Wysoka';
+    }
+    return 'Srednia';
+  }
+
+  Color _confidenceColor(String confidence) {
+    switch (confidence) {
+      case 'Wysoka':
+        return const Color(0xFF2ECC71);
+      case 'Srednia':
+        return const Color(0xFFF7B500);
+      default:
+        return const Color(0xFFFF6B6B);
+    }
+  }
+
+  String _recommendationReason(
+    CableData data,
+    HeatShrinkStandard standard,
+    List<HeatShrinkTube> tubes,
+  ) {
+    final baseReason =
+        'Srednica kabla ${data.outerDiameter} mm, zapas ${_materialReservePercent.toStringAsFixed(0)}%, warunki ${CableData.workingConditionToString(_selectedWorkingCondition).toLowerCase()}.';
+
+    if (tubes.isEmpty) {
+      return '$baseReason Brak jednoznacznego dopasowania rur - wymagana reczna weryfikacja.';
+    }
+
+    return '$baseReason Standard ${HeatShrinkTube.standardToString(standard)} dobrany do profilu pracy.';
+  }
+
+  List<String> _buildRecommendationWarnings(
+    CableData data,
+    List<HeatShrinkTube> tubes,
+    List<int> conduits,
+    HeatShrinkStandard standard,
+  ) {
+    final warnings = <String>[];
+    final halogen = (data.halogenFree ?? '').toLowerCase();
+
+    if (tubes.isEmpty) {
+      warnings.add(
+          'Brak sugerowanej rury termokurczliwej dla aktualnych parametrow.');
+    }
+    if (conduits.isEmpty) {
+      warnings.add(
+          'Brak sugerowanej rury sztywnej - sprawdz trase i srednice recznie.');
+    }
+    if ((halogen.contains('tak') || halogen.contains('yes')) &&
+        standard == HeatShrinkStandard.rc) {
+      warnings.add(
+          'Kabel oznaczony jako halogen free: preferowany standard RCK/RGK.');
+    }
+    if (_materialReservePercent >= 30 && tubes.length < 2) {
+      warnings
+          .add('Duzy zapas montazowy: rozważ alternatywe o wiekszej srednicy.');
+    }
+    if (data.groupNumber >= 6) {
+      warnings.add('Dla grupy SN zalecana akceptacja przez osobe uprawniona.');
+    }
+
+    return warnings;
+  }
+
+  _RecommendationSnapshot _buildRecommendationSnapshot(
+    CableData data,
+    WorkingCondition condition,
+    double reservePercent,
+  ) {
+    final adjustedDiameter =
+        data.outerDiameter * (1 + ((reservePercent - 20) / 100));
+    final standard =
+        CableDataProvider.suggestTubeStandardForCondition(condition);
+    final tubes =
+        CableDataProvider.suggestTubesForCable(adjustedDiameter, condition);
+    final conduits =
+        CableDataProvider.suggestRigidConduitDiameters(adjustedDiameter);
+
+    return _RecommendationSnapshot(
+      condition: condition,
+      reservePercent: reservePercent,
+      standard: HeatShrinkTube.standardToString(standard),
+      sleeve: data.heatShrinkSleeve,
+      label: data.heatShrinkLabel,
+      topTube: tubes.isNotEmpty ? tubes.first.description : '-',
+      topRigidConduit: conduits.isNotEmpty ? 'DN ${conduits.first} mm' : '-',
+    );
+  }
+
+  String? _buildRecommendationDeltaMessage(
+    _RecommendationSnapshot before,
+    _RecommendationSnapshot after,
+  ) {
+    final changes = <String>[];
+    if (before.condition != after.condition) {
+      changes.add(
+        'warunki ${CableData.workingConditionToString(before.condition)} -> ${CableData.workingConditionToString(after.condition)}',
+      );
+    }
+    if (before.reservePercent != after.reservePercent) {
+      changes.add(
+        'zapas ${before.reservePercent.toStringAsFixed(0)}% -> ${after.reservePercent.toStringAsFixed(0)}%',
+      );
+    }
+    if (before.standard != after.standard) {
+      changes.add('standard ${before.standard} -> ${after.standard}');
+    }
+    if (before.topTube != after.topTube) {
+      changes.add('rura termokurczliwa ${before.topTube} -> ${after.topTube}');
+    }
+    if (before.topRigidConduit != after.topRigidConduit) {
+      changes.add(
+        'rura sztywna ${before.topRigidConduit} -> ${after.topRigidConduit}',
+      );
+    }
+
+    if (changes.isEmpty) {
+      return null;
+    }
+
+    return 'Dlaczego zmiana: ${changes.join('; ')}.';
+  }
+
+  void _applyMaterialProfile(_MaterialProfile profile) {
+    final data = _result;
+    final before = data == null
+        ? null
+        : _buildRecommendationSnapshot(
+            data,
+            _selectedWorkingCondition,
+            _materialReservePercent,
+          );
+
+    final nextCondition = _profileCondition(profile);
+    final nextReserve = _profileReservePercent(profile);
+    final nextReason = data == null || before == null
+        ? null
+        : _buildRecommendationDeltaMessage(
+            before,
+            _buildRecommendationSnapshot(data, nextCondition, nextReserve),
+          );
+
+    setState(() {
+      _selectedMaterialProfile = profile;
+      _selectedWorkingCondition = nextCondition;
+      _materialReservePercent = nextReserve;
+      _previousRecommendation = before;
+      _recommendationChangeReason = nextReason;
+    });
+    _animationController.forward(from: 0);
+  }
+
+  void _onReserveChanged(double value) {
+    final data = _result;
+    final before = data == null
+        ? null
+        : _buildRecommendationSnapshot(
+            data,
+            _selectedWorkingCondition,
+            _materialReservePercent,
+          );
+    final rounded = (value / 5).round() * 5.0;
+    final nextReason = data == null || before == null
+        ? null
+        : _buildRecommendationDeltaMessage(
+            before,
+            _buildRecommendationSnapshot(
+              data,
+              _selectedWorkingCondition,
+              rounded,
+            ),
+          );
+
+    setState(() {
+      _materialReservePercent = rounded;
+      _previousRecommendation = before;
+      _recommendationChangeReason = nextReason;
+    });
+  }
+
+  bool _isPowerCable(CableData data) {
+    return data.application == CableApplication.electrical ||
+        data.application == CableApplication.power ||
+        data.application == CableApplication.mediumVoltage;
+  }
+
+  ({double a, double b})? _flatDimensions(CableData data) {
+    if (!_isFlatCable(data) || !_hasValue(data.sourceDiameter)) {
+      return null;
+    }
+    final raw = data.sourceDiameter!
+        .toLowerCase()
+        .replaceAll('×', 'x')
+        .replaceAll(' ', '');
+    final parts = raw.split('x');
+    if (parts.length != 2) {
+      return null;
+    }
+    final a = double.tryParse(parts[0].replaceAll(',', '.'));
+    final b = double.tryParse(parts[1].replaceAll(',', '.'));
+    if (a == null || b == null || a <= 0 || b <= 0) {
+      return null;
+    }
+    return (a: a, b: b);
+  }
+
+  double _projectedCableAreaMm2(CableData data) {
+    final flat = _flatDimensions(data);
+    if (flat != null) {
+      return flat.a * flat.b;
+    }
+    final radius = data.outerDiameter / 2;
+    return math.pi * radius * radius;
+  }
+
+  double _estimatedCableMassKgPerM(CableData data) {
+    final wireCount = _wireCountForConfig(data.wireConfiguration) ?? 1;
+    final conductorAreaMm2 = data.crossSection * wireCount;
+    final conductorDensity =
+        data.material == CableMaterial.cu ? 8960.0 : 2700.0;
+    final conductorMass = conductorAreaMm2 * 1e-6 * conductorDensity;
+
+    final outerAreaMm2 = math.pi * math.pow(data.outerDiameter / 2, 2);
+    final polymerAreaMm2 = math.max(
+        (outerAreaMm2 - (conductorAreaMm2 * 1.15)).toDouble(),
+        outerAreaMm2 * 0.35);
+    final polymerMass = polymerAreaMm2 * 1e-6 * 1200;
+
+    return conductorMass + polymerMass;
+  }
+
+  double? _massFromDatabaseKgPerM(CableData data) {
+    final candidates = [
+      data.notes,
+      data.usage,
+      data.sourceSize,
+      data.sourceType,
+    ];
+    final regex =
+        RegExp(r'(\d+(?:[\.,]\d+)?)\s*kg\s*/\s*m', caseSensitive: false);
+
+    for (final entry in candidates) {
+      if (entry == null || entry.trim().isEmpty) {
+        continue;
+      }
+      final match = regex.firstMatch(entry);
+      if (match == null) {
+        continue;
+      }
+      final parsed = double.tryParse(match.group(1)!.replaceAll(',', '.'));
+      if (parsed != null && parsed > 0) {
+        return parsed;
+      }
+    }
+    return null;
+  }
+
+  bool _isXlpeInsulation(CableData data) {
+    final text =
+        '${data.insulation ?? ''} ${data.sourceType ?? ''}'.toLowerCase();
+    return text.contains('xlpe') ||
+        text.contains('xlh') ||
+        text.contains('xhak');
+  }
+
+  double _temperatureCorrection(CableData data) {
+    final xlpe = _isXlpeInsulation(data);
+    final temp = _trayAmbientTempC;
+
+    if (xlpe) {
+      if (temp <= 25) return 1.03;
+      if (temp <= 30) return 1.00;
+      if (temp <= 35) return 0.96;
+      if (temp <= 40) return 0.91;
+      if (temp <= 45) return 0.87;
+      return 0.82;
+    }
+
+    if (temp <= 25) return 1.02;
+    if (temp <= 30) return 1.00;
+    if (temp <= 35) return 0.94;
+    if (temp <= 40) return 0.87;
+    if (temp <= 45) return 0.79;
+    return 0.71;
+  }
+
+  double _groupingCorrection() {
+    const factors = {
+      1: 1.00,
+      2: 0.85,
+      3: 0.79,
+      4: 0.75,
+      5: 0.73,
+      6: 0.72,
+    };
+
+    if (_trayGroupedPowerCircuits <= 1) {
+      return 1.0;
+    }
+    if (_trayGroupedPowerCircuits >= 6) {
+      return 0.72;
+    }
+    return factors[_trayGroupedPowerCircuits] ?? 0.72;
+  }
+
+  double _ventilationCorrection() {
+    return _trayVentilated ? 1.0 : 0.9;
+  }
+
+  double _thermalFactorForTray(CableData data) {
+    if (!_isPowerCable(data)) {
+      return 1.0;
+    }
+    var factor = _temperatureCorrection(data) *
+        _groupingCorrection() *
+        _ventilationCorrection();
+
+    if (_trayMaxFillPercent > 40) {
+      factor *= 0.93;
+    }
+    if (_trayHeightMm <= 50) {
+      factor *= 0.96;
+    }
+    if (_selectedWorkingCondition == WorkingCondition.humid) {
+      factor *= 0.97;
+    }
+    if (_selectedWorkingCondition == WorkingCondition.ground) {
+      factor *= 0.95;
+    }
+    if (data.groupNumber >= 6) {
+      factor *= 0.94;
+    }
+
+    return factor.clamp(0.5, 1.05);
+  }
+
+  _TrayCapacityResult _calculateTrayCapacity(CableData data) {
+    final trayArea = _trayHeightMm * _trayWidthMm;
+    final allowedArea = trayArea * (_trayMaxFillPercent / 100);
+    final cableArea =
+        _projectedCableAreaMm2(data).clamp(1, double.infinity).toDouble();
+    final dbMass = _massFromDatabaseKgPerM(data);
+    final cableMass = (dbMass ?? _estimatedCableMassKgPerM(data))
+        .clamp(0.01, double.infinity);
+
+    final spacingFactor = _isPowerCable(data) ? 1.15 : 1.05;
+    final maxByFill = (allowedArea / (cableArea * spacingFactor)).floor();
+    final maxByLoad = (_trayMaxLoadKgPerM / cableMass).floor();
+    final thermalFactor = _thermalFactorForTray(data);
+
+    final preThermal = math.max(0, math.min(maxByFill, maxByLoad));
+    final maxByThermal = (preThermal * thermalFactor).floor();
+    final finalCount = _isPowerCable(data)
+        ? math.max(0, math.min(preThermal, maxByThermal))
+        : preThermal;
+
+    return _TrayCapacityResult(
+      maxByFill: math.max(0, maxByFill),
+      maxByLoad: math.max(0, maxByLoad),
+      maxByThermal: math.max(0, maxByThermal),
+      finalCount: finalCount,
+      cableMassKgPerM: cableMass,
+      cableAreaMm2: cableArea,
+      thermalFactor: thermalFactor,
+      isPowerCable: _isPowerCable(data),
+      massFromDatabase: dbMass != null,
+      tempCorrection: _temperatureCorrection(data),
+      groupingCorrection: _groupingCorrection(),
+      ventilationCorrection: _ventilationCorrection(),
+    );
+  }
+
+  String _trayLimitingFactor(_TrayCapacityResult result) {
+    if (result.finalCount <= 0) {
+      return 'Brak miejsca lub za duze obciazenie';
+    }
+    if (result.maxByFill <= result.maxByLoad &&
+        (!result.isPowerCable || result.maxByFill <= result.maxByThermal)) {
+      return 'Limit zajetosci koryta';
+    }
+    if (result.maxByLoad <= result.maxByFill &&
+        (!result.isPowerCable || result.maxByLoad <= result.maxByThermal)) {
+      return 'Limit obciazenia kg/m';
+    }
+    if (result.isPowerCable) {
+      return 'Limit termiczny (grzanie kabli)';
+    }
+    return 'Warunki mieszane';
+  }
+
+  String _substrateLabel(_MountingSubstrate substrate) {
+    switch (substrate) {
+      case _MountingSubstrate.concrete:
+        return 'Beton';
+      case _MountingSubstrate.steel:
+        return 'Stal';
+      case _MountingSubstrate.masonry:
+        return 'Mur/cegla';
+    }
+  }
+
+  int _nearestClipSize(double cableDiameterMm, List<int> sizes) {
+    // Prefer tight fit: minimal functional clearance for assembly.
+    final target = cableDiameterMm + 0.2;
+    for (final size in sizes) {
+      if (target <= size) {
+        return size;
+      }
+    }
+    return sizes.last;
+  }
+
+  String _celoPinRecommendation(_MountingSubstrate substrate) {
+    switch (substrate) {
+      case _MountingSubstrate.concrete:
+        return 'Gwozdzie do betonu (dobor dlugosci wg podloza i osadzaka).';
+      case _MountingSubstrate.steel:
+        return 'Gwozdzie do stali (dobor typu wg grubosci blachy).';
+      case _MountingSubstrate.masonry:
+        return 'Mur/cegla: mocowanie strzelane tylko warunkowo; zwykle lepiej kotwa/mechaniczne.';
+    }
+  }
+
+  String _celoShotFiredSelection(double cableDiameterMm) {
+    const celoClipSeries = [8, 10, 12, 14, 16, 20, 25, 30];
+    final size = _nearestClipSize(cableDiameterMm, celoClipSeries);
+    final clearance = size - cableDiameterMm;
+    final fitNote = clearance <= 0.8
+        ? 'wariant ciasny (minimalny luz montazowy)'
+        : 'przy wiekszym luzie dodaj przekladke/wkladke dociskowa';
+    final looseCableWarning = clearance > 1.2
+        ? 'Uwaga: przy blaszce wiekszej od srednicy zewnetrznej kabla moze pojawic sie luz; zalecana jest weryfikacja srednicy kabla i doboru elementu mocujacego.'
+        : null;
+    return 'PFT $size (pojedyncza) / DFT $size (podwojna), $fitNote${looseCableWarning != null ? '. $looseCableWarning' : ''}';
+  }
+
+  String _hiltiPinRecommendation(_MountingSubstrate substrate) {
+    switch (substrate) {
+      case _MountingSubstrate.concrete:
+        return 'Gwozdzie X-U (dlugosc dobierz wg podloza i geometrii uchwytu).';
+      case _MountingSubstrate.steel:
+        return 'Gwozdzie X-P do stali (dobor wg grubosci blachy).';
+      case _MountingSubstrate.masonry:
+        return 'Mur/cegla: mocowanie strzelane tylko po probie; przewaznie mocowanie kotwione.';
+    }
+  }
+
+  String _hiltiShotFiredSelection(double cableDiameterMm) {
+    if (cableDiameterMm <= 10) {
+      return 'X-EKSC M8 (pojedynczy kabel)';
+    }
+    if (cableDiameterMm <= 14) {
+      return 'X-EKSC M10 (pojedynczy kabel)';
+    }
+    if (cableDiameterMm <= 22) {
+      return 'X-ECT-M M16 (mocowanie trasy/przewiazki)';
+    }
+    return 'X-ECT-M M20 (mocowanie trasy/przewiazki)';
+  }
+
+  String _shotFiredSubstrateNote(_MountingSubstrate substrate) {
+    switch (substrate) {
+      case _MountingSubstrate.concrete:
+        return 'Podloze beton: dobieraj systemowe gwozdzie producenta pod osadzak i klase betonu.';
+      case _MountingSubstrate.steel:
+        return 'Podloze stal: stosowac gwozdzie dedykowane do stali i kontrolowac grubosc blachy.';
+      case _MountingSubstrate.masonry:
+        return 'Podloze murowe: osprzet strzelany tylko po weryfikacji podloza; czesto lepszy montaz kotwiony.';
+    }
+  }
+
+  double _largestCableDimensionMm(CableData data) {
+    final flat = _flatDimensions(data);
+    if (flat == null) {
+      return data.outerDiameter;
+    }
+    return math.max(flat.a, flat.b);
+  }
+
+  int _selectNominalSize(double requiredMm, List<int> series) {
+    for (final value in series) {
+      if (value >= requiredMm) {
+        return value;
+      }
+    }
+    return series.isNotEmpty ? series.last : requiredMm.ceil();
+  }
+
+  /// Zakresy wg typowych katalogów (można doprecyzować pod producenta):
+  /// PG7: 3–6.5 mm
+  /// PG9: 4–8 mm
+  /// PG11: 5–10 mm
+  /// PG13.5: 6–12 mm
+  /// PG16: 10–14 mm
+  /// PG21: 13–18 mm
+  /// PG29: 18–25 mm
+  /// PG36: 25–33 mm
+  /// PG42: 32–38 mm
+  String _selectPgGland(double cableDiameterMm) {
+    if (cableDiameterMm <= 6.5) return 'PG7';
+    if (cableDiameterMm <= 8) return 'PG9';
+    if (cableDiameterMm <= 10) return 'PG11';
+    if (cableDiameterMm <= 12) return 'PG13.5';
+    if (cableDiameterMm <= 14) return 'PG16';
+    if (cableDiameterMm <= 18) return 'PG21';
+    if (cableDiameterMm <= 25) return 'PG29';
+    if (cableDiameterMm <= 33) return 'PG36';
+    if (cableDiameterMm <= 38) return 'PG42';
+    return 'PG48';
+  }
+
+  bool _requiresShotFiredMounting(CableData data) {
+    return data.application == CableApplication.fireproof ||
+        data.application == CableApplication.control ||
+        data.type == CableType.h07rnf ||
+        data.type == CableType.htksh;
+  }
+
+  bool _supportsUnderPlasterFlatClips(CableData data) {
+    return _isFlatCable(data) &&
+        data.application == CableApplication.electrical &&
+        data.groupNumber == 1;
+  }
+
+  bool _needsArotForGroundPower(CableData data) {
+    final isGround = _selectedWorkingCondition == WorkingCondition.ground;
+    final isPower = data.application == CableApplication.electrical ||
+        data.application == CableApplication.mediumVoltage;
+    final largeCrossSection = data.crossSection >= 16;
+    final typeName = data.type.name.toLowerCase();
+    final preferredType = typeName.contains('yky') ||
+        typeName.contains('yaky') ||
+        typeName.contains('hakxs') ||
+        typeName.contains('a2xsy') ||
+        typeName.contains('na2xsy');
+
+    return isGround && isPower && (largeCrossSection || preferredType);
+  }
+
+  List<_OfferRecommendationGroup> _buildOfferRecommendationGroups(
+    CableData data,
+    List<HeatShrinkTube> suggestedTubes,
+    List<int> rigidConduits,
+  ) {
+    final groups = <_OfferRecommendationGroup>[];
+    final largestDim = _largestCableDimensionMm(data);
+    final corrugatedSeries = [16, 20, 25, 32, 40, 50, 63, 75, 90];
+    final arotSeries = [50, 63, 75, 90, 110, 125, 160];
+    final corrugatedNominal = _selectNominalSize(largestDim * 1.4, corrugatedSeries);
+    final arotNominal = _selectNominalSize(largestDim * 1.7, arotSeries);
+    final shotFiredRequired = _requiresShotFiredMounting(data);
+    final flatCable = _isFlatCable(data);
+    final flatUnderPlasterAllowed = _supportsUnderPlasterFlatClips(data);
+
+    // FLAT CABLES: Only under-plaster clips, no glands/dławiki
+    if (flatCable) {
+      // Determine single/double cable for USMP model
+      final isDouble = (data.notes?.contains('2x') ?? false) || (data.usage?.contains('2x') ?? false);
+      final singleModel = 'USMP-3';
+      final doubleModel = 'USMP-3 BIS';
+      groups.add(
+        _OfferRecommendationGroup(
+          title: 'Uchwyty podtynkowe do kabli płaskich',
+          icon: Icons.push_pin,
+          items: [
+            'Pojedynczy kabel: $singleModel (Elektro-Plast Opatówek)',
+            'Podwójny kabel: $doubleModel (Elektro-Plast Opatówek)',
+            'Dobierz model wg szerokości kabla i liczby żył; patrz katalog producenta.',
+            'Mocowanie co 30-40 cm, gęściej przy załamaniach trasy.',
+          ],
+          note: 'Dla kabli płaskich YDYp, YDYt, itp. – stosuj wyłącznie uchwyty podtynkowe USMP serii Elektro-Plast Opatówek. Nie stosować dławików.',
+        ),
+      );
+      return groups;
+    }
+
+    // NON-FLAT: Standard logic (including glands/dławiki)
+    final pgSize = _selectPgGland(largestDim);
+    if (shotFiredRequired) {
+      groups.add(
+        _OfferRecommendationGroup(
+          title: 'Mocowanie strzelane',
+          icon: Icons.construction,
+          items: [
+            'Uchwyty szybkiego montażu płaskie: USMP-1, USMP-2, USMP-3 BIS, USMP-4, USMP-5, USMP-6, USMP-7, USMP-8, USMP-9, USMP-10 (dobierz rozmiar do szerokości kabla; np. USMP-3 BIS do 2x YDYp 3x1,5/3x2,5)',
+            'Podloze montazowe: ${_substrateLabel(_mountingSubstrate)}',
+            'Rozstaw montazu: zgodnie z dokumentacja producenta systemu mocujacego oraz projektem trasy',
+          ],
+          note:
+              'Dla pojedynczych przewodów na blaszkach/obejmach w praktyce często stosuje się rozstaw 25–30 cm, ale ostateczny dobór należy potwierdzić w projekcie i dokumentacji systemu mocującego.',
+        ),
+      );
+    }
+
+    groups.add(
+      _OfferRecommendationGroup(
+        title: 'Dławiki skręcane typu PG',
+        icon: Icons.settings_input_component,
+        items: [
+          'Zalecany rozmiar: $pgSize',
+          'Alternatywa: ${_selectPgGland(largestDim * 1.1)} (wiekszy zakres zacisku)',
+          'Wersja IP68 dla stref wilgotnych i zewnetrznych',
+        ],
+      ),
+    );
+
+    // Pokazuj tylko jedną najbardziej odpowiednią opcję rury termokurczliwej
+    String? bestTube;
+    if (suggestedTubes.isNotEmpty) {
+      bestTube = 'Katalogowe dopasowanie: ${suggestedTubes.first.description}';
+    } else if ((data.heatShrinkSleeve ?? '').isNotEmpty) {
+      bestTube = 'Podstawowa: ${data.heatShrinkSleeve}';
+    } else if ((data.heatShrinkLabel ?? '').isNotEmpty) {
+      bestTube = 'Alternatywa/znacznik: ${data.heatShrinkLabel}';
+    }
+    if (bestTube != null) {
+      groups.add(
+        _OfferRecommendationGroup(
+          title: 'Rury termokurczliwe',
+          icon: Icons.bolt,
+          items: [bestTube],
+        ),
+      );
+    }
+
+    if (!shotFiredRequired) {
+      groups.add(
+        _OfferRecommendationGroup(
+          title: 'Rury oslonowe sztywne',
+          icon: Icons.straighten,
+          items: [
+            if (rigidConduits.isNotEmpty)
+              'Podstawowa: DN ${rigidConduits.first} mm',
+            if (rigidConduits.length > 1)
+              'Alternatywa: DN ${rigidConduits[1]} mm',
+            if (rigidConduits.isEmpty)
+              'Brak jednoznacznej pozycji - sprawdz trase recznie',
+          ],
+        ),
+      );
+
+      groups.add(
+        _OfferRecommendationGroup(
+          title: 'Rury oslonowe karbowane',
+          icon: Icons.waves,
+          items: [
+            'Peszel/karbowana: fi $corrugatedNominal mm',
+            'Alternatywa: fi ${_selectNominalSize(corrugatedNominal * 1.2, corrugatedSeries).toInt()} mm',
+            'Wersja UV lub HF dla tras zewnetrznych / halogen free',
+          ],
+        ),
+      );
+    }
+
+    if (_needsArotForGroundPower(data)) {
+      groups.add(
+        _OfferRecommendationGroup(
+          title: 'Rury dwuwarstwowe AROT (ziemia)',
+          icon: Icons.route,
+          items: [
+            'Podstawowa: AROT DN $arotNominal',
+            'Alternatywa: AROT DN ${_selectNominalSize(arotNominal * 1.2, arotSeries).toInt()}',
+            'Stosowac z uszczelnieniem koncow i tasma ostrzegawcza',
+          ],
+          note:
+              'Dodatkowo rekomendowane dla duzych przekrojow kabli ziemnych (np. YKY/YAKY/YHAKXS).',
+        ),
+      );
+    }
+
+    if (flatUnderPlasterAllowed && !shotFiredRequired) {
+      groups.add(
+        _OfferRecommendationGroup(
+          title: 'Uchwyty podtynkowe dla kabli plaskich',
+          icon: Icons.push_pin,
+          items: [
+            'Uchwyt pojedynczy: pod ${_externalDimensionValue(data)}',
+            'Uchwyt podwojny: dla prowadzenia rownoleglego 2x kabel',
+            'Mocowanie co 30-40 cm, gestsze przy zalamaniach trasy',
+          ],
+        ),
+      );
+    }
+
+    return groups;
+  }
+
   Future<void> _copyResultToClipboard(CableData data) async {
     final dimensionLabel =
         _isFlatCable(data) ? 'Wymiary zewnetrzne' : 'Srednica zewnetrzna';
     final tubeStandard = CableDataProvider.suggestTubeStandardForCondition(
       _selectedWorkingCondition,
     );
-    final suggestedTubes = CableDataProvider.suggestTubesForCable(
-      data.outerDiameter,
-      _selectedWorkingCondition,
+    final suggestedTubes = _tubeRecommendationsForReserve(data);
+    final rigidConduits = _rigidConduitsForReserve(data);
+    final confidence = _confidenceLabel(data, suggestedTubes, rigidConduits);
+    final reason = _recommendationReason(data, tubeStandard, suggestedTubes);
+    final warnings = _buildRecommendationWarnings(
+      data,
+      suggestedTubes,
+      rigidConduits,
+      tubeStandard,
     );
-    final rigidConduits = CableDataProvider.suggestRigidConduitDiameters(
-      data.outerDiameter,
+    final rigidStandard = rigidConduits.isNotEmpty
+        ? 'DN ${rigidConduits.first} mm'
+        : 'Brak standardu';
+    final offerGroups = _buildOfferRecommendationGroups(
+      data,
+      suggestedTubes,
+      rigidConduits,
     );
+    final trayCapacity = _calculateTrayCapacity(data);
 
-    final textParts = <String>[
-      'Parametry techniczne',
-      'Grupa: ${CableData.typeGroupLabel(data.type)}',
-      'Typ kabla: ${CableData.typeToString(data.type)}',
-      'Zastosowanie: ${CableData.applicationToString(data.application)}',
-      'Material zyly: ${CableData.materialToString(data.material)}',
-      'Przekroj: ${data.crossSection} mm2',
-      'Ilosc zyl: ${CableData.wireConfigToString(data.wireConfiguration)}',
-      'Typ zyly: ${CableData.coreTypeToString(data.coreType)}',
-      '$dimensionLabel: ${_externalDimensionValue(data)}',
-      'Napiecie max: ${data.maxVoltage}',
-      'Zakres temperatur: ${data.temperatureRange}',
-    ];
 
-    if (_hasValue(data.cpr)) {
-      textParts.add('CPR/Ognioodpornosc: ${data.cpr!.trim()}');
+    final textParts = <String>[];
+    textParts.add('Zalecane materiały');
+    textParts.add('Profil pracy: ${_profileTitle(_selectedMaterialProfile)}');
+    textParts.add('Warunki pracy: ${CableData.workingConditionToString(_selectedWorkingCondition)}');
+    textParts.add('Zapas montażowy: ${_materialReservePercent.toStringAsFixed(0)}%');
+    if (confidence == 'Do weryfikacji') {
+      textParts.add('⚠️ Dobór materiałów wymaga weryfikacji!');
     }
-    if (_hasValue(data.insulation)) {
-      textParts.add('Izolacja/plaszcz: ${data.insulation!.trim()}');
-    }
-    if (_hasValue(data.halogenFree)) {
-      textParts.add('Halogen free: ${data.halogenFree!.trim()}');
-    }
-    if (_hasValue(data.usage)) {
-      textParts.add('Zastosowanie (zrodlo): ${data.usage!.trim()}');
-    }
-    if (_hasValue(data.notes)) {
-      textParts.add('Uwagi: ${data.notes!.trim()}');
-    }
-
-    textParts.addAll([
-      '',
-      'Zalecane materialy',
-      'Warunki pracy: ${CableData.workingConditionToString(_selectedWorkingCondition)}',
-      'Standard rury: ${HeatShrinkTube.standardToString(tubeStandard)}',
-      'Oslona (3:1): ${data.heatShrinkSleeve}',
-      'Znacznik (2:1): ${data.heatShrinkLabel}',
-    ]);
-
     if (suggestedTubes.isNotEmpty) {
-      final tubeValues = suggestedTubes
-          .take(4)
-          .map((tube) => tube.description)
-          .join(', ');
-      textParts.add('Dopasowane srednice (z zapasem 20%): $tubeValues');
+      textParts.add('Rura termokurczliwa: ${suggestedTubes.first.description}');
+    } else {
+      textParts.add('⚠️ Brak dopasowania rury termokurczliwej – sprawdź ręcznie!');
     }
-
     if (rigidConduits.isNotEmpty) {
-      final conduitValues = rigidConduits.map((d) => 'DN $d mm').join(', ');
-      textParts.add('Sugerowane rury sztywne (orientacyjnie): $conduitValues');
+      textParts.add('Rura sztywna: DN ${rigidConduits.first} mm');
+    } else {
+      textParts.add('⚠️ Brak dopasowania rury sztywnej – sprawdź trasę!');
     }
-
+    if (offerGroups.isNotEmpty) {
+      for (final group in offerGroups) {
+        textParts.add('- ${group.title}: ${group.items.join(' | ')}');
+        if (group.note != null && group.note!.trim().isNotEmpty) {
+          textParts.add('  Uwaga: ${group.note!}');
+        }
+      }
+    }
+    if (warnings.isNotEmpty) {
+      textParts.add('Ostrzeżenia: ${warnings.join(' | ')}');
+    }
+    if (_recommendationChangeReason != null) {
+      textParts.add(_recommendationChangeReason!);
+    }
     final text = textParts.join('\n');
 
     await Clipboard.setData(ClipboardData(text: text));
@@ -668,6 +1410,64 @@ class _CableSelectorScreenState extends State<CableSelectorScreen>
     }
     ScaffoldMessenger.of(context).showSnackBar(
       const SnackBar(content: Text('Parametry kabla skopiowane do schowka.')),
+    );
+  }
+
+  Future<void> _copyRecommendedMaterialsSet(CableData data) async {
+    final tubeStandard = CableDataProvider.suggestTubeStandardForCondition(
+      _selectedWorkingCondition,
+    );
+    final suggestedTubes = _tubeRecommendationsForReserve(data);
+    final rigidConduits = _rigidConduitsForReserve(data);
+    final rigidStandard =
+        rigidConduits.isNotEmpty ? 'DN ${rigidConduits.first} mm' : '-';
+    final offerGroups = _buildOfferRecommendationGroups(
+      data,
+      suggestedTubes,
+      rigidConduits,
+    );
+    final trayCapacity = _calculateTrayCapacity(data);
+
+    final kitLines = <String>[
+      'Zestaw materialow',
+      'Profil: ${_profileTitle(_selectedMaterialProfile)}',
+      'Warunki pracy: ${CableData.workingConditionToString(_selectedWorkingCondition)}',
+      'Zapas montazowy: ${_materialReservePercent.toStringAsFixed(0)}%',
+      'Standard rury: ${HeatShrinkTube.standardToString(tubeStandard)}',
+      'Rura termokurczliwa: ${data.heatShrinkSleeve} / ${data.heatShrinkLabel}',
+      'Standard rury sztywnej: $rigidStandard',
+      'Rura termokurczliwa: ${suggestedTubes.isNotEmpty ? suggestedTubes.first.description : '-'}',
+      'Rura termokurczliwa lub: ${suggestedTubes.length > 1 ? suggestedTubes[1].description : '-'}',
+      'Rura sztywna: ${rigidConduits.isNotEmpty ? 'DN ${rigidConduits.first} mm' : '-'}',
+      'Rura sztywna lub: ${rigidConduits.length > 1 ? 'DN ${rigidConduits[1]} mm' : '-'}',
+      if (offerGroups.isNotEmpty) ...[
+        '',
+        'Akcesoria i osprzet montazowy:',
+        'Podloze montazowe: ${_substrateLabel(_mountingSubstrate)}',
+        ...offerGroups.map((group) =>
+            '- ${group.title}: ${group.items.join(' | ')}${group.note != null ? ' [${group.note}]' : ''}'),
+      ],
+      '',
+      'Koryto kablowe: ${_trayWidthMm.toInt()}x${_trayHeightMm.toInt()} mm',
+      _trayNormReference,
+      'Maks. zajetosc: ${_trayMaxFillPercent.toStringAsFixed(0)}%',
+      'Maks. obciazenie: ${_trayMaxLoadKgPerM.toStringAsFixed(1)} kg/m',
+      'Temp. otoczenia: ${_trayAmbientTempC.toStringAsFixed(0)} C',
+      'Liczba obwodow zasilajacych: $_trayGroupedPowerCircuits',
+      'Koryto wentylowane: ${_trayVentilated ? 'tak' : 'nie'}',
+      'Mozliwa liczba kabli: ${trayCapacity.finalCount} szt.',
+      if (trayCapacity.isPowerCable)
+        'Korekty: kt=${trayCapacity.tempCorrection.toStringAsFixed(2)}, kg=${trayCapacity.groupingCorrection.toStringAsFixed(2)}, kv=${trayCapacity.ventilationCorrection.toStringAsFixed(2)}',
+      'Masa kabla: ${trayCapacity.cableMassKgPerM.toStringAsFixed(2)} kg/m (${trayCapacity.massFromDatabase ? 'z bazy' : 'szacowana'})',
+      'Czynnik ograniczajacy: ${_trayLimitingFactor(trayCapacity)}',
+    ];
+
+    await Clipboard.setData(ClipboardData(text: kitLines.join('\n')));
+    if (!mounted) {
+      return;
+    }
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('Zestaw materialow skopiowany do schowka.')),
     );
   }
 
@@ -741,8 +1541,37 @@ class _CableSelectorScreenState extends State<CableSelectorScreen>
   }
 
   void _onWorkingConditionSelected(WorkingCondition condition) {
+    final data = _result;
+    final before = data == null
+        ? null
+        : _buildRecommendationSnapshot(
+            data,
+            _selectedWorkingCondition,
+            _materialReservePercent,
+          );
+    final nextReason = data == null || before == null
+        ? null
+        : _buildRecommendationDeltaMessage(
+            before,
+            _buildRecommendationSnapshot(
+              data,
+              condition,
+              _materialReservePercent,
+            ),
+          );
+
     setState(() {
       _selectedWorkingCondition = condition;
+      if (condition == WorkingCondition.interior) {
+        _selectedMaterialProfile = _MaterialProfile.interior;
+      } else if (condition == WorkingCondition.ground) {
+        _selectedMaterialProfile = _MaterialProfile.underground;
+      } else if (_selectedMaterialProfile == _MaterialProfile.interior ||
+          _selectedMaterialProfile == _MaterialProfile.underground) {
+        _selectedMaterialProfile = _MaterialProfile.outdoorUv;
+      }
+      _previousRecommendation = before;
+      _recommendationChangeReason = nextReason;
     });
     _animationController.forward(from: 0);
   }
@@ -768,23 +1597,6 @@ class _CableSelectorScreenState extends State<CableSelectorScreen>
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                _buildDatabaseInfoBanner(),
-                const SizedBox(height: 12),
-                Text(
-                  'Baza kabli: szybkie wyszukiwanie',
-                  style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                        color: Colors.white,
-                        fontWeight: FontWeight.bold,
-                      ),
-                ),
-                const SizedBox(height: 8),
-                Text(
-                  'Filtruj po: zastosowanie, grupa, typ, ilosc zyl, przekroj.',
-                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                        color: Colors.grey[300],
-                      ),
-                ),
-                const SizedBox(height: 16),
                 _buildApplicationSelection(),
                 if (_selectedApplication != null) ...[
                   const SizedBox(height: 24),
@@ -815,37 +1627,6 @@ class _CableSelectorScreenState extends State<CableSelectorScreen>
             ),
           ),
         ),
-      ),
-    );
-  }
-
-  Widget _buildDatabaseInfoBanner() {
-    final total = _databaseStats['totalRecords'] ?? 0;
-    final imported = _databaseStats['localImportedRecords'] ?? 0;
-
-    return Container(
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: _cardNavy,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: _amber.withOpacity(0.4)),
-      ),
-      child: Row(
-        children: [
-          Icon(
-            _databaseInitialized ? Icons.storage : Icons.hourglass_top,
-            color: _amber,
-          ),
-          const SizedBox(width: 10),
-          Expanded(
-            child: Text(
-              _databaseInitialized
-                  ? 'Lokalna baza aktywna: $total rekordow (dodatkowe z assets: $imported).'
-                  : 'Inicjalizacja lokalnej bazy danych...',
-              style: const TextStyle(color: Colors.white),
-            ),
-          ),
-        ],
       ),
     );
   }
@@ -1122,10 +1903,7 @@ class _CableSelectorScreenState extends State<CableSelectorScreen>
   }
 
   Widget _buildTypeSelection() {
-    final groups = _getAvailableGroupNumbersForCurrentSelection();
-    final voltages = _getAvailableVoltagesForCurrentSelection();
     final types = _getFilteredTypes();
-    final activeFilters = _activeFilterCount();
     final quickSearches = const <String>[
       'yky',
       'n2xh',
@@ -1153,29 +1931,12 @@ class _CableSelectorScreenState extends State<CableSelectorScreen>
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Row(
-          children: [
-            Expanded(
-              child: Text(
-                'Wyszukiwanie i filtry',
-                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                      color: Colors.grey[300],
-                      fontWeight: FontWeight.w700,
-                    ),
+        Text(
+          'Wyszukiwanie',
+          style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                color: Colors.grey[300],
+                fontWeight: FontWeight.w700,
               ),
-            ),
-            TextButton.icon(
-              onPressed: () => _openMobileFilterSheet(groups, voltages),
-              icon: const Icon(Icons.tune, size: 18),
-              label: Text(
-                  activeFilters > 0 ? 'Filtry ($activeFilters)' : 'Filtry'),
-            ),
-            if (activeFilters > 0)
-              TextButton(
-                onPressed: _clearTypeFilters,
-                child: const Text('Wyczysc'),
-              ),
-          ],
         ),
         const SizedBox(height: 12),
         TextField(
@@ -1195,12 +1956,7 @@ class _CableSelectorScreenState extends State<CableSelectorScreen>
                 : IconButton(
                     tooltip: 'Wyczysc wyszukiwanie',
                     icon: const Icon(Icons.close, color: Colors.white70),
-                    onPressed: () {
-                      setState(() {
-                        _typeSearchQuery = '';
-                        _typeSearchController.clear();
-                      });
-                    },
+                    onPressed: _clearTypeSearch,
                   ),
             filled: true,
             fillColor: _cardNavy,
@@ -1481,18 +2237,32 @@ class _CableSelectorScreenState extends State<CableSelectorScreen>
   Widget _buildResult() {
     if (_result == null) return const SizedBox.shrink();
 
+    final selectedData = _result!;
     final matchingVariants = _getMatchingVariants();
 
     final tubeStandard = CableDataProvider.suggestTubeStandardForCondition(
       _selectedWorkingCondition,
     );
-    final suggestedTubes = CableDataProvider.suggestTubesForCable(
-      _result!.outerDiameter,
-      _selectedWorkingCondition,
+    final suggestedTubes = _tubeRecommendationsForReserve(selectedData);
+    final rigidConduits = _rigidConduitsForReserve(selectedData);
+    final confidence =
+        _confidenceLabel(selectedData, suggestedTubes, rigidConduits);
+    final recommendationReason =
+        _recommendationReason(selectedData, tubeStandard, suggestedTubes);
+    final recommendationWarnings = _buildRecommendationWarnings(
+      selectedData,
+      suggestedTubes,
+      rigidConduits,
+      tubeStandard,
     );
-    final rigidConduits =
-        CableDataProvider.suggestRigidConduitDiameters(_result!.outerDiameter);
-    final quality = _qualityLabel(_result!);
+    final offerGroups = _buildOfferRecommendationGroups(
+      selectedData,
+      suggestedTubes,
+      rigidConduits,
+    );
+    final shotFiredRequired = _requiresShotFiredMounting(selectedData);
+    final trayCapacity = _calculateTrayCapacity(selectedData);
+    final quality = _qualityLabel(selectedData);
 
     return SlideTransition(
       position: Tween<Offset>(
@@ -1698,14 +2468,65 @@ class _CableSelectorScreenState extends State<CableSelectorScreen>
                   ],
                 ],
                 const Divider(height: 32, color: Colors.grey),
-                Text(
-                  'Zalecane materiały',
-                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                        color: _amber,
-                        fontWeight: FontWeight.bold,
+                Row(
+                  children: [
+                    Expanded(
+                      child: Text(
+                        'Zalecane materiały',
+                        style:
+                            Theme.of(context).textTheme.titleMedium?.copyWith(
+                                  color: _amber,
+                                  fontWeight: FontWeight.bold,
+                                ),
                       ),
+                    ),
+                    TextButton.icon(
+                      onPressed: () =>
+                          _copyRecommendedMaterialsSet(selectedData),
+                      icon: const Icon(Icons.inventory_2_outlined, size: 18),
+                      label: const Text('Kopiuj zestaw'),
+                    ),
+                  ],
                 ),
                 const SizedBox(height: 12),
+                Text(
+                  'Profile środowiska',
+                  style: TextStyle(
+                    color: Colors.grey[300],
+                    fontSize: 13,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+                const SizedBox(height: 8),
+                Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
+                  children: _MaterialProfile.values.map((profile) {
+                    final isSelected = _selectedMaterialProfile == profile;
+                    return ChoiceChip(
+                      label: Text(_profileTitle(profile)),
+                      selected: isSelected,
+                      onSelected: (_) => _applyMaterialProfile(profile),
+                      selectedColor: _electricBlue,
+                      labelStyle: TextStyle(
+                        color: isSelected ? Colors.white : Colors.white70,
+                        fontWeight:
+                            isSelected ? FontWeight.bold : FontWeight.normal,
+                      ),
+                      avatar: Icon(
+                        Icons.tune,
+                        size: 14,
+                        color: isSelected ? _amber : Colors.white54,
+                      ),
+                    );
+                  }).toList(),
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  _profileHint(_selectedMaterialProfile),
+                  style: TextStyle(color: Colors.grey[400], fontSize: 12),
+                ),
+                const SizedBox(height: 14),
                 Wrap(
                   spacing: 8,
                   runSpacing: 8,
@@ -1715,111 +2536,103 @@ class _CableSelectorScreenState extends State<CableSelectorScreen>
                       )
                       .toList(),
                 ),
-                const SizedBox(height: 16),
-                _buildResultRow(
-                  'Standard rury',
-                  HeatShrinkTube.standardToString(tubeStandard),
-                  Icons.rule,
+                const SizedBox(height: 14),
+                Text(
+                  'Zapas montazowy: ${_materialReservePercent.toStringAsFixed(0)}%',
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 13,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+                Slider(
+                  value: _materialReservePercent,
+                  min: 10,
+                  max: 35,
+                  divisions: 5,
+                  activeColor: _amber,
+                  inactiveColor: Colors.grey[700],
+                  label: '${_materialReservePercent.toStringAsFixed(0)}%',
+                  onChanged: _onReserveChanged,
                 ),
                 const SizedBox(height: 8),
-                _buildTubeStandardBadge(tubeStandard),
-                const SizedBox(height: 16),
-                Text(
-                  'Rekomendowane rury',
-                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                        color: _amber,
-                        fontWeight: FontWeight.bold,
+                Row(
+                  children: [
+                    _buildConfidenceBadge(confidence),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        recommendationReason,
+                        style: TextStyle(
+                          color: Colors.grey[300],
+                          fontSize: 12,
+                          fontStyle: FontStyle.italic,
+                        ),
                       ),
+                    ),
+                  ],
                 ),
-                const SizedBox(height: 12),
-                _buildResultRow(
-                  'Osłona (3:1)',
-                  _result!.heatShrinkSleeve,
-                  Icons.water_drop,
-                ),
-                const SizedBox(height: 12),
-                _buildResultRow(
-                  'Znacznik (2:1)',
-                  _result!.heatShrinkLabel,
-                  Icons.label,
-                ),
-                if (suggestedTubes.isNotEmpty) ...[
+                if (_recommendationChangeReason != null) ...[
+                  const SizedBox(height: 10),
+                  _buildInfoBanner(
+                    _previousRecommendation == null
+                        ? _recommendationChangeReason!
+                        : '${_recommendationChangeReason!} Poprzednio: ${_previousRecommendation!.standard}, ${_previousRecommendation!.topTube}.',
+                    icon: Icons.compare_arrows,
+                    borderColor: _electricBlue,
+                  ),
+                ],
+                if (recommendationWarnings.isNotEmpty) ...[
+                  const SizedBox(height: 10),
+                  _buildInfoBanner(
+                    recommendationWarnings.join(' '),
+                    icon: Icons.warning_amber_rounded,
+                    borderColor: const Color(0xFFFF6B6B),
+                  ),
+                ],
+                if (offerGroups.isNotEmpty) ...[
                   const SizedBox(height: 16),
                   Text(
-                    'Dopasowane średnice (z zapasem 20%)',
+                    'Akcesoria i osprzet montazowy',
                     style: TextStyle(
                       color: Colors.grey[300],
                       fontSize: 13,
                       fontWeight: FontWeight.w600,
                     ),
                   ),
-                  const SizedBox(height: 8),
-                  Wrap(
-                    spacing: 8,
-                    runSpacing: 8,
-                    children: suggestedTubes
-                        .take(4)
-                        .map(
-                          (tube) => Container(
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 10,
-                              vertical: 6,
-                            ),
-                            decoration: BoxDecoration(
-                              color: _deepNavy,
-                              borderRadius: BorderRadius.circular(8),
-                              border: Border.all(color: Colors.grey[700]!),
-                            ),
-                            child: Text(
-                              tube.description,
-                              style: const TextStyle(
-                                color: Colors.white,
-                                fontSize: 12,
-                              ),
-                            ),
-                          ),
-                        )
-                        .toList(),
-                  ),
-                ],
-                if (rigidConduits.isNotEmpty) ...[
-                  const SizedBox(height: 16),
-                  Text(
-                    'Sugerowane rury sztywne (orientacyjnie)',
-                    style: TextStyle(
-                      color: Colors.grey[300],
-                      fontSize: 13,
-                      fontWeight: FontWeight.w600,
+                  if (shotFiredRequired) ...[
+                    const SizedBox(height: 8),
+                    Text(
+                      'Podloze dla mocowania strzelanego',
+                      style: TextStyle(
+                        color: Colors.grey[300],
+                        fontSize: 12,
+                        fontWeight: FontWeight.w600,
+                      ),
                     ),
-                  ),
+                    const SizedBox(height: 6),
+                    Wrap(
+                      spacing: 8,
+                      runSpacing: 8,
+                      children: _MountingSubstrate.values.map((substrate) {
+                        final selected = _mountingSubstrate == substrate;
+                        return ChoiceChip(
+                          label: Text(_substrateLabel(substrate)),
+                          selected: selected,
+                          onSelected: (_) {
+                            setState(() {
+                              _mountingSubstrate = substrate;
+                            });
+                          },
+                        );
+                      }).toList(),
+                    ),
+                  ],
                   const SizedBox(height: 8),
-                  Wrap(
-                    spacing: 8,
-                    runSpacing: 8,
-                    children: rigidConduits
-                        .map(
-                          (d) => Container(
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 10,
-                              vertical: 6,
-                            ),
-                            decoration: BoxDecoration(
-                              color: _deepNavy,
-                              borderRadius: BorderRadius.circular(8),
-                              border: Border.all(color: Colors.grey[700]!),
-                            ),
-                            child: Text(
-                              'DN $d mm',
-                              style: const TextStyle(
-                                color: Colors.white,
-                                fontSize: 12,
-                              ),
-                            ),
-                          ),
-                        )
-                        .toList(),
-                  ),
+                  ...offerGroups.map(_buildOfferRecommendationGroupCard),
                 ],
+                const SizedBox(height: 18),
+                _buildCableTraySection(selectedData, trayCapacity),
                 const SizedBox(height: 8),
               ],
             ),
@@ -1855,41 +2668,335 @@ class _CableSelectorScreenState extends State<CableSelectorScreen>
     );
   }
 
-  Widget _buildTubeStandardBadge(HeatShrinkStandard standard) {
-    final color = _getTubeStandardColor(standard);
-    final shortLabel = standard.name.toUpperCase();
-
-    return Align(
-      alignment: Alignment.centerLeft,
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-        decoration: BoxDecoration(
-          color: color.withOpacity(0.18),
-          borderRadius: BorderRadius.circular(999),
-          border: Border.all(color: color, width: 1.4),
-        ),
-        child: Text(
-          shortLabel,
-          style: TextStyle(
-            color: color,
-            fontWeight: FontWeight.bold,
-            fontSize: 12,
-            letterSpacing: 0.5,
-          ),
+  Widget _buildConfidenceBadge(String confidence) {
+    final color = _confidenceColor(confidence);
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+      decoration: BoxDecoration(
+        color: color.withOpacity(0.2),
+        borderRadius: BorderRadius.circular(999),
+        border: Border.all(color: color),
+      ),
+      child: Text(
+        'Pewność: $confidence',
+        style: TextStyle(
+          color: color,
+          fontWeight: FontWeight.w700,
+          fontSize: 12,
         ),
       ),
     );
   }
 
-  Color _getTubeStandardColor(HeatShrinkStandard standard) {
-    switch (standard) {
-      case HeatShrinkStandard.rc:
-        return const Color(0xFF4FC3F7);
-      case HeatShrinkStandard.rck:
-        return _amber;
-      case HeatShrinkStandard.rgk:
-        return const Color(0xFFFF6B6B);
-    }
+  Widget _buildInfoBanner(
+    String text, {
+    required IconData icon,
+    required Color borderColor,
+  }) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(10),
+      decoration: BoxDecoration(
+        color: _deepNavy,
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: borderColor.withOpacity(0.75)),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Icon(icon, color: borderColor, size: 16),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(
+              text,
+              style: TextStyle(color: Colors.grey[200], fontSize: 12),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildOfferRecommendationGroupCard(_OfferRecommendationGroup group) {
+    return Container(
+      width: double.infinity,
+      margin: const EdgeInsets.only(bottom: 8),
+      padding: const EdgeInsets.all(10),
+      decoration: BoxDecoration(
+        color: _deepNavy,
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: Colors.grey[700]!),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(group.icon, color: _electricBlue, size: 16),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  group.title,
+                  style: TextStyle(
+                    color: Colors.grey[200],
+                    fontSize: 13,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          ...group.items.map(
+            (item) => Padding(
+              padding: const EdgeInsets.only(bottom: 4),
+              child: Text(
+                '- $item',
+                style: TextStyle(color: Colors.grey[300], fontSize: 12),
+              ),
+            ),
+          ),
+          if (group.note != null && group.note!.trim().isNotEmpty) ...[
+            const SizedBox(height: 2),
+            Text(
+              'Uwaga: ${group.note!}',
+              style: TextStyle(
+                color: Colors.orange[200],
+                fontSize: 11,
+                fontStyle: FontStyle.italic,
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
+  Widget _buildCableTraySection(CableData data, _TrayCapacityResult result) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: _deepNavy,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: _electricBlue.withOpacity(0.6)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'Koryto kablowe',
+            style: TextStyle(
+              color: _amber,
+              fontWeight: FontWeight.bold,
+              fontSize: 14,
+            ),
+          ),
+          const SizedBox(height: 6),
+          Text(
+            _trayNormReference,
+            style: TextStyle(color: Colors.grey[400], fontSize: 11),
+          ),
+          const SizedBox(height: 10),
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: _trayPresets.map((preset) {
+              final selected = _trayHeightMm == preset.heightMm &&
+                  _trayWidthMm == preset.widthMm;
+              return ChoiceChip(
+                label: Text(preset.label),
+                selected: selected,
+                onSelected: (_) {
+                  setState(() {
+                    _trayHeightMm = preset.heightMm;
+                    _trayWidthMm = preset.widthMm;
+                  });
+                },
+              );
+            }).toList(),
+          ),
+          const SizedBox(height: 12),
+          _buildResultRow(
+            'Rozmiar koryta',
+            '${_trayWidthMm.toInt()}x${_trayHeightMm.toInt()} mm',
+            Icons.view_week,
+          ),
+          const SizedBox(height: 10),
+          Text(
+            'Maks. zajetosc: ${_trayMaxFillPercent.toStringAsFixed(0)}%',
+            style: TextStyle(color: Colors.grey[300], fontSize: 12),
+          ),
+          if (_trayMaxFillPercent > 50)
+            Padding(
+              padding: const EdgeInsets.only(bottom: 4.0),
+              child: Text(
+                'Ostrzeżenie: Zajętość koryta przekracza 50%. Zalecane maksimum wg PN-EN 61537:2007 i praktyki branżowej to 40–50%. Przekroczenie może prowadzić do przegrzewania kabli i problemów z montażem.',
+                style: TextStyle(color: Colors.redAccent, fontSize: 12, fontWeight: FontWeight.bold),
+              ),
+            ),
+          Slider(
+            value: _trayMaxFillPercent,
+            min: 25,
+            max: 60,
+            divisions: 7,
+            activeColor: _amber,
+            inactiveColor: Colors.grey[700],
+            label: '${_trayMaxFillPercent.toStringAsFixed(0)}%',
+            onChanged: (value) {
+              setState(() {
+                _trayMaxFillPercent = value;
+              });
+            },
+          ),
+          Text(
+            'Maks. obciazenie: ${_trayMaxLoadKgPerM.toStringAsFixed(1)} kg/m',
+            style: TextStyle(color: Colors.grey[300], fontSize: 12),
+          ),
+          Slider(
+            value: _trayMaxLoadKgPerM,
+            min: 5,
+            max: 120,
+            divisions: 23,
+            activeColor: _amber,
+            inactiveColor: Colors.grey[700],
+            label: '${_trayMaxLoadKgPerM.toStringAsFixed(1)} kg/m',
+            onChanged: (value) {
+              setState(() {
+                _trayMaxLoadKgPerM = value;
+              });
+            },
+          ),
+          Text(
+            'Temp. otoczenia: ${_trayAmbientTempC.toStringAsFixed(0)} C',
+            style: TextStyle(color: Colors.grey[300], fontSize: 12),
+          ),
+          Slider(
+            value: _trayAmbientTempC,
+            min: 20,
+            max: 55,
+            divisions: 7,
+            activeColor: _amber,
+            inactiveColor: Colors.grey[700],
+            label: '${_trayAmbientTempC.toStringAsFixed(0)} C',
+            onChanged: (value) {
+              setState(() {
+                _trayAmbientTempC = value;
+              });
+            },
+          ),
+          Row(
+            children: [
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Liczba obwodow zasilajacych: $_trayGroupedPowerCircuits',
+                      style: TextStyle(color: Colors.grey[300], fontSize: 12),
+                    ),
+                    SizedBox(height: 2),
+                    Text(
+                      'Adnotacja: Liczba obwodów zasilających oznacza ilość niezależnych obwodów energetycznych prowadzonych wspólnie w jednym korycie. Wartość ta wpływa na współczynnik korekcyjny prądów obciążenia (wg PN-EN 61537:2007).',
+                      style: TextStyle(color: Colors.grey[500], fontSize: 11, fontStyle: FontStyle.italic),
+                    ),
+                  ],
+                ),
+              ),
+              IconButton(
+                tooltip: 'Zmniejsz',
+                onPressed: _trayGroupedPowerCircuits > 1
+                    ? () {
+                        setState(() {
+                          _trayGroupedPowerCircuits -= 1;
+                        });
+                      }
+                    : null,
+                icon: const Icon(Icons.remove_circle_outline),
+              ),
+              IconButton(
+                tooltip: 'Zwieksz',
+                onPressed: _trayGroupedPowerCircuits < 6
+                    ? () {
+                        setState(() {
+                          _trayGroupedPowerCircuits += 1;
+                        });
+                      }
+                    : null,
+                icon: const Icon(Icons.add_circle_outline),
+              ),
+            ],
+          ),
+          SwitchListTile(
+            contentPadding: EdgeInsets.zero,
+            value: _trayVentilated,
+            activeColor: _amber,
+            title: const Text(
+              'Koryto wentylowane',
+              style: TextStyle(color: Colors.white, fontSize: 13),
+            ),
+            subtitle: Text(
+              _trayVentilated
+                  ? 'Koryto perforowane/siatkowe/drabinkowe (z otworami, lepsze chlodzenie kabli)'
+                  : 'Koryto zamkniete/pelne (bez otworow – silniejsze korekty termiczne)',
+              style: TextStyle(color: Colors.grey[400], fontSize: 11),
+            ),
+            onChanged: (value) {
+              setState(() {
+                _trayVentilated = value;
+              });
+            },
+          ),
+          const SizedBox(height: 8),
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.all(10),
+            decoration: BoxDecoration(
+              color: _cardNavy,
+              borderRadius: BorderRadius.circular(10),
+              border: Border.all(color: _amber.withOpacity(0.8)),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'W wybranym korycie zmiesci sie: ${result.finalCount} szt. (${CableData.typeToString(data.type)})',
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontWeight: FontWeight.bold,
+                    fontSize: 13,
+                  ),
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  'Limit zajetosci: ${result.maxByFill} szt. | limit obciazenia: ${result.maxByLoad} szt.',
+                  style: TextStyle(color: Colors.grey[300], fontSize: 12),
+                ),
+                if (result.isPowerCable)
+                  Text(
+                    'Limit termiczny: ${result.maxByThermal} szt. (wspolczynnik ${result.thermalFactor.toStringAsFixed(2)})',
+                    style: TextStyle(color: Colors.grey[300], fontSize: 12),
+                  ),
+                if (result.isPowerCable)
+                  Text(
+                    'Korekty normatywne: kt=${result.tempCorrection.toStringAsFixed(2)}, kg=${result.groupingCorrection.toStringAsFixed(2)}, kv=${result.ventilationCorrection.toStringAsFixed(2)}',
+                    style: TextStyle(color: Colors.grey[300], fontSize: 12),
+                  ),
+                Text(
+                  'Czynnik ograniczajacy: ${_trayLimitingFactor(result)}',
+                  style: TextStyle(color: Colors.grey[300], fontSize: 12),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  'Masa kabla: ${result.cableMassKgPerM.toStringAsFixed(2)} kg/m (${result.massFromDatabase ? 'z bazy' : 'szacowana'})',
+                  style: TextStyle(color: Colors.grey[400], fontSize: 11),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
   }
 
   Widget _buildWorkingConditionChip(WorkingCondition condition) {
