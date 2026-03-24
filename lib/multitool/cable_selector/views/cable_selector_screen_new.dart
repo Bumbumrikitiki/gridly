@@ -19,8 +19,6 @@ class _CableSelectorScreenState extends State<CableSelectorScreen>
 
   CableApplication? _selectedApplication;
   CableMaterial? _selectedMaterial;
-  int? _selectedGroupNumber;
-  String? _selectedVoltageFilter;
   String _typeSearchQuery = '';
   CableType? _selectedType;
   WireConfiguration? _selectedWireConfiguration;
@@ -78,8 +76,6 @@ class _CableSelectorScreenState extends State<CableSelectorScreen>
       _selectedApplication = app;
       _selectedMaterial =
           availableMaterials.length == 1 ? availableMaterials.first : null;
-      _selectedGroupNumber = null;
-      _selectedVoltageFilter = null;
       _typeSearchQuery = '';
       _selectedType = null;
       _selectedWireConfiguration = null;
@@ -104,8 +100,6 @@ class _CableSelectorScreenState extends State<CableSelectorScreen>
   void _onMaterialSelected(CableMaterial material) {
     setState(() {
       _selectedMaterial = material;
-      _selectedGroupNumber = null;
-      _selectedVoltageFilter = null;
       _typeSearchQuery = '';
       _selectedType = null;
       _selectedWireConfiguration = null;
@@ -151,29 +145,17 @@ class _CableSelectorScreenState extends State<CableSelectorScreen>
     );
   }
 
-  List<int> _getAvailableGroupNumbersForCurrentSelection() {
-    final groups = _getBaseTypesForCurrentSelection()
-        .map(CableData.typeGroupNumber)
-        .toSet()
-        .toList();
-    groups.sort();
-    return groups;
-  }
-
   List<CableType> _getFilteredTypes() {
     final query = _normalizeToken(_typeSearchQuery);
     final tokens = _extractSearchTokens(query);
-    final filtered = _getBaseTypesForCurrentSelection().where((type) {
-      if (_selectedGroupNumber != null &&
-          CableData.typeGroupNumber(type) != _selectedGroupNumber) {
-        return false;
-      }
 
-      if (_selectedVoltageFilter != null &&
-          !_typeMatchesVoltage(type, _selectedVoltageFilter!)) {
-        return false;
-      }
+    // Gdy jest aktywna fraza – szukamy globalnie po wszystkich typach kabli.
+    // Gdy brak frazy – filtrujemy tylko typy dla wybranego zastosowania i materiału.
+    final baseTypes = query.isNotEmpty
+        ? CableType.values
+        : _getBaseTypesForCurrentSelection();
 
+    final filtered = baseTypes.where((type) {
       if (query.isEmpty) {
         return true;
       }
@@ -342,190 +324,68 @@ class _CableSelectorScreenState extends State<CableSelectorScreen>
     }
   }
 
-  int _activeFilterCount() {
-    var count = 0;
-    if (_selectedGroupNumber != null) {
-      count += 1;
-    }
-    if (_selectedVoltageFilter != null) {
-      count += 1;
-    }
-    if (_typeSearchQuery.trim().isNotEmpty) {
-      count += 1;
-    }
-    return count;
-  }
+  void _openTypeSearchDialog() {
+    final controller = TextEditingController(text: _typeSearchQuery);
 
-  void _applyQuickSearchChip(String value) {
-    setState(() {
-      _typeSearchQuery = value;
-      _typeSearchController.text = value;
-      _typeSearchController.selection =
-          TextSelection.collapsed(offset: value.length);
-    });
-  }
-
-  void _clearTypeFilters() {
-    setState(() {
-      _selectedGroupNumber = null;
-      _selectedVoltageFilter = null;
-      _typeSearchQuery = '';
-      _typeSearchController.clear();
-    });
-  }
-
-  void _openMobileFilterSheet(List<int> groups, List<String> voltages) {
-    var tempGroup = _selectedGroupNumber;
-    var tempVoltage = _selectedVoltageFilter;
-
-    showModalBottomSheet<void>(
+    showDialog<void>(
       context: context,
-      isScrollControlled: true,
-      backgroundColor: _cardNavy,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(18)),
-      ),
       builder: (context) {
-        return StatefulBuilder(
-          builder: (context, setModalState) {
-            return SafeArea(
-              child: Padding(
-                padding: const EdgeInsets.fromLTRB(16, 14, 16, 20),
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(
-                      children: [
-                        const Icon(Icons.tune, color: Colors.white),
-                        const SizedBox(width: 8),
-                        const Expanded(
-                          child: Text(
-                            'Filtry',
-                            style: TextStyle(
-                              color: Colors.white,
-                              fontSize: 18,
-                              fontWeight: FontWeight.bold,
-                            ),
-                          ),
-                        ),
-                        TextButton(
-                          onPressed: () {
-                            setModalState(() {
-                              tempGroup = null;
-                              tempVoltage = null;
-                            });
-                          },
-                          child: const Text('Wyczysc'),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 10),
-                    const Text('Grupa',
-                        style: TextStyle(color: Colors.white70)),
-                    const SizedBox(height: 8),
-                    Wrap(
-                      spacing: 8,
-                      runSpacing: 8,
-                      children: [
-                        ChoiceChip(
-                          label: const Text('Wszystkie'),
-                          selected: tempGroup == null,
-                          onSelected: (_) =>
-                              setModalState(() => tempGroup = null),
-                        ),
-                        for (final group in groups)
-                          ChoiceChip(
-                            label: Text('Grupa $group'),
-                            selected: tempGroup == group,
-                            onSelected: (_) =>
-                                setModalState(() => tempGroup = group),
-                          ),
-                      ],
-                    ),
-                    const SizedBox(height: 14),
-                    const Text('Napiecie',
-                        style: TextStyle(color: Colors.white70)),
-                    const SizedBox(height: 8),
-                    Wrap(
-                      spacing: 8,
-                      runSpacing: 8,
-                      children: [
-                        ChoiceChip(
-                          label: const Text('Wszystkie'),
-                          selected: tempVoltage == null,
-                          onSelected: (_) =>
-                              setModalState(() => tempVoltage = null),
-                        ),
-                        for (final voltage in voltages)
-                          ChoiceChip(
-                            label: Text(voltage),
-                            selected: tempVoltage == voltage,
-                            onSelected: (_) =>
-                                setModalState(() => tempVoltage = voltage),
-                          ),
-                      ],
-                    ),
-                    const SizedBox(height: 16),
-                    SizedBox(
-                      width: double.infinity,
-                      child: ElevatedButton.icon(
-                        onPressed: () {
-                          setState(() {
-                            _selectedGroupNumber = tempGroup;
-                            _selectedVoltageFilter = tempVoltage;
-                          });
-                          Navigator.of(context).pop();
-                        },
-                        icon: const Icon(Icons.check),
-                        label: const Text('Zastosuj'),
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: _electricBlue,
-                          foregroundColor: Colors.white,
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            );
-          },
+        return AlertDialog(
+          backgroundColor: _cardNavy,
+          title: const Text(
+            'Szukaj typu kabla',
+            style: TextStyle(color: Colors.white),
+          ),
+          content: TextField(
+            controller: controller,
+            autofocus: true,
+            style: const TextStyle(color: Colors.white),
+            decoration: InputDecoration(
+              hintText: 'np. yky 3x2.5, n2xh, utp6',
+              hintStyle: TextStyle(color: Colors.grey[400]),
+              prefixIcon: const Icon(Icons.search, color: Colors.white70),
+              filled: true,
+              fillColor: _deepNavy,
+              border: const OutlineInputBorder(),
+            ),
+            onSubmitted: (value) {
+              setState(() {
+                _typeSearchQuery = value.trim();
+                _typeSearchController.text = _typeSearchQuery;
+              });
+              Navigator.of(context).pop();
+            },
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(),
+              child: const Text('Anuluj'),
+            ),
+            TextButton(
+              onPressed: () {
+                setState(() {
+                  _typeSearchQuery = '';
+                  _typeSearchController.clear();
+                });
+                Navigator.of(context).pop();
+              },
+              child: const Text('Wyczysc'),
+            ),
+            ElevatedButton.icon(
+              onPressed: () {
+                setState(() {
+                  _typeSearchQuery = controller.text.trim();
+                  _typeSearchController.text = _typeSearchQuery;
+                });
+                Navigator.of(context).pop();
+              },
+              icon: const Icon(Icons.search),
+              label: const Text('Szukaj'),
+            ),
+          ],
         );
       },
     );
-  }
-
-  List<String> _getAvailableVoltagesForCurrentSelection() {
-    final values = <String>{};
-    for (final type in _getBaseTypesForCurrentSelection()) {
-      if (_selectedMaterial == null) {
-        continue;
-      }
-      final variants = CableDataProvider.getCableVariants(
-        _selectedMaterial!,
-        type,
-      );
-      if (variants.isEmpty) {
-        continue;
-      }
-      for (final data in variants) {
-        values.add(data.maxVoltage);
-      }
-    }
-    final list = values.toList();
-    list.sort();
-    return list;
-  }
-
-  bool _typeMatchesVoltage(CableType type, String voltage) {
-    if (_selectedMaterial == null) {
-      return false;
-    }
-    final variants = CableDataProvider.getCableVariants(
-      _selectedMaterial!,
-      type,
-    );
-    return variants.any((data) => data.maxVoltage == voltage);
   }
 
   String _qualityLabel(CableData data) {
@@ -584,7 +444,34 @@ class _CableSelectorScreenState extends State<CableSelectorScreen>
     }
 
     // Wymiar zewnętrzny pobieramy z kolumny d zaimportowanej do outerDiameter.
-    return '${data.outerDiameter} mm';
+    return '${_formatNumber(data.outerDiameter)} mm';
+  }
+
+  String _formatNumber(double value, {int maxFractionDigits = 2}) {
+    final fixed = value.toStringAsFixed(maxFractionDigits);
+    return fixed.replaceFirst(RegExp(r'([.,]\\d*?)0+$'), r'$1').replaceFirst(
+      RegExp(r'[.,]$'),
+      '',
+    );
+  }
+
+  String _normalizedText(String? value) {
+    if (!_hasValue(value)) {
+      return '-';
+    }
+    return value!.trim();
+  }
+
+  String _formatCrossSection(double crossSection) {
+    return '${_formatNumber(crossSection)} mm²';
+  }
+
+  String _formatVoltage(String? value) {
+    return _normalizedText(value);
+  }
+
+  String _formatTemperature(String? value) {
+    return _normalizedText(value);
   }
 
   Color _qualityColor(String quality) {
@@ -601,67 +488,32 @@ class _CableSelectorScreenState extends State<CableSelectorScreen>
   Future<void> _copyResultToClipboard(CableData data) async {
     final dimensionLabel =
         _isFlatCable(data) ? 'Wymiary zewnetrzne' : 'Srednica zewnetrzna';
-    final tubeStandard = CableDataProvider.suggestTubeStandardForCondition(
-      _selectedWorkingCondition,
-    );
-    final suggestedTubes = CableDataProvider.suggestTubesForCable(
-      data.outerDiameter,
-      _selectedWorkingCondition,
-    );
-    final rigidConduits = CableDataProvider.suggestRigidConduitDiameters(
-      data.outerDiameter,
-    );
 
     final textParts = <String>[
       'Parametry techniczne',
-      'Grupa: ${CableData.typeGroupLabel(data.type)}',
       'Typ kabla: ${CableData.typeToString(data.type)}',
+      'Grupa: ${CableData.typeGroupLabel(data.type)}',
       'Zastosowanie: ${CableData.applicationToString(data.application)}',
       'Material zyly: ${CableData.materialToString(data.material)}',
-      'Przekroj: ${data.crossSection} mm2',
       'Ilosc zyl: ${CableData.wireConfigToString(data.wireConfiguration)}',
       'Typ zyly: ${CableData.coreTypeToString(data.coreType)}',
+      'Przekroj: ${_formatCrossSection(data.crossSection)}',
       '$dimensionLabel: ${_externalDimensionValue(data)}',
-      'Napiecie max: ${data.maxVoltage}',
-      'Zakres temperatur: ${data.temperatureRange}',
+      'Napiecie max: ${_formatVoltage(data.maxVoltage)}',
+      'Zakres temperatur: ${_formatTemperature(data.temperatureRange)}',
     ];
 
-    if (_hasValue(data.cpr)) {
-      textParts.add('CPR/Ognioodpornosc: ${data.cpr!.trim()}');
-    }
-    if (_hasValue(data.insulation)) {
-      textParts.add('Izolacja/plaszcz: ${data.insulation!.trim()}');
-    }
-    if (_hasValue(data.halogenFree)) {
-      textParts.add('Halogen free: ${data.halogenFree!.trim()}');
-    }
-    if (_hasValue(data.usage)) {
-      textParts.add('Zastosowanie (zrodlo): ${data.usage!.trim()}');
-    }
-    if (_hasValue(data.notes)) {
-      textParts.add('Uwagi: ${data.notes!.trim()}');
-    }
-
-    textParts.addAll([
-      '',
-      'Zalecane materialy',
-      'Warunki pracy: ${CableData.workingConditionToString(_selectedWorkingCondition)}',
-      'Standard rury: ${HeatShrinkTube.standardToString(tubeStandard)}',
-      'Oslona (3:1): ${data.heatShrinkSleeve}',
-      'Znacznik (2:1): ${data.heatShrinkLabel}',
-    ]);
-
-    if (suggestedTubes.isNotEmpty) {
-      final tubeValues = suggestedTubes
-          .take(4)
-          .map((tube) => tube.description)
-          .join(', ');
-      textParts.add('Dopasowane srednice (z zapasem 20%): $tubeValues');
-    }
-
-    if (rigidConduits.isNotEmpty) {
-      final conduitValues = rigidConduits.map((d) => 'DN $d mm').join(', ');
-      textParts.add('Sugerowane rury sztywne (orientacyjnie): $conduitValues');
+    final additionalRows = <String>[
+      if (_hasValue(data.cpr)) 'CPR/Ognioodpornosc: ${_normalizedText(data.cpr)}',
+      if (_hasValue(data.insulation)) 'Izolacja/plaszcz: ${_normalizedText(data.insulation)}',
+      if (_hasValue(data.halogenFree)) 'Halogen free: ${_normalizedText(data.halogenFree)}',
+      if (_hasValue(data.usage)) 'Zastosowanie (zrodlo): ${_normalizedText(data.usage)}',
+      if (_hasValue(data.notes)) 'Uwagi: ${_normalizedText(data.notes)}',
+    ];
+    if (additionalRows.isNotEmpty) {
+      textParts.add('');
+      textParts.add('Dane dodatkowe');
+      textParts.addAll(additionalRows);
     }
 
     final text = textParts.join('\n');
@@ -757,6 +609,15 @@ class _CableSelectorScreenState extends State<CableSelectorScreen>
       appBar: AppBar(
         title: const Text('Baza Kabli i Przewodów'),
         backgroundColor: _deepNavy,
+        actions: [
+          IconButton(
+            tooltip: _typeSearchQuery.isEmpty
+                ? 'Szukaj typu kabla'
+                : 'Edytuj wyszukiwanie',
+            onPressed: _openTypeSearchDialog,
+            icon: const Icon(Icons.search),
+          ),
+        ],
       ),
       body: Container(
         decoration: BoxDecoration(
@@ -772,8 +633,6 @@ class _CableSelectorScreenState extends State<CableSelectorScreen>
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                _buildDatabaseInfoBanner(),
-                const SizedBox(height: 12),
                 Text(
                   'Baza kabli: szybkie wyszukiwanie',
                   style: Theme.of(context).textTheme.headlineSmall?.copyWith(
@@ -798,7 +657,7 @@ class _CableSelectorScreenState extends State<CableSelectorScreen>
                   const SizedBox(height: 16),
                   _buildQuickAccessSection(),
                 ],
-                if (_selectedMaterial != null) ...[
+                if (_selectedMaterial != null || _typeSearchQuery.isNotEmpty) ...[
                   const SizedBox(height: 24),
                   _buildTypeSelection(),
                 ],
@@ -1126,19 +985,7 @@ class _CableSelectorScreenState extends State<CableSelectorScreen>
   }
 
   Widget _buildTypeSelection() {
-    final groups = _getAvailableGroupNumbersForCurrentSelection();
-    final voltages = _getAvailableVoltagesForCurrentSelection();
     final types = _getFilteredTypes();
-    final activeFilters = _activeFilterCount();
-    final quickSearches = const <String>[
-      'yky',
-      'n2xh',
-      'utp6',
-      'futp6',
-      'kat6',
-      '0.6/1kv',
-      'b2ca',
-    ];
 
     if (types.isEmpty) {
       return Card(
@@ -1146,7 +993,9 @@ class _CableSelectorScreenState extends State<CableSelectorScreen>
         child: Padding(
           padding: const EdgeInsets.all(16),
           child: Text(
-            'Brak dostępnych typów kabli dla wybranego zastosowania i materiału',
+            _typeSearchQuery.isNotEmpty
+                ? 'Brak wyników dla frazy "$_typeSearchQuery". Spróbuj np. yky, n2xh, hdgs, utp6.'
+                : 'Brak dostępnych typów kabli dla wybranego zastosowania i materiału.',
             style: TextStyle(color: Colors.grey[400]),
             textAlign: TextAlign.center,
           ),
@@ -1157,80 +1006,6 @@ class _CableSelectorScreenState extends State<CableSelectorScreen>
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Row(
-          children: [
-            Expanded(
-              child: Text(
-                'Wyszukiwanie i filtry',
-                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                      color: Colors.grey[300],
-                      fontWeight: FontWeight.w700,
-                    ),
-              ),
-            ),
-            TextButton.icon(
-              onPressed: () => _openMobileFilterSheet(groups, voltages),
-              icon: const Icon(Icons.tune, size: 18),
-              label: Text(
-                  activeFilters > 0 ? 'Filtry ($activeFilters)' : 'Filtry'),
-            ),
-            if (activeFilters > 0)
-              TextButton(
-                onPressed: _clearTypeFilters,
-                child: const Text('Wyczysc'),
-              ),
-          ],
-        ),
-        const SizedBox(height: 12),
-        TextField(
-          controller: _typeSearchController,
-          onChanged: (value) {
-            setState(() {
-              _typeSearchQuery = value;
-            });
-          },
-          style: const TextStyle(color: Colors.white),
-          decoration: InputDecoration(
-            labelText: 'Szukaj (np. yky 3x2.5, n2xh b2ca, utp6)',
-            labelStyle: TextStyle(color: Colors.grey[300]),
-            prefixIcon: const Icon(Icons.search, color: Colors.white70),
-            suffixIcon: _typeSearchQuery.isEmpty
-                ? null
-                : IconButton(
-                    tooltip: 'Wyczysc wyszukiwanie',
-                    icon: const Icon(Icons.close, color: Colors.white70),
-                    onPressed: () {
-                      setState(() {
-                        _typeSearchQuery = '';
-                        _typeSearchController.clear();
-                      });
-                    },
-                  ),
-            filled: true,
-            fillColor: _cardNavy,
-            border: const OutlineInputBorder(),
-          ),
-        ),
-        const SizedBox(height: 10),
-        SizedBox(
-          height: 36,
-          child: ListView.separated(
-            scrollDirection: Axis.horizontal,
-            itemCount: quickSearches.length,
-            separatorBuilder: (_, __) => const SizedBox(width: 8),
-            itemBuilder: (context, index) {
-              final value = quickSearches[index];
-              final selected =
-                  _normalizeToken(_typeSearchQuery) == _normalizeToken(value);
-              return ChoiceChip(
-                label: Text(value),
-                selected: selected,
-                onSelected: (_) => _applyQuickSearchChip(value),
-              );
-            },
-          ),
-        ),
-        const SizedBox(height: 16),
         Text(
           'Wybierz typ kabla (${types.length})',
           style: Theme.of(context).textTheme.titleMedium?.copyWith(
@@ -1569,15 +1344,15 @@ class _CableSelectorScreenState extends State<CableSelectorScreen>
                 ),
                 const Divider(height: 32, color: Colors.grey),
                 _buildResultRow(
-                  'Grupa',
-                  CableData.typeGroupLabel(_result!.type),
-                  Icons.folder_open,
-                ),
-                const SizedBox(height: 16),
-                _buildResultRow(
                   'Typ kabla',
                   CableData.typeToString(_result!.type),
                   Icons.cable,
+                ),
+                const SizedBox(height: 16),
+                _buildResultRow(
+                  'Grupa',
+                  CableData.typeGroupLabel(_result!.type),
+                  Icons.folder_open,
                 ),
                 const SizedBox(height: 16),
                 _buildResultRow(
@@ -1593,12 +1368,6 @@ class _CableSelectorScreenState extends State<CableSelectorScreen>
                 ),
                 const SizedBox(height: 16),
                 _buildResultRow(
-                  'Przekrój',
-                  '${_result!.crossSection} mm²',
-                  Icons.straighten,
-                ),
-                const SizedBox(height: 16),
-                _buildResultRow(
                   'Ilość żył',
                   CableData.wireConfigToString(_result!.wireConfiguration),
                   Icons.linear_scale,
@@ -1611,21 +1380,27 @@ class _CableSelectorScreenState extends State<CableSelectorScreen>
                 ),
                 const SizedBox(height: 16),
                 _buildResultRow(
-                  _externalDimensionLabel(_result!),
-                  _externalDimensionValue(_result!),
-                  Icons.circle_outlined,
+                  'Przekrój',
+                  _formatCrossSection(_result!.crossSection),
+                  Icons.straighten,
                 ),
                 const SizedBox(height: 16),
                 _buildResultRow(
                   'Napięcie max',
-                  _result!.maxVoltage,
+                  _formatVoltage(_result!.maxVoltage),
                   Icons.bolt,
                 ),
                 const SizedBox(height: 16),
                 _buildResultRow(
                   'Zakres temperatur',
-                  _result!.temperatureRange,
+                  _formatTemperature(_result!.temperatureRange),
                   Icons.thermostat,
+                ),
+                const SizedBox(height: 16),
+                _buildResultRow(
+                  _externalDimensionLabel(_result!),
+                  _externalDimensionValue(_result!),
+                  Icons.circle_outlined,
                 ),
                 if (matchingVariants.length > 1) ...[
                   const SizedBox(height: 16),
@@ -1663,7 +1438,7 @@ class _CableSelectorScreenState extends State<CableSelectorScreen>
                   if (_hasValue(_result!.cpr)) ...[
                     _buildResultRow(
                       'CPR/Ognioodpornosc',
-                      _result!.cpr!.trim(),
+                      _normalizedText(_result!.cpr),
                       Icons.local_fire_department,
                     ),
                     const SizedBox(height: 12),
@@ -1671,7 +1446,7 @@ class _CableSelectorScreenState extends State<CableSelectorScreen>
                   if (_hasValue(_result!.insulation)) ...[
                     _buildResultRow(
                       'Izolacja/plaszcz',
-                      _result!.insulation!.trim(),
+                      _normalizedText(_result!.insulation),
                       Icons.layers,
                     ),
                     const SizedBox(height: 12),
@@ -1679,7 +1454,7 @@ class _CableSelectorScreenState extends State<CableSelectorScreen>
                   if (_hasValue(_result!.halogenFree)) ...[
                     _buildResultRow(
                       'Halogen free',
-                      _result!.halogenFree!.trim(),
+                      _normalizedText(_result!.halogenFree),
                       Icons.shield,
                     ),
                     const SizedBox(height: 12),
@@ -1687,7 +1462,7 @@ class _CableSelectorScreenState extends State<CableSelectorScreen>
                   if (_hasValue(_result!.usage)) ...[
                     _buildResultRow(
                       'Zastosowanie (zrodlo)',
-                      _result!.usage!.trim(),
+                      _normalizedText(_result!.usage),
                       Icons.build,
                     ),
                     const SizedBox(height: 12),
@@ -1695,7 +1470,7 @@ class _CableSelectorScreenState extends State<CableSelectorScreen>
                   if (_hasValue(_result!.notes)) ...[
                     _buildResultRow(
                       'Uwagi',
-                      _result!.notes!.trim(),
+                      _normalizedText(_result!.notes),
                       Icons.notes,
                     ),
                     const SizedBox(height: 12),
@@ -1835,6 +1610,7 @@ class _CableSelectorScreenState extends State<CableSelectorScreen>
 
   Widget _buildResultRow(String label, String value, IconData icon) {
     return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Icon(icon, color: _electricBlue, size: 20),
         const SizedBox(width: 12),
@@ -1847,12 +1623,16 @@ class _CableSelectorScreenState extends State<CableSelectorScreen>
             ),
           ),
         ),
-        Text(
-          value,
-          style: const TextStyle(
-            color: Colors.white,
-            fontSize: 14,
-            fontWeight: FontWeight.bold,
+        const SizedBox(width: 12),
+        Flexible(
+          child: Text(
+            value,
+            textAlign: TextAlign.right,
+            style: const TextStyle(
+              color: Colors.white,
+              fontSize: 14,
+              fontWeight: FontWeight.bold,
+            ),
           ),
         ),
       ],
