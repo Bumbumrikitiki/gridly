@@ -9,7 +9,7 @@ import 'package:gridly/screens/dashboard_screen.dart';
 import 'package:gridly/screens/auth_screen.dart';
 import 'package:gridly/screens/paywall_screen.dart';
 import 'package:gridly/screens/profile_screen.dart';
-import 'package:gridly/screens/construction_power_screen.dart';
+import 'package:gridly/screens/topology_screen.dart';
 import 'package:gridly/screens/circuit_assessment_screen.dart';
 import 'package:gridly/multitool/logic/multitool_provider.dart';
 import 'package:gridly/multitool/field_guide/logic/field_guide_provider.dart';
@@ -133,14 +133,14 @@ class GridlyApp extends StatelessWidget {
       child: MaterialApp(
         title: 'Gridly Electrical Checker',
         theme: GridTheme.themeData(),
-        initialRoute: '/',
+        initialRoute: '/dashboard',
         routes: {
           '/': (context) => const SplashScreen(),
           '/dashboard': (context) => const DashboardScreen(),
           '/auth': (context) => const AuthScreen(),
           '/paywall': (context) => const PaywallScreen(),
           '/profile': (context) => const ProfileScreen(),
-          '/construction-power': (context) => const ConstructionPowerScreen(),
+          '/construction-power': (context) => const TopologyScreen(),
           '/audit': (context) => const CircuitAssessmentScreen(),
           '/multitool': (context) => const MultitoolScreen(),
         },

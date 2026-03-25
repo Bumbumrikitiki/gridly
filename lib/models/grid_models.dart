@@ -196,6 +196,8 @@ abstract class GridNode {
 
 class DistributionBoard extends GridNode {
   bool isPenSplitPoint;
+  int? socketCount230V;
+  int? socketCount400V;
   final List<BoardProtectionSlot> protectionSlots;
   final List<BoardAdditionalEquipment> additionalEquipment;
 
@@ -211,6 +213,8 @@ class DistributionBoard extends GridNode {
     required super.material,
     super.circuitLines,
     this.isPenSplitPoint = false,
+    this.socketCount230V,
+    this.socketCount400V,
     List<BoardProtectionSlot>? protectionSlots,
     List<BoardAdditionalEquipment>? additionalEquipment,
   })  : protectionSlots = protectionSlots ?? [],
@@ -234,6 +238,8 @@ class DistributionBoard extends GridNode {
       'material': GridNode.materialToString(material),
       'isThreePhase': isThreePhase,
       'isPenSplitPoint': isPenSplitPoint,
+        'socketCount230V': socketCount230V,
+        'socketCount400V': socketCount400V,
       'circuitLines': circuitLines.map((e) => e.toMap()).toList(),
       'protectionSlots': protectionSlots.map((e) => e.toMap()).toList(),
       'additionalEquipment':
@@ -260,6 +266,8 @@ class DistributionBoard extends GridNode {
       material: GridNode.materialFromString(map['material'] as String),
       circuitLines: linesList.map((e) => CircuitLine.fromMap(e)).toList(),
       isPenSplitPoint: (map['isPenSplitPoint'] as bool?) ?? false,
+        socketCount230V: (map['socketCount230V'] as num?)?.toInt(),
+        socketCount400V: (map['socketCount400V'] as num?)?.toInt(),
       protectionSlots:
           slotsList.map((e) => BoardProtectionSlot.fromMap(e)).toList(),
       additionalEquipment:
