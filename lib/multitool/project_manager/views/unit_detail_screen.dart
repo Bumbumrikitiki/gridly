@@ -50,10 +50,11 @@ class _UnitDetailScreenState extends State<UnitDetailScreen>
           (u) => u.unitId == widget.unit.unitId,
           orElse: () => widget.unit,
         );
+        final displayUnitId = project.displayUnitId(currentUnit);
 
         return Scaffold(
           appBar: AppBar(
-            title: Text('Lokal ${currentUnit.unitId}'),
+            title: Text('Lokal $displayUnitId'),
             centerTitle: true,
             elevation: 0,
             actions: [
@@ -742,7 +743,7 @@ class _UnitDetailScreenState extends State<UnitDetailScreen>
       await KartaSingleGenerator.generateSinglePdf(
         nazwaBudowy: project.name,
         data: currentDate,
-        nrLokalu: unit.unitId,
+        nrLokalu: project.displayUnitId(unit),
         nrBudynku: buildingName,
         klatka: unit.stairCase,
         pietro: unit.floor.toString(),
@@ -751,9 +752,10 @@ class _UnitDetailScreenState extends State<UnitDetailScreen>
       );
 
       if (mounted) {
+        final displayUnitId = project.displayUnitId(unit);
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Karta lokalowa dla lokalu ${unit.unitId} została wygenerowana!'),
+            content: Text('Karta lokalowa dla lokalu $displayUnitId została wygenerowana!'),
             backgroundColor: Colors.green,
             duration: const Duration(seconds: 3),
           ),

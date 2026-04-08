@@ -256,9 +256,22 @@ class _ProjectSelectorScreenState extends State<ProjectSelectorScreen> {
       ),
     );
     
-    // Projekt już jest dodany i zapisany w providerze, nie trzeba ładować ponownie
+    // Po powrocie z kreatora projekt powinien być już w liście
+    // Ale wymuszamy odświeżenie dla pewności
     if (result == true && mounted) {
-      setState(() {}); // Tylko odśwież UI
+      // Provider już wyemitował notifyListeners(), ale forceujemy rebuild
+      setState(() {});
+      
+      // Pokaż potwierdzenie
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Projekt został utworzony pomyślnie!'),
+            backgroundColor: Colors.green,
+            duration: Duration(seconds: 2),
+          ),
+        );
+      }
     }
   }
 

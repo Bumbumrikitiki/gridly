@@ -6,11 +6,642 @@ import 'package:gridly/services/grid_provider.dart';
 import 'package:gridly/models/grid_models.dart';
 
 class PdfService {
+  static Future<pw.ThemeData> _buildPdfTheme() async {
+    final baseFont = await PdfGoogleFonts.notoSansRegular();
+    final boldFont = await PdfGoogleFonts.notoSansBold();
+    final italicFont = await PdfGoogleFonts.notoSansItalic();
+    final boldItalicFont = await PdfGoogleFonts.notoSansBoldItalic();
+    final symbolsFont = await PdfGoogleFonts.notoSansSymbolsRegular();
+    final symbols2Font = await PdfGoogleFonts.notoSansSymbols2Regular();
+
+    return pw.ThemeData.withFont(
+      base: baseFont,
+      bold: boldFont,
+      italic: italicFont,
+      boldItalic: boldItalicFont,
+      fontFallback: [symbolsFont, symbols2Font, baseFont],
+    );
+  }
+
+  static Future<void> generateTopologyHybridSchematicPdf({
+    required GridProvider gridProvider,
+    required String buildingName,
+  }) async {
+    final pdf = pw.Document();
+    final theme = await _buildPdfTheme();
+    final nodes = gridProvider.nodes;
+    final aggregatePowers = gridProvider.aggregatePowerKw;
+
+    final nodeById = <String, GridNode>{
+      for (final node in nodes) node.id: node,
+    };
+
+    final edges = <Map<String, GridNode>>[];
+    for (final node in nodes) {
+      if (node.parentId == null) {
+        continue;
+      }
+      final parent = nodeById[node.parentId!];
+      if (parent == null) {
+        continue;
+      }
+      edges.add({'parent': parent, 'child': node});
+    }
+
+    edges.sort((a, b) {
+      final parentCompare = a['parent']!.name.compareTo(b['parent']!.name);
+      if (parentCompare != 0) {
+        return parentCompare;
+      }
+      return a['child']!.name.compareTo(b['child']!.name);
+    });
+
+    String parentProtectionLabel(GridNode parent, GridNode child) {
+      if (parent is! DistributionBoard) {
+        return 'brak';
+      }
+
+      for (final slot in parent.protectionSlots) {
+        if (slot.assignedNodeId == child.id) {
+          final status = slot.isReserve ? 'rezerwa' : 'obsadzone';
+          return '${_protectionTypeLabel(slot.type)} ${_protectionValueLabel(slot)} ($status)';
+        }
+      }
+
+      return 'brak';
+    }
+
+    final boards = nodes.whereType<DistributionBoard>().toList()
+      ..sort((a, b) => a.name.compareTo(b.name));
+    final generatedAt = DateFormat('yyyy-MM-dd HH:mm').format(DateTime.now());
+
+    pdf.addPage(
+      pw.MultiPage(
+        pageFormat: PdfPageFormat.a4,
+        margin: const pw.EdgeInsets.all(20),
+        theme: theme,
+        build: (context) => [
+          pw.Text(
+            'GRIDLY - SCHEMAT IDEOWY TOPOLOGII (WERSJA HYBRYDOWA)',
+            style: pw.TextStyle(fontSize: 16, fontWeight: pw.FontWeight.bold),
+          ),
+          pw.SizedBox(height: 6),
+          pw.Text('Plac budowy: $buildingName', style: const pw.TextStyle(fontSize: 10)),
+          pw.Text('Data wygenerowania: $generatedAt', style: const pw.TextStyle(fontSize: 10)),
+          pw.SizedBox(height: 10),
+
+          pw.Text(
+            '1. Macierz połączeń (parent -> child)',
+            style: pw.TextStyle(fontSize: 12, fontWeight: pw.FontWeight.bold),
+          ),
+          pw.SizedBox(height: 6),
+          if (edges.isEmpty)
+            pw.Text('Brak połączeń.', style: const pw.TextStyle(fontSize: 10))
+          else
+            pw.Table(
+              border: pw.TableBorder.all(color: PdfColors.grey400),
+              columnWidths: {
+                0: const pw.FlexColumnWidth(1.8),
+                1: const pw.FlexColumnWidth(1.8),
+                2: const pw.FlexColumnWidth(2.3),
+                3: const pw.FlexColumnWidth(2.1),
+              },
+              children: [
+                pw.TableRow(
+                  decoration: pw.BoxDecoration(color: PdfColors.grey300),
+                  children: [
+                    _cellHeader('Nadrzędny'),
+                    _cellHeader('Podrzędny'),
+                    _cellHeader('Kabel do podrzędnego'),
+                    _cellHeader('Zabezpieczenie'),
+                  ],
+                ),
+                for (final edge in edges)
+                  pw.TableRow(
+                    children: [
+                      _cellBody(edge['parent']!.name),
+                      _cellBody(edge['child']!.name),
+                      _cellBody(
+                        '${edge['child']!.cableCores}z ${edge['child']!.crossSectionMm2.toStringAsFixed(1)}mm² ${edge['child']!.lengthM.toStringAsFixed(1)}m ${edge['child']!.material == ConductorMaterial.cu ? 'Cu' : 'Al'}',
+                      ),
+                      _cellBody(
+                        parentProtectionLabel(edge['parent']!, edge['child']!),
+                      ),
+                    ],
+                  ),
+              ],
+            ),
+
+          pw.SizedBox(height: 12),
+          pw.Text(
+            '2. Zestawienie rozdzielnic (moc agregowana i aparatura)',
+            style: pw.TextStyle(fontSize: 12, fontWeight: pw.FontWeight.bold),
+          ),
+          pw.SizedBox(height: 6),
+          if (boards.isEmpty)
+            pw.Text('Brak rozdzielnic.', style: const pw.TextStyle(fontSize: 10))
+          else
+            pw.Table(
+              border: pw.TableBorder.all(color: PdfColors.grey400),
+              columnWidths: {
+                0: const pw.FlexColumnWidth(2),
+                1: const pw.FlexColumnWidth(1.1),
+                2: const pw.FlexColumnWidth(1.3),
+                3: const pw.FlexColumnWidth(1.2),
+                4: const pw.FlexColumnWidth(1.2),
+              },
+              children: [
+                pw.TableRow(
+                  decoration: pw.BoxDecoration(color: PdfColors.grey300),
+                  children: [
+                    _cellHeader('Rozdzielnica'),
+                    _cellHeader('Moc [kW]'),
+                    _cellHeader('Kabel'),
+                    _cellHeader('Obsadzone'),
+                    _cellHeader('Rezerwy'),
+                  ],
+                ),
+                for (final board in boards)
+                  pw.TableRow(
+                    children: [
+                      _cellBody(board.name),
+                      _cellBody(
+                        (aggregatePowers[board] ?? board.powerKw).toStringAsFixed(2),
+                      ),
+                      _cellBody(
+                        '${board.cableCores}z ${board.crossSectionMm2.toStringAsFixed(1)}mm² ${board.material == ConductorMaterial.cu ? 'Cu' : 'Al'}',
+                      ),
+                      _cellBody(
+                        '${board.protectionSlots.where((s) => !s.isReserve).length}',
+                      ),
+                      _cellBody(
+                        '${board.protectionSlots.where((s) => s.isReserve).length}',
+                      ),
+                    ],
+                  ),
+              ],
+            ),
+        ],
+      ),
+    );
+
+    await Printing.layoutPdf(
+      onLayout: (PdfPageFormat format) async => pdf.save(),
+    );
+  }
+
+  static Future<void> generateTopologyBlockSchematicPdf({
+    required GridProvider gridProvider,
+    required String buildingName,
+  }) async {
+    final pdf = pw.Document();
+    final theme = await _buildPdfTheme();
+    final nodes = gridProvider.nodes;
+
+    final nodeById = <String, GridNode>{
+      for (final node in nodes) node.id: node,
+    };
+
+    final childrenByParentId = <String?, List<GridNode>>{};
+    for (final node in nodes) {
+      childrenByParentId.putIfAbsent(node.parentId, () => []);
+      childrenByParentId[node.parentId]!.add(node);
+    }
+    for (final children in childrenByParentId.values) {
+      children.sort((a, b) => a.name.compareTo(b.name));
+    }
+
+    final roots = childrenByParentId[null] ?? const <GridNode>[];
+    final generatedAt = DateFormat('yyyy-MM-dd HH:mm').format(DateTime.now());
+    final supplyConfig = gridProvider.temporarySupplyConfig;
+
+    String formatOptional(double? value, String unit, {int fraction = 2}) {
+      if (value == null) {
+        return '-';
+      }
+      return '${value.toStringAsFixed(fraction)} $unit';
+    }
+
+    String _nodePhase(GridNode node) => node.isThreePhase ? '3F' : '1F';
+
+    String _cableLabel(GridNode node) {
+      return '${node.cableCores}z | ${node.crossSectionMm2.toStringAsFixed(1)}mm² | ${node.lengthM.toStringAsFixed(1)}m | ${node.material == ConductorMaterial.cu ? 'Cu' : 'Al'}';
+    }
+
+    String _incomingProtection(GridNode node) {
+      final parent = node.parentId == null ? null : nodeById[node.parentId!];
+      if (parent is! DistributionBoard) {
+        return 'brak';
+      }
+
+      for (final slot in parent.protectionSlots) {
+        if (slot.assignedNodeId == node.id) {
+          return '${_protectionTypeLabel(slot.type)} ${_protectionValueLabel(slot)}';
+        }
+      }
+
+      return 'brak';
+    }
+
+    List<pw.Widget> _buildBlocks(GridNode node, int level) {
+      final items = <pw.Widget>[];
+      final horizontalIndent = 6.0 + (level * 10.0);
+      final isBoard = node is DistributionBoard;
+      final board = isBoard ? node as DistributionBoard : null;
+
+      final nodeLine =
+          '${_nodePhase(node)} | P=${node.powerKw.toStringAsFixed(2)} kW | In=${node.ratedCurrentA.toStringAsFixed(0)} A';
+      final cableLine = 'Kabel: ${_cableLabel(node)}';
+      final supplyLine = 'Zasilanie: ${_incomingProtection(node)}';
+      final equipmentLine = board == null
+          ? null
+          : 'Aparatura: ${board.protectionSlots.length} | Rezerwy: ${board.protectionSlots.where((s) => s.isReserve).length}';
+
+      items.add(
+        pw.Padding(
+          padding: pw.EdgeInsets.only(left: horizontalIndent, bottom: 2),
+          child: pw.Container(
+            width: 560 - horizontalIndent,
+            padding: const pw.EdgeInsets.symmetric(horizontal: 6, vertical: 4),
+            decoration: pw.BoxDecoration(
+              color: isBoard ? PdfColors.lightBlue100 : PdfColors.green100,
+              border: pw.Border.all(
+                color: isBoard ? PdfColors.blue700 : PdfColors.green700,
+                width: 1,
+              ),
+              borderRadius: const pw.BorderRadius.all(pw.Radius.circular(3)),
+            ),
+            child: pw.Column(
+              crossAxisAlignment: pw.CrossAxisAlignment.start,
+              children: [
+                pw.Text(
+                  '${isBoard ? 'ROZDZIELNICA' : 'ODBIORNIK'}: ${node.name}',
+                  style: pw.TextStyle(fontSize: 9, fontWeight: pw.FontWeight.bold),
+                ),
+                pw.SizedBox(height: 1),
+                pw.Row(
+                  crossAxisAlignment: pw.CrossAxisAlignment.start,
+                  children: [
+                    pw.Expanded(
+                      child: pw.Text(
+                        nodeLine,
+                        style: const pw.TextStyle(fontSize: 8.2),
+                      ),
+                    ),
+                    pw.SizedBox(width: 6),
+                    pw.Expanded(
+                      child: pw.Text(
+                        cableLine,
+                        style: const pw.TextStyle(fontSize: 8.2),
+                      ),
+                    ),
+                  ],
+                ),
+                pw.SizedBox(height: 1),
+                pw.Row(
+                  crossAxisAlignment: pw.CrossAxisAlignment.start,
+                  children: [
+                    pw.Expanded(
+                      child: pw.Text(
+                        supplyLine,
+                        style: const pw.TextStyle(fontSize: 8.2),
+                      ),
+                    ),
+                    if (equipmentLine != null) ...[
+                      pw.SizedBox(width: 6),
+                      pw.Expanded(
+                        child: pw.Text(
+                          equipmentLine,
+                          style: const pw.TextStyle(fontSize: 8.2),
+                        ),
+                      ),
+                    ],
+                  ],
+                ),
+              ],
+            ),
+          ),
+        ),
+      );
+
+      final children = childrenByParentId[node.id] ?? const <GridNode>[];
+      for (final child in children) {
+        items.add(
+          pw.Padding(
+            padding: pw.EdgeInsets.only(left: horizontalIndent + 6, bottom: 1),
+            child: pw.Text('↓', style: const pw.TextStyle(fontSize: 8.5)),
+          ),
+        );
+        items.addAll(_buildBlocks(child, level + 1));
+      }
+
+      return items;
+    }
+
+    pdf.addPage(
+      pw.MultiPage(
+        pageFormat: PdfPageFormat.a4,
+        margin: const pw.EdgeInsets.all(14),
+        theme: theme,
+        build: (context) => [
+          pw.Column(
+            crossAxisAlignment: pw.CrossAxisAlignment.start,
+            children: [
+              pw.Center(
+                child: pw.Text(
+                  'GRIDLY ELECTRICAL CHECKER - SCHEMAT BLOKOWY',
+                  style: pw.TextStyle(
+                    fontSize: 20,
+                    fontWeight: pw.FontWeight.bold,
+                  ),
+                ),
+              ),
+              pw.SizedBox(height: 8),
+              pw.Center(
+                child: pw.Text(
+                  'Data: $generatedAt',
+                  style: const pw.TextStyle(fontSize: 11),
+                ),
+              ),
+              pw.SizedBox(height: 16),
+              pw.Row(
+                mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+                children: [
+                  pw.Text(
+                    'Plac budowy:',
+                    style: pw.TextStyle(fontWeight: pw.FontWeight.bold),
+                  ),
+                  pw.Text(buildingName),
+                ],
+              ),
+              pw.SizedBox(height: 8),
+              pw.Text(
+                'Zasilanie tymczasowe: ${supplyConfig.networkSystem} | Moc OSD: ${formatOptional(supplyConfig.osdConnectionPowerKw, 'kW', fraction: 1)} | Zabezpieczenie OSD: ${formatOptional(supplyConfig.osdMainProtectionA, 'A', fraction: 0)}',
+                style: const pw.TextStyle(fontSize: 10),
+              ),
+              pw.Text(
+                'Założenia zwarciowe: Ik ${formatOptional(supplyConfig.assumedShortCircuitCurrentKa, 'kA')} | Zs ${formatOptional(supplyConfig.assumedLoopImpedanceOhm, 'Ω', fraction: 3)} | RCD 30 mA: ${supplyConfig.rcdRequired ? 'tak' : 'nie'} | Uziemienie placu: ${supplyConfig.siteEarthingRequired ? 'tak' : 'nie'}',
+                style: const pw.TextStyle(fontSize: 10),
+              ),
+              pw.SizedBox(height: 20),
+            ],
+          ),
+          pw.Text(
+            'Układ blokowy połączeń (od góry: zasilanie główne).',
+            style: const pw.TextStyle(fontSize: 9),
+          ),
+          pw.SizedBox(height: 8),
+          if (roots.isEmpty)
+            pw.Text(
+              'Brak danych topologii.',
+              style: const pw.TextStyle(fontSize: 10),
+            )
+          else
+            ...roots.expand((root) => _buildBlocks(root, 0)),
+        ],
+      ),
+    );
+
+    await Printing.layoutPdf(
+      onLayout: (PdfPageFormat format) async => pdf.save(),
+    );
+  }
+
+  static Future<void> generateTopologySchematicPdf({
+    required GridProvider gridProvider,
+    required String buildingName,
+  }) async {
+    final pdf = pw.Document();
+    final theme = await _buildPdfTheme();
+    final nodes = gridProvider.nodes;
+
+    final nodeById = <String, GridNode>{
+      for (final node in nodes) node.id: node,
+    };
+
+    final childrenByParentId = <String?, List<GridNode>>{};
+    for (final node in nodes) {
+      childrenByParentId.putIfAbsent(node.parentId, () => []);
+      childrenByParentId[node.parentId]!.add(node);
+    }
+
+    for (final children in childrenByParentId.values) {
+      children.sort((a, b) => a.name.compareTo(b.name));
+    }
+
+    final roots = childrenByParentId[null] ?? const <GridNode>[];
+    final boards = nodes.whereType<DistributionBoard>().toList()
+      ..sort((a, b) => a.name.compareTo(b.name));
+
+    final generatedAt = DateFormat('yyyy-MM-dd HH:mm').format(DateTime.now());
+
+    String? connectionProtectionLabel(GridNode child) {
+      final parent = child.parentId == null
+          ? null
+          : nodeById[child.parentId!];
+      if (parent is! DistributionBoard) {
+        return null;
+      }
+
+      for (final slot in parent.protectionSlots) {
+        if (slot.assignedNodeId == child.id) {
+          final status = slot.isReserve ? 'Rezerwa' : 'Obsadzone';
+          return '${_protectionTypeLabel(slot.type)} ${_protectionValueLabel(slot)} · $status';
+        }
+      }
+
+      return null;
+    }
+
+    List<pw.Widget> buildHierarchyRows(GridNode node, int depth) {
+      final indentation = depth * 14.0;
+      final isBoard = node is DistributionBoard;
+      final parentProtection = connectionProtectionLabel(node);
+      final cableLabel =
+          '${node.cableCores} żył | ${node.crossSectionMm2.toStringAsFixed(1)} mm² | ${node.lengthM.toStringAsFixed(1)} m | ${node.material == ConductorMaterial.cu ? 'Cu' : 'Al'}';
+
+      final rows = <pw.Widget>[
+        pw.Container(
+          margin: const pw.EdgeInsets.only(bottom: 4),
+          padding: const pw.EdgeInsets.all(6),
+          decoration: pw.BoxDecoration(
+            color: isBoard ? PdfColors.blue50 : PdfColors.grey100,
+            border: pw.Border.all(color: PdfColors.grey400),
+          ),
+          child: pw.Row(
+            crossAxisAlignment: pw.CrossAxisAlignment.start,
+            children: [
+              pw.SizedBox(width: indentation),
+              pw.Expanded(
+                child: pw.Column(
+                  crossAxisAlignment: pw.CrossAxisAlignment.start,
+                  children: [
+                    pw.Text(
+                      '${isBoard ? 'Rozdzielnica' : 'Odbiornik'}: ${node.name}',
+                      style: pw.TextStyle(
+                        fontSize: 10,
+                        fontWeight: pw.FontWeight.bold,
+                      ),
+                    ),
+                    pw.SizedBox(height: 2),
+                    pw.Text(
+                      '${node.isThreePhase ? '3F' : '1F'} | Moc: ${node.powerKw.toStringAsFixed(2)} kW | In: ${node.ratedCurrentA.toStringAsFixed(0)} A',
+                      style: const pw.TextStyle(fontSize: 9),
+                    ),
+                    pw.Text(
+                      'Kabel: $cableLabel',
+                      style: const pw.TextStyle(fontSize: 9),
+                    ),
+                    pw.Text(
+                      parentProtection == null
+                          ? 'Zabezpieczenie zasilające: brak przypisania'
+                          : 'Zabezpieczenie zasilające: $parentProtection',
+                      style: const pw.TextStyle(fontSize: 9),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+      ];
+
+      final children = childrenByParentId[node.id] ?? const <GridNode>[];
+      for (final child in children) {
+        rows.addAll(buildHierarchyRows(child, depth + 1));
+      }
+
+      return rows;
+    }
+
+    pdf.addPage(
+      pw.MultiPage(
+        pageFormat: PdfPageFormat.a4,
+        margin: const pw.EdgeInsets.all(20),
+        theme: theme,
+        build: (context) => [
+          pw.Text(
+            'GRIDLY - SCHEMAT IDEOWY TOPOLOGII',
+            style: pw.TextStyle(fontSize: 18, fontWeight: pw.FontWeight.bold),
+          ),
+          pw.SizedBox(height: 6),
+          pw.Text('Plac budowy: $buildingName', style: const pw.TextStyle(fontSize: 11)),
+          pw.Text('Data wygenerowania: $generatedAt', style: const pw.TextStyle(fontSize: 11)),
+          pw.SizedBox(height: 12),
+
+          pw.Text(
+            '1. Struktura połączeń',
+            style: pw.TextStyle(fontSize: 13, fontWeight: pw.FontWeight.bold),
+          ),
+          pw.SizedBox(height: 6),
+          if (roots.isEmpty)
+            pw.Text(
+              'Brak węzłów głównych w topologii.',
+              style: const pw.TextStyle(fontSize: 10),
+            )
+          else
+            ...roots.expand((root) => buildHierarchyRows(root, 0)),
+
+          pw.SizedBox(height: 12),
+          pw.Text(
+            '2. Rozdzielnice - aparatura i rezerwy',
+            style: pw.TextStyle(fontSize: 13, fontWeight: pw.FontWeight.bold),
+          ),
+          pw.SizedBox(height: 6),
+          if (boards.isEmpty)
+            pw.Text(
+              'Brak rozdzielnic w topologii.',
+              style: const pw.TextStyle(fontSize: 10),
+            )
+          else
+            ...boards.expand((board) {
+              final usedSlots = board.protectionSlots
+                  .where((slot) => !slot.isReserve)
+                  .toList();
+              final reserveSlots = board.protectionSlots
+                  .where((slot) => slot.isReserve)
+                  .toList();
+
+              return [
+                pw.Container(
+                  margin: const pw.EdgeInsets.only(bottom: 6),
+                  padding: const pw.EdgeInsets.all(8),
+                  decoration: pw.BoxDecoration(
+                    border: pw.Border.all(color: PdfColors.grey500),
+                  ),
+                  child: pw.Column(
+                    crossAxisAlignment: pw.CrossAxisAlignment.start,
+                    children: [
+                      pw.Text(
+                        board.name,
+                        style: pw.TextStyle(
+                          fontSize: 11,
+                          fontWeight: pw.FontWeight.bold,
+                        ),
+                      ),
+                      pw.SizedBox(height: 3),
+                      pw.Text(
+                        'Wykorzystane: ${usedSlots.length} | Rezerwy: ${reserveSlots.length}',
+                        style: const pw.TextStyle(fontSize: 9),
+                      ),
+                      pw.SizedBox(height: 4),
+                      if (board.protectionSlots.isEmpty)
+                        pw.Text(
+                          'Brak zdefiniowanych pozycji aparatury.',
+                          style: const pw.TextStyle(fontSize: 9),
+                        )
+                      else
+                        pw.Table(
+                          border: pw.TableBorder.all(color: PdfColors.grey400),
+                          columnWidths: {
+                            0: const pw.FlexColumnWidth(2),
+                            1: const pw.FlexColumnWidth(1.2),
+                            2: const pw.FlexColumnWidth(1.2),
+                            3: const pw.FlexColumnWidth(2),
+                          },
+                          children: [
+                            pw.TableRow(
+                              decoration: pw.BoxDecoration(color: PdfColors.grey300),
+                              children: [
+                                _cellHeader('Typ'),
+                                _cellHeader('Wartość'),
+                                _cellHeader('Status'),
+                                _cellHeader('Przypisanie'),
+                              ],
+                            ),
+                            for (final slot in board.protectionSlots)
+                              pw.TableRow(
+                                children: [
+                                  _cellBody(_protectionTypeLabel(slot.type)),
+                                  _cellBody(_protectionValueLabel(slot)),
+                                  _cellBody(slot.isReserve ? 'Rezerwa' : 'Obsadzone'),
+                                  _cellBody(
+                                    _resolveAssignedNodeName(nodes, slot.assignedNodeId),
+                                  ),
+                                ],
+                              ),
+                          ],
+                        ),
+                    ],
+                  ),
+                ),
+              ];
+            }),
+        ],
+      ),
+    );
+
+    await Printing.layoutPdf(
+      onLayout: (PdfPageFormat format) async => pdf.save(),
+    );
+  }
+
   static Future<void> generateSiteReport({
     required GridProvider gridProvider,
     required String buildingName,
   }) async {
     final pdf = pw.Document();
+    final theme = await _buildPdfTheme();
 
     final nodes = gridProvider.nodes;
     final aggregatePowers = gridProvider.aggregatePowerKw;
@@ -30,6 +661,7 @@ class PdfService {
       pw.MultiPage(
         pageFormat: PdfPageFormat.a4,
         margin: const pw.EdgeInsets.all(20),
+        theme: theme,
         build: (context) => [
           // Header
           pw.Column(
@@ -56,7 +688,7 @@ class PdfService {
                 mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
                 children: [
                   pw.Text(
-                    'Budowa:',
+                    'Plac budowy:',
                     style: pw.TextStyle(fontWeight: pw.FontWeight.bold),
                   ),
                   pw.Text(buildingName),
@@ -459,7 +1091,7 @@ class PdfService {
       case ProtectionDeviceType.residualCurrentDevice:
         return 'Wyłącznik różnicowoprądowy (RCD)';
       case ProtectionDeviceType.fuseHolder:
-        return 'Kieszeń wkładki bezpiecznikowej';
+        return 'Rozłącznik bezpiecznikowy';
     }
   }
 
@@ -636,17 +1268,13 @@ class PdfService {
     required bool isPartialResult,
   }) async {
     final pdf = pw.Document();
-    final baseFont = await PdfGoogleFonts.notoSansRegular();
-    final boldFont = await PdfGoogleFonts.notoSansBold();
+    final theme = await _buildPdfTheme();
 
     pdf.addPage(
       pw.MultiPage(
         pageFormat: PdfPageFormat.a4,
         margin: const pw.EdgeInsets.all(20),
-        theme: pw.ThemeData.withFont(
-          base: baseFont,
-          bold: boldFont,
-        ),
+        theme: theme,
         build: (context) => [
           // Nagłówek
           pw.Center(
@@ -670,7 +1298,7 @@ class PdfService {
             mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
             children: [
               pw.Text(
-                'Budowa:',
+                'Plac budowy:',
                 style: pw.TextStyle(fontWeight: pw.FontWeight.bold),
               ),
               pw.Text(buildingName),

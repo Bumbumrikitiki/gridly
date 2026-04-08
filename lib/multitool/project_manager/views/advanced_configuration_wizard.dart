@@ -10,6 +10,8 @@
 /// 7. OZE i Elektromobilność
 
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
+import 'package:gridly/multitool/project_manager/logic/project_manager_provider.dart';
 import 'package:gridly/multitool/project_manager/models/building_hierarchy.dart';
 import 'package:gridly/multitool/project_manager/models/project_models.dart';
 import 'package:gridly/multitool/project_manager/models/renewable_energy_config.dart';
@@ -80,16 +82,16 @@ class _AdvancedConfigurationWizardState
   }
 
   void _finishConfiguration() {
-    // Auto-generuj nazwę jeśli pusta
+    // Generuj nazwę sekwencyjną jeśli pusta
     String projectName = _projectNameController.text.trim();
     if (projectName.isEmpty) {
-      projectName = 'Budowa ${_generateRandomId()}';
+      final provider = Provider.of<ProjectManagerProvider>(context, listen: false);
+      final nextNumber = provider.allProjects.length + 1;
+      projectName = 'Projekt #$nextNumber';
     }
 
-    String address = _addressController.text.trim();
-    if (address.isEmpty) {
-      address = 'Adres budowy';
-    }
+    // Adres pozostaje pusty jeśli nie podano
+    final String address = _addressController.text.trim();
 
     // Stwórz hierarchię budynków
     final buildings = <Building>[];
@@ -174,10 +176,7 @@ class _AdvancedConfigurationWizardState
     widget.onComplete(config);
   }
 
-  String _generateRandomId() {
-    final now = DateTime.now();
-    return '${now.day}${now.month}${now.year}${now.hour}${now.minute}';
-  }
+
 
   @override
   Widget build(BuildContext context) {
@@ -371,7 +370,13 @@ class _AdvancedConfigurationWizardState
                 lastDate: DateTime(2030),
               );
               if (picked != null) {
-                setState(() => _startDate = picked);
+                setState(() {
+                  _startDate = picked;
+                  // Jeśli data startu jest późniejsza niż koniec — przesuń koniec
+                  if (_endDate != null && !_endDate!.isAfter(_startDate!)) {
+                    _endDate = _startDate!.add(const Duration(days: 1));
+                  }
+                });
               }
             },
           ),
@@ -919,8 +924,8 @@ class _AdvancedConfigurationWizardState
                                             child: Slider(
                                               value: units.toDouble(),
                                               min: 0,
-                                              max: 12,
-                                              divisions: 12,
+                                              max: 25,
+                                              divisions: 25,
                                               label: '$units mieszkań',
                                               onChanged: (value) {
                                                 setState(() {

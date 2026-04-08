@@ -108,19 +108,21 @@ class BoardProtectionSlot {
 
 abstract class GridNode {
   final String id;
-  final String name;
+  String name;
+  String location;
   String? parentId;
-  final double powerKw;
+  double powerKw;
   double lengthM;
   double crossSectionMm2;
   int cableCores;
-  final double ratedCurrentA;
+  double ratedCurrentA;
   ConductorMaterial material;
   final List<CircuitLine> circuitLines;
 
   GridNode({
     required this.id,
     required this.name,
+    this.location = '',
     this.parentId,
     required this.powerKw,
     required this.lengthM,
@@ -204,6 +206,7 @@ class DistributionBoard extends GridNode {
   DistributionBoard({
     required super.id,
     required super.name,
+    super.location = '',
     super.parentId,
     required super.powerKw,
     required super.lengthM,
@@ -229,6 +232,7 @@ class DistributionBoard extends GridNode {
       'type': 'distribution_board',
       'id': id,
       'name': name,
+      'location': location,
       'parentId': parentId,
       'P': powerKw,
       'L': lengthM,
@@ -238,8 +242,8 @@ class DistributionBoard extends GridNode {
       'material': GridNode.materialToString(material),
       'isThreePhase': isThreePhase,
       'isPenSplitPoint': isPenSplitPoint,
-        'socketCount230V': socketCount230V,
-        'socketCount400V': socketCount400V,
+      'socketCount230V': socketCount230V,
+      'socketCount400V': socketCount400V,
       'circuitLines': circuitLines.map((e) => e.toMap()).toList(),
       'protectionSlots': protectionSlots.map((e) => e.toMap()).toList(),
       'additionalEquipment':
@@ -257,6 +261,7 @@ class DistributionBoard extends GridNode {
     return DistributionBoard(
       id: map['id'] as String,
       name: map['name'] as String,
+      location: (map['location'] as String?)?.trim() ?? '',
       parentId: map['parentId'] as String?,
       powerKw: (map['P'] as num).toDouble(),
       lengthM: (map['L'] as num).toDouble(),
@@ -266,8 +271,8 @@ class DistributionBoard extends GridNode {
       material: GridNode.materialFromString(map['material'] as String),
       circuitLines: linesList.map((e) => CircuitLine.fromMap(e)).toList(),
       isPenSplitPoint: (map['isPenSplitPoint'] as bool?) ?? false,
-        socketCount230V: (map['socketCount230V'] as num?)?.toInt(),
-        socketCount400V: (map['socketCount400V'] as num?)?.toInt(),
+      socketCount230V: (map['socketCount230V'] as num?)?.toInt(),
+      socketCount400V: (map['socketCount400V'] as num?)?.toInt(),
       protectionSlots:
           slotsList.map((e) => BoardProtectionSlot.fromMap(e)).toList(),
       additionalEquipment:
@@ -306,6 +311,7 @@ class PowerReceiver extends GridNode {
   PowerReceiver({
     required super.id,
     required super.name,
+    super.location = '',
     super.parentId,
     required super.powerKw,
     required super.lengthM,
@@ -326,6 +332,7 @@ class PowerReceiver extends GridNode {
       'type': 'power_receiver',
       'id': id,
       'name': name,
+      'location': location,
       'parentId': parentId,
       'P': powerKw,
       'L': lengthM,
@@ -344,6 +351,7 @@ class PowerReceiver extends GridNode {
     return PowerReceiver(
       id: map['id'] as String,
       name: map['name'] as String,
+      location: (map['location'] as String?)?.trim() ?? '',
       parentId: map['parentId'] as String?,
       powerKw: (map['P'] as num).toDouble(),
       lengthM: (map['L'] as num).toDouble(),

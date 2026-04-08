@@ -41,9 +41,9 @@ class _ConstructionPowerScreenState extends State<ConstructionPowerScreen> {
               crossAxisAlignment: CrossAxisAlignment.start,
               mainAxisSize: MainAxisSize.min,
               children: [
-                const Text('Struktura rozdzielnic zasilania budowlanego'),
+                const Text('Zasilanie placu budowy'),
                 Text(
-                  'Budowa: $buildingName',
+                  'Plac budowy: $buildingName',
                   style: Theme.of(context).textTheme.bodySmall,
                 ),
               ],
@@ -135,13 +135,13 @@ class _ConstructionPowerScreenState extends State<ConstructionPowerScreen> {
       context: context,
       builder: (dialogContext) {
         return AlertDialog(
-          title: const Text('Nazwa budowy'),
+          title: const Text('Nazwa placu budowy'),
           content: TextField(
             controller: controller,
             autofocus: true,
             inputFormatters: TechnicalLabelGuard.inputFormatters(),
             decoration: const InputDecoration(
-              labelText: 'Nazwa techniczna budowy',
+              labelText: 'Nazwa techniczna placu budowy',
               hintText: 'np. BUD-2026-014',
             ),
           ),
@@ -397,7 +397,7 @@ class _ConstructionPowerScreenState extends State<ConstructionPowerScreen> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text(
-              'Struktura rozdzielnic zasilania budowlanego',
+              'Zasilanie placu budowy',
               style: Theme.of(context).textTheme.titleMedium,
             ),
             const SizedBox(height: 8),
@@ -1958,7 +1958,7 @@ class _ConstructionPowerScreenState extends State<ConstructionPowerScreen> {
                         ),
                         DropdownMenuItem(
                           value: ProtectionDeviceType.fuseHolder,
-                          child: Text('Kieszeń wkładki bezpiecznikowej'),
+                          child: Text('Rozłącznik bezpiecznikowy'),
                         ),
                       ],
                       onChanged: (value) {
@@ -2292,7 +2292,7 @@ class _ConstructionPowerScreenState extends State<ConstructionPowerScreen> {
       case ProtectionDeviceType.residualCurrentDevice:
         return 'Wyłącznik różnicowoprądowy$poles ${slot.ratedCurrentA?.toStringAsFixed(0) ?? '-'}A/${slot.residualCurrentmA?.toStringAsFixed(0) ?? '-'}mA';
       case ProtectionDeviceType.fuseHolder:
-        return 'Kieszeń wkładki bezpiecznikowej ${slot.fuseLinkSize ?? '-'}';
+        return 'Rozłącznik bezpiecznikowy ${slot.fuseLinkSize ?? '-'}';
     }
   }
 

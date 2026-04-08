@@ -209,19 +209,7 @@ class DashboardScreen extends StatelessWidget {
       children: [
         _buildDashboardButton(
           context,
-          'Struktura rozdzielnic zasilania budowlanego',
-          Icons.account_tree,
-          () => Navigator.pushNamed(context, '/construction-power'),
-        ),
-        _buildDashboardButton(
-          context,
-          'Analiza obwodu elektrycznego',
-          Icons.assessment,
-          () => Navigator.pushNamed(context, '/audit'),
-        ),
-        _buildDashboardButton(
-          context,
-          'Moja Budowa',
+          'Moja budowa',
           Icons.construction,
           () => Navigator.push(
             context,
@@ -229,6 +217,18 @@ class DashboardScreen extends StatelessWidget {
               builder: (context) => const ProjectSelectorScreen(),
             ),
           ),
+        ),
+        _buildDashboardButton(
+          context,
+          'Zasilanie placu budowy',
+          Icons.account_tree,
+          () => Navigator.pushNamed(context, '/construction-power'),
+        ),
+        _buildDashboardButton(
+          context,
+          'Obwody elektryczne',
+          Icons.assessment,
+          () => Navigator.pushNamed(context, '/audit'),
         ),
         _buildDashboardButton(
           context,

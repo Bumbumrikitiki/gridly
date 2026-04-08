@@ -178,7 +178,7 @@ class _CircuitAssessmentScreenState extends State<CircuitAssessmentScreen> {
         : (isMobile ? 16.0 : 20.0);
 
     return Scaffold(
-      appBar: AppBar(title: const Text('Analiza obwodu elektrycznego')),
+      appBar: AppBar(title: const Text('Obwody elektryczne')),
       bottomNavigationBar: isMobile
           ? const MainMobileNavBar(currentRoute: '/audit')
           : null,

@@ -836,15 +836,13 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreen>
             )
           else
             ...rooms.map((room) {
-              final total = room.tasks.length;
-              final completed = room.completedTasks.length;
-              final progress = total > 0 ? completed / total : 0.0;
+              final systemsCount = room.specificSystems.length;
               return _buildProgressRow(
                 title: room.name,
-                progress: progress,
-                subtitle: total == 0
+                progress: systemsCount > 0 ? 1.0 : 0.0,
+                subtitle: systemsCount == 0
                     ? _formatAdditionalRoomLocation(project, room)
-                    : '${_formatAdditionalRoomLocation(project, room)} · $completed/$total',
+                    : '${_formatAdditionalRoomLocation(project, room)} · Systemy: $systemsCount',
               );
             }),
         ],
@@ -873,7 +871,9 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreen>
                 } else {
                   results = rooms
                       .where(
-                        (room) => room.name.toLowerCase().contains(query),
+                        (room) =>
+                            room.name.toLowerCase().contains(query) ||
+                            room.roomNumber.toLowerCase().contains(query),
                       )
                       .toList();
                 }
@@ -952,7 +952,10 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreen>
     final stair = room.stairCaseName == null
         ? ''
         : ' · Klatka ${room.stairCaseName}';
-    return '$buildingName$stair · $levelLabel ${room.floorNumber}';
+    final number = room.roomNumber.trim().isEmpty
+      ? ''
+      : ' · Pom. ${room.roomNumber.trim()}';
+    return '$buildingName$stair · $levelLabel ${room.floorNumber}$number';
   }
 
   // ═══════════════════════════════════════════════════════════════════════════
@@ -1340,7 +1343,7 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreen>
                         ),
                         const SizedBox(height: 2),
                         Text(
-                          'M. ${unit.unitId} · Piętro ${unit.floor} · Klatka ${unit.stairCase}',
+                          'M. ${project.displayUnitId(unit)} · Piętro ${unit.floor} · Klatka ${unit.stairCase}',
                           style: TextStyle(
                             fontSize: 12,
                             color: Colors.grey.shade600,
@@ -1467,8 +1470,7 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreen>
                 } else {
                   results = units
                       .where(
-                        (unit) => unit.unitName.toLowerCase().contains(query) ||
-                            unit.unitId.toLowerCase().contains(query),
+                        (unit) => unit.matchesSearchQuery(query),
                       )
                       .toList();
                 }
@@ -1508,7 +1510,7 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreen>
                                   contentPadding: EdgeInsets.zero,
                                   title: Text(unit.unitName),
                                   subtitle: Text(
-                                    'M. ${unit.unitId} · Piętro ${unit.floor} · Klatka ${unit.stairCase}',
+                                    'M. ${project.displayUnitId(unit)} · Piętro ${unit.floor} · Klatka ${unit.stairCase}',
                                   ),
                                   trailing: unit.isAlternateUnit
                                       ? Icon(
@@ -1749,7 +1751,7 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreen>
       for (final unit in filteredUnits) {
         // Nr lokalu
         cell = sheet.cell(excel.CellIndex.indexByColumnRow(columnIndex: 0, rowIndex: currentRow));
-        cell.value = unit.unitId;
+        cell.value = project.displayUnitId(unit);
         cell.cellStyle = dataStyle;
         
         // Lokal zamienny
@@ -1904,7 +1906,7 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreen>
       }
 
       for (final unit in project.units) {
-        final entry = <String, dynamic>{'nrLokalu': unit.unitId};
+        final entry = <String, dynamic>{'nrLokalu': project.displayUnitId(unit)};
 
         for (final stageName in stageNames) {
           // Znajdź ID tasku dla tego etapu
@@ -2013,7 +2015,7 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreen>
       }
 
       for (final unit in project.units) {
-        final entry = <String, dynamic>{'nrLokalu': unit.unitId};
+        final entry = <String, dynamic>{'nrLokalu': project.displayUnitId(unit)};
 
         for (final stageName in stageNames) {
           // Znajdź ID tasku dla tego etapu

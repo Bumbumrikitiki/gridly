@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:math';
 
 import 'package:flutter/material.dart';
@@ -5,10 +6,17 @@ import 'package:provider/provider.dart';
 import 'package:gridly/models/grid_models.dart';
 import 'package:gridly/models/circuit_line.dart';
 import 'package:gridly/services/grid_provider.dart';
+import 'package:gridly/services/pdf_service.dart';
 import 'package:gridly/services/technical_label_guard.dart';
 import 'package:gridly/theme/grid_theme.dart';
 import 'package:gridly/widgets/circuit_line_edit_dialog.dart';
 import 'package:gridly/widgets/main_mobile_nav_bar.dart';
+
+enum _MobileTopologyAction {
+  manageStructures,
+  temporarySupply,
+  editBuildingName,
+}
 
 class TopologyScreen extends StatefulWidget {
   const TopologyScreen({super.key});
@@ -17,34 +25,93 @@ class TopologyScreen extends StatefulWidget {
   State<TopologyScreen> createState() => _TopologyScreenState();
 }
 
-class _TopologyScreenState extends State<TopologyScreen> {
+class _TopologyScreenState extends State<TopologyScreen>
+    with WidgetsBindingObserver {
   bool _hidePowerReceivers = false;
   bool _showOnlyWarningObservations = false;
   bool _showDistributionBoardTimeline = false;
+  bool _showOnlyNodesWithIssues = false;
+  final Set<String> _collapsedNodeIds = <String>{};
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addObserver(this);
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      context.read<GridProvider>().loadSavedStructures();
+    });
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (!mounted) {
+      return;
+    }
+
+    if (state == AppLifecycleState.inactive ||
+        state == AppLifecycleState.paused ||
+        state == AppLifecycleState.hidden ||
+        state == AppLifecycleState.detached) {
+      unawaited(context.read<GridProvider>().flushPendingSnapshotSave());
+    }
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
+  }
+
+  bool _isNodeExpanded(GridNode node, bool hasChildren) {
+    if (!hasChildren) {
+      return true;
+    }
+    return !_collapsedNodeIds.contains(node.id);
+  }
+
+  void _toggleNodeExpansion(GridNode node, bool hasChildren) {
+    if (!hasChildren) {
+      return;
+    }
+
+    setState(() {
+      if (_collapsedNodeIds.contains(node.id)) {
+        _collapsedNodeIds.remove(node.id);
+      } else {
+        _collapsedNodeIds.add(node.id);
+      }
+    });
+  }
 
   @override
   Widget build(BuildContext context) {
     final viewportWidth = MediaQuery.sizeOf(context).width;
     final isMobile = viewportWidth < 600;
-    final contentPadding = viewportWidth < 380
-        ? 12.0
-        : (isMobile ? 14.0 : 16.0);
+    final contentPadding =
+        viewportWidth < 380 ? 12.0 : (isMobile ? 14.0 : 16.0);
 
     return Scaffold(
       appBar: AppBar(
-        title: Consumer<GridProvider>(
-          builder: (context, provider, _) {
-            final buildingName = provider.buildingName.isEmpty
+        title: Selector<GridProvider,
+            ({String buildingName, String structureName})>(
+          selector: (context, provider) => (
+            buildingName: provider.buildingName.isEmpty
                 ? 'nie podano'
-                : provider.buildingName;
-
+                : provider.buildingName,
+            structureName: provider.currentStructureName,
+          ),
+          builder: (context, headerData, _) {
             return Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               mainAxisSize: MainAxisSize.min,
               children: [
-                const Text('Struktura rozdzielnic zasilania budowlanego'),
+                const Text('Zasilanie placu budowy'),
                 Text(
-                  'Budowa: $buildingName',
+                  'Struktura: ${headerData.structureName}',
+                  style: Theme.of(context).textTheme.bodySmall,
+                ),
+                Text(
+                  'Plac budowy: ${headerData.buildingName}',
                   style: Theme.of(context).textTheme.bodySmall,
                 ),
               ],
@@ -52,103 +119,683 @@ class _TopologyScreenState extends State<TopologyScreen> {
           },
         ),
         actions: [
-          IconButton(
-            icon: const Icon(Icons.edit_note),
-            onPressed: () => _showBuildingNameDialog(context),
-            tooltip: 'Edytuj nazwę budowy',
-          ),
+          if (isMobile)
+            PopupMenuButton<_MobileTopologyAction>(
+              tooltip: 'Więcej opcji',
+              onSelected: (action) {
+                switch (action) {
+                  case _MobileTopologyAction.manageStructures:
+                    _showStructureManagerDialog(context);
+                    break;
+                  case _MobileTopologyAction.temporarySupply:
+                    _showTemporarySupplyConfigDialog(context);
+                    break;
+                  case _MobileTopologyAction.editBuildingName:
+                    _showBuildingNameDialog(context);
+                    break;
+                }
+              },
+              itemBuilder: (context) => const [
+                PopupMenuItem(
+                  value: _MobileTopologyAction.manageStructures,
+                  child: Text('Zarządzaj strukturami'),
+                ),
+                PopupMenuItem(
+                  value: _MobileTopologyAction.temporarySupply,
+                  child: Text('Parametry zasilania tymczasowego'),
+                ),
+                PopupMenuItem(
+                  value: _MobileTopologyAction.editBuildingName,
+                  child: Text('Edytuj nazwę budowy'),
+                ),
+              ],
+            )
+          else
+            IconButton(
+              icon: const Icon(Icons.account_tree_outlined),
+              onPressed: () => _showStructureManagerDialog(context),
+              tooltip: 'Zarządzaj strukturami',
+            ),
+          if (!isMobile)
+            IconButton(
+              icon: const Icon(Icons.settings_input_component_outlined),
+              onPressed: () => _showTemporarySupplyConfigDialog(context),
+              tooltip: 'Parametry zasilania tymczasowego',
+            ),
+          if (isMobile)
+            IconButton(
+              icon: const Icon(Icons.picture_as_pdf),
+              onPressed: () => _generateTopologyPdf(context),
+              tooltip: 'Schemat blokowy (PDF)',
+            )
+          else
+            TextButton.icon(
+              onPressed: () => _generateTopologyPdf(context),
+              icon: const Icon(Icons.picture_as_pdf, size: 18),
+              label: const Text('Schemat blokowy'),
+            ),
+          if (!isMobile)
+            IconButton(
+              icon: const Icon(Icons.edit_note),
+              onPressed: () => _showBuildingNameDialog(context),
+              tooltip: 'Edytuj nazwę budowy',
+            ),
           IconButton(
             icon: const Icon(Icons.add),
-            onPressed: () => _showAddNodeDialog(context),
-            tooltip: 'Dodaj węzeł',
+            onPressed: () => _showAddNodeFromToolbarDialog(context),
+            tooltip: 'Dodaj element do rozdzielnicy',
           ),
         ],
       ),
       bottomNavigationBar: isMobile
           ? const MainMobileNavBar(currentRoute: '/construction-power')
           : null,
-      body: Consumer<GridProvider>(
-        builder: (context, provider, _) {
-          final allNodes = provider.nodes;
-          final observations = _collectConnectionObservations(allNodes);
-          final nodes = _hidePowerReceivers
-              ? allNodes.whereType<DistributionBoard>().toList()
-              : allNodes;
-          final visibleNodeIds = nodes.map((node) => node.id).toSet();
-          final childrenById = <String?, List<GridNode>>{};
-
-          for (final node in nodes) {
-            final parentId =
-                visibleNodeIds.contains(node.parentId) ? node.parentId : null;
-            childrenById.putIfAbsent(parentId, () => []);
-            childrenById[parentId]!.add(node);
-          }
-
-          for (final childList in childrenById.values) {
-            childList.sort((a, b) => a.name.compareTo(b.name));
-          }
-
-          final roots = childrenById[null] ?? [];
-
-          if (allNodes.isEmpty) {
-            return const Center(child: Text('No nodes available.'));
-          }
-
-          if (nodes.isEmpty) {
-            return Center(
-              child: Text(
-                'Brak widocznych węzłów po zastosowaniu filtra.',
-                style: Theme.of(context).textTheme.bodyMedium,
+      body: SingleChildScrollView(
+        child: Padding(
+          padding: EdgeInsets.all(contentPadding),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Selector<GridProvider, TemporarySupplyConfig>(
+                selector: (context, provider) => provider.temporarySupplyConfig,
+                builder: (context, config, _) {
+                  return _buildTemporarySupplyCard(context, config);
+                },
               ),
-            );
-          }
-
-          return SingleChildScrollView(
-            child: Padding(
-              padding: EdgeInsets.all(contentPadding),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
+              const SizedBox(height: 10),
+              Row(
                 children: [
-                  Row(
+                  ElevatedButton.icon(
+                    onPressed: () {
+                      setState(() {
+                        _showDistributionBoardTimeline =
+                            !_showDistributionBoardTimeline;
+                      });
+                    },
+                    icon: Icon(
+                      _showDistributionBoardTimeline
+                          ? Icons.visibility_off
+                          : Icons.visibility,
+                    ),
+                    label: Text(
+                      _showDistributionBoardTimeline
+                          ? 'Ukryj topologię rozdzielnic'
+                          : 'Pokaż topologię rozdzielnic',
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 10),
+              Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                children: [
+                  FilterChip(
+                    label: const Text('Pokaż tylko rozdzielnice'),
+                    selected: _hidePowerReceivers,
+                    onSelected: (selected) {
+                      setState(() {
+                        _hidePowerReceivers = selected;
+                      });
+                    },
+                  ),
+                  FilterChip(
+                    label: const Text('Tylko elementy z problemami'),
+                    selected: _showOnlyNodesWithIssues,
+                    onSelected: (selected) {
+                      setState(() {
+                        _showOnlyNodesWithIssues = selected;
+                      });
+                    },
+                  ),
+                ],
+              ),
+              Selector<GridProvider, int>(
+                selector: (context, provider) => provider.topologyRevision,
+                builder: (context, _, __) {
+                  final provider = context.read<GridProvider>();
+                  final allNodes = provider.nodes;
+                  final observations = _collectConnectionObservations(allNodes);
+                  final nodes = _hidePowerReceivers
+                      ? allNodes.whereType<DistributionBoard>().toList()
+                      : allNodes;
+                  final visibleNodeIds = nodes.map((node) => node.id).toSet();
+                  final childrenById = <String?, List<GridNode>>{};
+
+                  for (final node in nodes) {
+                    final parentId = visibleNodeIds.contains(node.parentId)
+                        ? node.parentId
+                        : null;
+                    childrenById.putIfAbsent(parentId, () => []);
+                    childrenById[parentId]!.add(node);
+                  }
+
+                  for (final childList in childrenById.values) {
+                    childList.sort((a, b) => a.name.compareTo(b.name));
+                  }
+
+                  final roots = childrenById[null] ?? [];
+                  final nodesWithIssues = allNodes
+                      .where((candidate) => _hasNodeIssues(candidate, allNodes))
+                      .map((candidate) => candidate.id)
+                      .toSet();
+                  final filteredRoots = roots
+                      .where(
+                        (root) =>
+                            !_showOnlyNodesWithIssues ||
+                            _subtreeHasIssue(
+                                root, childrenById, nodesWithIssues),
+                      )
+                      .toList();
+
+                  if (allNodes.isEmpty) {
+                    return const Padding(
+                      padding: EdgeInsets.only(top: 24),
+                      child: Center(child: Text('Brak elementów topologii.')),
+                    );
+                  }
+
+                  if (nodes.isEmpty) {
+                    return Padding(
+                      padding: const EdgeInsets.only(top: 24),
+                      child: Center(
+                        child: Text(
+                          'Brak widocznych węzłów po zastosowaniu filtra.',
+                          style: Theme.of(context).textTheme.bodyMedium,
+                        ),
+                      ),
+                    );
+                  }
+
+                  return Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
-                      ElevatedButton.icon(
-                        onPressed: () {
-                          setState(() {
-                            _showDistributionBoardTimeline =
-                                !_showDistributionBoardTimeline;
+                      if (_showDistributionBoardTimeline) ...[
+                        const SizedBox(height: 12),
+                        _buildDistributionBoardTimeline(context, allNodes),
+                      ],
+                      if (observations.isNotEmpty) ...[
+                        const SizedBox(height: 12),
+                        _buildObservationsCard(context, observations),
+                      ],
+                      const SizedBox(height: 12),
+                      for (final node in filteredRoots)
+                        _buildNode(
+                          context,
+                          provider,
+                          node,
+                          allNodes,
+                          childrenById,
+                          depth: 0,
+                        ),
+                    ],
+                  );
+                },
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildTemporarySupplyCard(
+    BuildContext context,
+    TemporarySupplyConfig config,
+  ) {
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(12),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                const Expanded(
+                  child: Text(
+                    'Parametry zasilania tymczasowego',
+                    style: TextStyle(fontWeight: FontWeight.bold),
+                  ),
+                ),
+                TextButton.icon(
+                  onPressed: () => _showTemporarySupplyConfigDialog(context),
+                  icon: const Icon(Icons.tune, size: 16),
+                  label: const Text('Edytuj'),
+                ),
+              ],
+            ),
+            const SizedBox(height: 6),
+            Text(
+              'Układ sieci: ${config.networkSystem} | Moc OSD: ${_formatOptionalValue(config.osdConnectionPowerKw, unit: 'kW')} | Zabezpieczenie OSD: ${_formatOptionalValue(config.osdMainProtectionA, unit: 'A')}',
+              style: Theme.of(context).textTheme.bodySmall,
+            ),
+            const SizedBox(height: 2),
+            Text(
+              'Założenia zwarciowe: Ik ${_formatOptionalValue(config.assumedShortCircuitCurrentKa, unit: 'kA')} | Zs ${_formatOptionalValue(config.assumedLoopImpedanceOhm, unit: 'Ω')}',
+              style: Theme.of(context).textTheme.bodySmall,
+            ),
+            const SizedBox(height: 2),
+            Text(
+              'Ochrona: RCD 30 mA ${config.rcdRequired ? 'wymagane' : 'niewymagane'} | Uziemienie placu ${config.siteEarthingRequired ? 'wymagane' : 'niewymagane'}',
+              style: Theme.of(context).textTheme.bodySmall,
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Future<void> _showTemporarySupplyConfigDialog(BuildContext context) async {
+    final provider = context.read<GridProvider>();
+    final current = provider.temporarySupplyConfig;
+
+    final osdPowerController = TextEditingController(
+      text: current.osdConnectionPowerKw?.toStringAsFixed(1) ?? '',
+    );
+    final osdProtectionController = TextEditingController(
+      text: current.osdMainProtectionA?.toStringAsFixed(0) ?? '',
+    );
+    final assumedIkController = TextEditingController(
+      text: current.assumedShortCircuitCurrentKa?.toStringAsFixed(2) ?? '',
+    );
+    final assumedZsController = TextEditingController(
+      text: current.assumedLoopImpedanceOhm?.toStringAsFixed(3) ?? '',
+    );
+
+    var selectedNetworkSystem = current.networkSystem;
+    var rcdRequired = current.rcdRequired;
+    var siteEarthingRequired = current.siteEarthingRequired;
+
+    await showDialog<void>(
+      context: context,
+      builder: (dialogContext) {
+        return StatefulBuilder(
+          builder: (context, setDialogState) {
+            return AlertDialog(
+              insetPadding:
+                  const EdgeInsets.symmetric(horizontal: 12, vertical: 24),
+              title: const Text('Parametry zasilania tymczasowego'),
+              content: ConstrainedBox(
+                constraints: BoxConstraints(
+                  maxHeight: MediaQuery.sizeOf(dialogContext).height * 0.76,
+                ),
+                child: SingleChildScrollView(
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      DropdownButtonFormField<String>(
+                        initialValue: selectedNetworkSystem,
+                        decoration:
+                            const InputDecoration(labelText: 'Układ sieci'),
+                        items: const [
+                          DropdownMenuItem(value: 'TN-C', child: Text('TN-C')),
+                          DropdownMenuItem(value: 'TN-S', child: Text('TN-S')),
+                          DropdownMenuItem(
+                              value: 'TN-C-S', child: Text('TN-C-S')),
+                          DropdownMenuItem(value: 'TT', child: Text('TT')),
+                        ],
+                        onChanged: (value) {
+                          if (value != null) {
+                            setDialogState(() {
+                              selectedNetworkSystem = value;
+                            });
+                          }
+                        },
+                      ),
+                      const SizedBox(height: 10),
+                      TextField(
+                        controller: osdPowerController,
+                        keyboardType: const TextInputType.numberWithOptions(
+                            decimal: true),
+                        decoration: const InputDecoration(
+                          labelText:
+                              'Moc przyłączeniowa OSD [kW] (opcjonalnie)',
+                        ),
+                      ),
+                      const SizedBox(height: 10),
+                      TextField(
+                        controller: osdProtectionController,
+                        keyboardType: const TextInputType.numberWithOptions(
+                            decimal: true),
+                        decoration: const InputDecoration(
+                          labelText:
+                              'Zabezpieczenie przedlicznikowe OSD [A] (opcjonalnie)',
+                        ),
+                      ),
+                      const SizedBox(height: 10),
+                      TextField(
+                        controller: assumedIkController,
+                        keyboardType: const TextInputType.numberWithOptions(
+                            decimal: true),
+                        decoration: const InputDecoration(
+                          labelText:
+                              'Założony prąd zwarciowy Ik [kA] (opcjonalnie)',
+                        ),
+                      ),
+                      const SizedBox(height: 10),
+                      TextField(
+                        controller: assumedZsController,
+                        keyboardType: const TextInputType.numberWithOptions(
+                            decimal: true),
+                        decoration: const InputDecoration(
+                          labelText:
+                              'Założona impedancja pętli Zs [Ω] (opcjonalnie)',
+                        ),
+                      ),
+                      const SizedBox(height: 10),
+                      SwitchListTile(
+                        contentPadding: EdgeInsets.zero,
+                        title: const Text('RCD 30 mA wymagane'),
+                        value: rcdRequired,
+                        onChanged: (value) {
+                          setDialogState(() {
+                            rcdRequired = value;
                           });
                         },
-                        icon: Icon(
-                          _showDistributionBoardTimeline
-                              ? Icons.visibility_off
-                              : Icons.visibility,
-                        ),
-                        label: Text(
-                          _showDistributionBoardTimeline
-                              ? 'Ukryj strukturę rozdzielnic'
-                              : 'Pokaż strukturę rozdzielnic',
-                        ),
+                      ),
+                      SwitchListTile(
+                        contentPadding: EdgeInsets.zero,
+                        title: const Text('Uziemienie placu wymagane'),
+                        value: siteEarthingRequired,
+                        onChanged: (value) {
+                          setDialogState(() {
+                            siteEarthingRequired = value;
+                          });
+                        },
                       ),
                     ],
                   ),
-                  if (_showDistributionBoardTimeline) ...[
-                    const SizedBox(height: 12),
-                    _buildDistributionBoardTimeline(context, allNodes),
-                  ],
-                  if (observations.isNotEmpty) ...[
-                    const SizedBox(height: 12),
-                    _buildObservationsCard(context, observations),
-                  ],
-                  const SizedBox(height: 12),
-                  for (final node in roots)
-                    _buildNode(context, provider, node, childrenById, depth: 0),
-                ],
+                ),
               ),
-            ),
-          );
-        },
-      ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.of(dialogContext).pop(),
+                  child: const Text('Anuluj'),
+                ),
+                ElevatedButton(
+                  onPressed: () {
+                    final parsedOsdPower = _parseOptionalPositiveNumber(
+                      osdPowerController.text,
+                    );
+                    final parsedOsdProtection = _parseOptionalPositiveNumber(
+                      osdProtectionController.text,
+                    );
+                    final parsedIk = _parseOptionalPositiveNumber(
+                      assumedIkController.text,
+                    );
+                    final parsedZs = _parseOptionalPositiveNumber(
+                      assumedZsController.text,
+                    );
+
+                    final hasInvalidOsdPower =
+                        osdPowerController.text.trim().isNotEmpty &&
+                            parsedOsdPower == null;
+                    final hasInvalidOsdProtection =
+                        osdProtectionController.text.trim().isNotEmpty &&
+                            parsedOsdProtection == null;
+                    final hasInvalidIk =
+                        assumedIkController.text.trim().isNotEmpty &&
+                            parsedIk == null;
+                    final hasInvalidZs =
+                        assumedZsController.text.trim().isNotEmpty &&
+                            parsedZs == null;
+
+                    if (hasInvalidOsdPower ||
+                        hasInvalidOsdProtection ||
+                        hasInvalidIk ||
+                        hasInvalidZs) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(
+                          content: Text(
+                            'Sprawdź pola liczbowe parametrów zasilania (wartości dodatnie).',
+                          ),
+                        ),
+                      );
+                      return;
+                    }
+
+                    provider.updateTemporarySupplyConfig(
+                      TemporarySupplyConfig(
+                        networkSystem: selectedNetworkSystem,
+                        osdConnectionPowerKw: parsedOsdPower,
+                        osdMainProtectionA: parsedOsdProtection,
+                        assumedShortCircuitCurrentKa: parsedIk,
+                        assumedLoopImpedanceOhm: parsedZs,
+                        rcdRequired: rcdRequired,
+                        siteEarthingRequired: siteEarthingRequired,
+                      ),
+                    );
+
+                    Navigator.of(dialogContext).pop();
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(
+                        content:
+                            Text('Zapisano parametry zasilania tymczasowego.'),
+                      ),
+                    );
+                  },
+                  child: const Text('Zapisz'),
+                ),
+              ],
+            );
+          },
+        );
+      },
     );
+
+    osdPowerController.dispose();
+    osdProtectionController.dispose();
+    assumedIkController.dispose();
+    assumedZsController.dispose();
+  }
+
+  String _formatOptionalValue(double? value, {required String unit}) {
+    if (value == null) {
+      return '-';
+    }
+    return '${value.toStringAsFixed(2)} $unit';
+  }
+
+  Future<void> _showStructureManagerDialog(BuildContext context) async {
+    await context.read<GridProvider>().loadSavedStructures();
+    if (!context.mounted) {
+      return;
+    }
+
+    await showDialog<void>(
+      context: context,
+      builder: (dialogContext) {
+        return Consumer<GridProvider>(
+          builder: (context, provider, _) {
+            final structures = provider.structures;
+            final selectedId = provider.currentStructureId;
+
+            return AlertDialog(
+              insetPadding:
+                  const EdgeInsets.symmetric(horizontal: 12, vertical: 24),
+              title: const Text('Topologie rozdzielnic'),
+              content: SizedBox(
+                width: min(460, MediaQuery.sizeOf(dialogContext).width * 0.92),
+                child: provider.isStructuresLoading
+                    ? const Padding(
+                        padding: EdgeInsets.all(16),
+                        child: Center(child: CircularProgressIndicator()),
+                      )
+                    : Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Align(
+                            alignment: Alignment.centerLeft,
+                            child: ElevatedButton.icon(
+                              onPressed: () =>
+                                  _showCreateStructureDialog(dialogContext),
+                              icon: const Icon(Icons.add),
+                              label: const Text('Nowa struktura'),
+                            ),
+                          ),
+                          const SizedBox(height: 10),
+                          if (structures.isEmpty)
+                            const Padding(
+                              padding: EdgeInsets.symmetric(vertical: 12),
+                              child: Text('Brak zapisanych struktur.'),
+                            )
+                          else
+                            Flexible(
+                              child: ListView.separated(
+                                shrinkWrap: true,
+                                itemCount: structures.length,
+                                separatorBuilder: (_, __) =>
+                                    const SizedBox(height: 6),
+                                itemBuilder: (context, index) {
+                                  final structure = structures[index];
+                                  final isSelected = structure.id == selectedId;
+
+                                  return ListTile(
+                                    tileColor: isSelected
+                                        ? Theme.of(context)
+                                            .colorScheme
+                                            .primary
+                                            .withValues(alpha: 0.12)
+                                        : null,
+                                    shape: RoundedRectangleBorder(
+                                      borderRadius: BorderRadius.circular(8),
+                                      side: BorderSide(
+                                        color: isSelected
+                                            ? Theme.of(context)
+                                                .colorScheme
+                                                .primary
+                                            : Colors.transparent,
+                                      ),
+                                    ),
+                                    title: Text(structure.name),
+                                    subtitle: Text(
+                                      'Aktualizacja: ${_formatStructureDate(structure.updatedAt)}',
+                                    ),
+                                    onTap: () async {
+                                      await provider
+                                          .switchStructure(structure.id);
+                                      if (context.mounted) {
+                                        Navigator.of(dialogContext).pop();
+                                      }
+                                    },
+                                    trailing: IconButton(
+                                      icon: const Icon(Icons.delete,
+                                          color: Colors.red),
+                                      tooltip: 'Usuń strukturę',
+                                      onPressed: () => _confirmDeleteStructure(
+                                        dialogContext,
+                                        structure.id,
+                                        structure.name,
+                                      ),
+                                    ),
+                                  );
+                                },
+                              ),
+                            ),
+                        ],
+                      ),
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.of(dialogContext).pop(),
+                  child: const Text('Zamknij'),
+                ),
+              ],
+            );
+          },
+        );
+      },
+    );
+  }
+
+  Future<void> _showCreateStructureDialog(BuildContext context) async {
+    final controller = TextEditingController();
+
+    await showDialog<void>(
+      context: context,
+      builder: (dialogContext) {
+        return AlertDialog(
+          insetPadding:
+              const EdgeInsets.symmetric(horizontal: 12, vertical: 24),
+          title: const Text('Nowa struktura'),
+          content: TextField(
+            controller: controller,
+            autofocus: true,
+            decoration: const InputDecoration(
+              labelText: 'Nazwa struktury',
+              hintText: 'np. Etap 1 - rozdzielnice',
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(dialogContext).pop(),
+              child: const Text('Anuluj'),
+            ),
+            ElevatedButton(
+              onPressed: () async {
+                await context.read<GridProvider>().createNewStructure(
+                      controller.text,
+                    );
+                if (context.mounted) {
+                  Navigator.of(dialogContext).pop();
+                }
+              },
+              child: const Text('Utwórz'),
+            ),
+          ],
+        );
+      },
+    );
+
+    controller.dispose();
+  }
+
+  Future<void> _confirmDeleteStructure(
+    BuildContext context,
+    String structureId,
+    String structureName,
+  ) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) {
+        return AlertDialog(
+          title: const Text('Usuń strukturę'),
+          content: Text(
+            'Czy na pewno chcesz usunąć strukturę "$structureName"?',
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(dialogContext).pop(false),
+              child: const Text('Anuluj'),
+            ),
+            ElevatedButton(
+              onPressed: () => Navigator.of(dialogContext).pop(true),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.red,
+                foregroundColor: Colors.white,
+              ),
+              child: const Text('Usuń'),
+            ),
+          ],
+        );
+      },
+    );
+
+    if (confirmed == true) {
+      await context.read<GridProvider>().deleteStructure(structureId);
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Struktura została usunięta.'),
+          ),
+        );
+      }
+    }
+  }
+
+  String _formatStructureDate(DateTime date) {
+    final twoDigits = (int value) => value.toString().padLeft(2, '0');
+    return '${date.year}-${twoDigits(date.month)}-${twoDigits(date.day)} ${twoDigits(date.hour)}:${twoDigits(date.minute)}';
   }
 
   Future<void> _showBuildingNameDialog(BuildContext context) async {
@@ -159,14 +806,15 @@ class _TopologyScreenState extends State<TopologyScreen> {
       context: context,
       builder: (dialogContext) {
         return AlertDialog(
-          insetPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 24),
-          title: const Text('Nazwa budowy'),
+          insetPadding:
+              const EdgeInsets.symmetric(horizontal: 12, vertical: 24),
+          title: const Text('Nazwa placu budowy'),
           content: TextField(
             controller: controller,
             autofocus: true,
             inputFormatters: TechnicalLabelGuard.inputFormatters(),
             decoration: const InputDecoration(
-              labelText: 'Nazwa techniczna budowy',
+              labelText: 'Nazwa techniczna placu budowy',
               hintText: 'np. BUD-2026-014',
             ),
           ),
@@ -422,7 +1070,7 @@ class _TopologyScreenState extends State<TopologyScreen> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text(
-              'Struktura rozdzielnic zasilania budowlanego',
+              'Zasilanie placu budowy',
               style: Theme.of(context).textTheme.titleMedium,
             ),
             const SizedBox(height: 8),
@@ -550,21 +1198,27 @@ class _TopologyScreenState extends State<TopologyScreen> {
     BuildContext context,
     GridProvider provider,
     GridNode node,
+    List<GridNode> allNodes,
     Map<String?, List<GridNode>> childrenById, {
     required int depth,
   }) {
     final children = childrenById[node.id] ?? const [];
+    final hasChildren = children.isNotEmpty;
+    final isExpanded = _isNodeExpanded(node, hasChildren);
+    final leftIndent = _resolveNodeIndent(context, depth);
+    final tileWidth = _resolveNodeTileWidth(context, depth);
     final powerKw = provider.aggregatePowerKw[node];
     final actualPowerKw = powerKw ?? node.powerKw;
     final ib = _calculateIb(node, actualPowerKw);
     final currentLimits = _resolveNodeCurrentLimits(provider, node);
     final effectiveLimitA = currentLimits.effectiveLimitA;
-    final loadRatio =
-        effectiveLimitA == null || effectiveLimitA <= 0 ? 0.0 : ib / effectiveLimitA;
+    final loadRatio = effectiveLimitA == null || effectiveLimitA <= 0
+        ? 0.0
+        : ib / effectiveLimitA;
     final progressColor = _loadColor(loadRatio, context);
 
     return Padding(
-      padding: EdgeInsets.only(left: depth * 16.0, bottom: 12),
+      padding: EdgeInsets.only(left: leftIndent, bottom: 12),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         mainAxisSize: MainAxisSize.min,
@@ -590,6 +1244,12 @@ class _TopologyScreenState extends State<TopologyScreen> {
                     loadRatio,
                     currentLimits,
                     progressColor,
+                    tileWidth: tileWidth,
+                    hasChildren: hasChildren,
+                    isExpanded: isExpanded,
+                    onToggleExpansion: () =>
+                        _toggleNodeExpansion(node, hasChildren),
+                    allNodes: allNodes,
                     isDragging: true,
                   ),
                 ),
@@ -602,6 +1262,12 @@ class _TopologyScreenState extends State<TopologyScreen> {
                     loadRatio,
                     currentLimits,
                     progressColor,
+                    tileWidth: tileWidth,
+                    hasChildren: hasChildren,
+                    isExpanded: isExpanded,
+                    onToggleExpansion: () =>
+                        _toggleNodeExpansion(node, hasChildren),
+                    allNodes: allNodes,
                     isDragging: true,
                   ),
                 ),
@@ -612,12 +1278,26 @@ class _TopologyScreenState extends State<TopologyScreen> {
                   loadRatio,
                   currentLimits,
                   progressColor,
+                  tileWidth: tileWidth,
+                  hasChildren: hasChildren,
+                  isExpanded: isExpanded,
+                  onToggleExpansion: () =>
+                      _toggleNodeExpansion(node, hasChildren),
+                  allNodes: allNodes,
                   isHighlighted: candidateData.isNotEmpty,
                 ),
               );
             },
           ),
-          if (children.isNotEmpty)
+          if (hasChildren && !isExpanded)
+            Padding(
+              padding: const EdgeInsets.only(top: 6, left: 8),
+              child: Text(
+                'Zwinięto ${children.length} ${children.length == 1 ? 'element' : 'elementy'} podrzędne',
+                style: Theme.of(context).textTheme.bodySmall,
+              ),
+            ),
+          if (hasChildren && isExpanded)
             Padding(
               padding: const EdgeInsets.only(top: 8),
               child: Column(
@@ -641,6 +1321,7 @@ class _TopologyScreenState extends State<TopologyScreen> {
                           context,
                           provider,
                           child,
+                          allNodes,
                           childrenById,
                           depth: depth + 1,
                         ),
@@ -662,18 +1343,20 @@ class _TopologyScreenState extends State<TopologyScreen> {
     required int depth,
   }) {
     final cableState = _evaluateCableState(provider, child);
+    final leftIndent = _resolveNodeIndent(context, depth);
+    final tileWidth = _resolveNodeTileWidth(context, depth);
     final stateColor = _cableStateColor(context, cableState.kind);
     final caption =
         '${child.lengthM.toStringAsFixed(0)} m · ${child.crossSectionMm2.toStringAsFixed(1)} mm² · ${child.cableCores} żył · ${GridNode.materialToString(child.material)}';
 
     return Padding(
       padding: EdgeInsets.only(
-        left: depth * 16.0,
+        left: leftIndent,
         right: 8,
         bottom: 8,
       ),
       child: SizedBox(
-        width: 300,
+        width: tileWidth,
         child: Material(
           color: Theme.of(context).cardColor,
           borderRadius: BorderRadius.circular(10),
@@ -759,12 +1442,12 @@ class _TopologyScreenState extends State<TopologyScreen> {
     );
   }
 
-  void _showEditCableDialog(
+  Future<void> _showEditCableDialog(
     BuildContext context,
     GridProvider provider,
     DistributionBoard parent,
     DistributionBoard child,
-  ) {
+  ) async {
     final lengthController = TextEditingController(
       text: child.lengthM.toStringAsFixed(1),
     );
@@ -784,13 +1467,14 @@ class _TopologyScreenState extends State<TopologyScreen> {
       selectedCores = 5;
     }
 
-    showDialog<void>(
+    await showDialog<void>(
       context: context,
       builder: (dialogContext) {
         return StatefulBuilder(
           builder: (context, setDialogState) {
             return AlertDialog(
-              insetPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 24),
+              insetPadding:
+                  const EdgeInsets.symmetric(horizontal: 12, vertical: 24),
               title: Text('Kabel: ${parent.name} → ${child.name}'),
               content: ConstrainedBox(
                 constraints: BoxConstraints(
@@ -822,7 +1506,8 @@ class _TopologyScreenState extends State<TopologyScreen> {
                       const SizedBox(height: 10),
                       DropdownButtonFormField<ConductorMaterial>(
                         initialValue: selectedMaterial,
-                        decoration: const InputDecoration(labelText: 'Materiał'),
+                        decoration:
+                            const InputDecoration(labelText: 'Materiał'),
                         items: const [
                           DropdownMenuItem(
                             value: ConductorMaterial.cu,
@@ -844,7 +1529,8 @@ class _TopologyScreenState extends State<TopologyScreen> {
                       const SizedBox(height: 10),
                       DropdownButtonFormField<int>(
                         initialValue: selectedCores,
-                        decoration: const InputDecoration(labelText: 'Liczba żył'),
+                        decoration:
+                            const InputDecoration(labelText: 'Liczba żył'),
                         items: const [
                           DropdownMenuItem(value: 4, child: Text('4-żyłowy')),
                           DropdownMenuItem(value: 5, child: Text('5-żyłowy')),
@@ -928,6 +1614,9 @@ class _TopologyScreenState extends State<TopologyScreen> {
         );
       },
     );
+
+    lengthController.dispose();
+    crossSectionController.dispose();
   }
 
   double? _parsePositiveNumber(String value) {
@@ -936,6 +1625,28 @@ class _TopologyScreenState extends State<TopologyScreen> {
     if (parsed == null || parsed <= 0) {
       return null;
     }
+    return parsed;
+  }
+
+  double? _parseOptionalPositiveNumber(String value) {
+    final normalized = value.replaceAll(',', '.').trim();
+    if (normalized.isEmpty) {
+      return null;
+    }
+    return _parsePositiveNumber(normalized);
+  }
+
+  int? _parseOptionalNonNegativeInt(String value) {
+    final normalized = value.trim();
+    if (normalized.isEmpty) {
+      return null;
+    }
+
+    final parsed = int.tryParse(normalized);
+    if (parsed == null || parsed < 0) {
+      return null;
+    }
+
     return parsed;
   }
 
@@ -1026,8 +1737,9 @@ class _TopologyScreenState extends State<TopologyScreen> {
       if (parentBoard != null) {
         for (final slot in parentBoard.protectionSlots) {
           final slotCurrent = slot.ratedCurrentA;
-          final isMatch =
-              !slot.isReserve && slot.assignedNodeId == node.id && (slotCurrent ?? 0) > 0;
+          final isMatch = !slot.isReserve &&
+              slot.assignedNodeId == node.id &&
+              (slotCurrent ?? 0) > 0;
           if (!isMatch) {
             continue;
           }
@@ -1103,6 +1815,11 @@ class _TopologyScreenState extends State<TopologyScreen> {
     double loadRatio,
     _NodeCurrentLimits currentLimits,
     Color progressColor, {
+    required double tileWidth,
+    required bool hasChildren,
+    required bool isExpanded,
+    required VoidCallback onToggleExpansion,
+    required List<GridNode> allNodes,
     bool isHighlighted = false,
     bool isDragging = false,
   }) {
@@ -1113,9 +1830,10 @@ class _TopologyScreenState extends State<TopologyScreen> {
         : const <BoardAdditionalEquipment>[];
     final socketsSummary =
         node is DistributionBoard ? _boardSocketSummary(node) : null;
+    final nodeStatus = _resolveNodeStatus(node, allNodes);
 
     return SizedBox(
-      width: 300,
+      width: tileWidth,
       child: ConstrainedBox(
         constraints: const BoxConstraints(minHeight: 60, minWidth: 200),
         child: Material(
@@ -1172,13 +1890,25 @@ class _TopologyScreenState extends State<TopologyScreen> {
                             ),
                           ),
                           const SizedBox(width: 8),
-                          Text(
-                            'Ib ${ib.toStringAsFixed(1)}A · Limit ${_formatCurrent(currentLimits.effectiveLimitA)} · ${node.cableCores} żył',
-                            style: Theme.of(context).textTheme.bodySmall,
+                          Flexible(
+                            child: Text(
+                              'Ib ${ib.toStringAsFixed(1)}A · Limit ${_formatCurrent(currentLimits.effectiveLimitA)} · ${node.cableCores} żył',
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              textAlign: TextAlign.right,
+                              style: Theme.of(context).textTheme.bodySmall,
+                            ),
                           ),
                         ],
                       ),
                       const SizedBox(height: 2),
+                      if (node.location.trim().isNotEmpty)
+                        Text(
+                          'Lokalizacja: ${node.location}',
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: Theme.of(context).textTheme.labelSmall,
+                        ),
                       Text(
                         'In ${_formatCurrent(currentLimits.nodeRatedA)} · Zabezp. ${_formatCurrent(currentLimits.upstreamProtectionA)} · Kabel~ ${_formatCurrent(currentLimits.cableEstimatedA)}',
                         maxLines: 1,
@@ -1192,6 +1922,8 @@ class _TopologyScreenState extends State<TopologyScreen> {
                           overflow: TextOverflow.ellipsis,
                           style: Theme.of(context).textTheme.labelSmall,
                         ),
+                      const SizedBox(height: 4),
+                      _buildNodeStatusChip(context, nodeStatus),
                       ConstrainedBox(
                         constraints: const BoxConstraints(minHeight: 6),
                         child: SizedBox(
@@ -1227,6 +1959,20 @@ class _TopologyScreenState extends State<TopologyScreen> {
                   ),
                 ),
                 const SizedBox(width: 8),
+                if (hasChildren)
+                  InkWell(
+                    borderRadius: BorderRadius.circular(18),
+                    onTap: onToggleExpansion,
+                    child: Padding(
+                      padding: const EdgeInsets.all(4),
+                      child: Icon(
+                        isExpanded ? Icons.expand_less : Icons.expand_more,
+                        size: 20,
+                        color: Theme.of(context).colorScheme.primary,
+                      ),
+                    ),
+                  ),
+                if (hasChildren) const SizedBox(width: 4),
                 // Action buttons
                 PopupMenuButton<String>(
                   onSelected: (value) {
@@ -1250,6 +1996,16 @@ class _TopologyScreenState extends State<TopologyScreen> {
                           Icon(Icons.edit, size: 14),
                           SizedBox(width: 6),
                           Text('Edytuj', style: TextStyle(fontSize: 12)),
+                        ],
+                      ),
+                    ),
+                    const PopupMenuItem<String>(
+                      value: 'details',
+                      child: Row(
+                        children: [
+                          Icon(Icons.info_outline, size: 14),
+                          SizedBox(width: 6),
+                          Text('Szczegóły', style: TextStyle(fontSize: 12)),
                         ],
                       ),
                     ),
@@ -1292,6 +2048,28 @@ class _TopologyScreenState extends State<TopologyScreen> {
         ),
       ),
     );
+  }
+
+  double _resolveNodeIndent(BuildContext context, int depth) {
+    final viewportWidth = MediaQuery.sizeOf(context).width;
+    final indentStep = viewportWidth < 600 ? 10.0 : 16.0;
+    final indent = depth * indentStep;
+    if (viewportWidth < 600) {
+      return min(indent, 56.0);
+    }
+    return indent;
+  }
+
+  double _resolveNodeTileWidth(BuildContext context, int depth) {
+    final viewportWidth = MediaQuery.sizeOf(context).width;
+    if (viewportWidth >= 600) {
+      return 300;
+    }
+
+    final leftIndent = _resolveNodeIndent(context, depth);
+    final basePadding = viewportWidth < 380 ? 24.0 : 28.0;
+    final availableWidth = viewportWidth - basePadding - leftIndent - 8;
+    return availableWidth.clamp(220.0, 320.0).toDouble();
   }
 
   Color _loadColor(double ratio, BuildContext context) {
@@ -1566,6 +2344,87 @@ class _TopologyScreenState extends State<TopologyScreen> {
     }
   }
 
+  bool _hasNodeIssues(GridNode node, List<GridNode> allNodes) {
+    final status = _resolveNodeStatus(node, allNodes);
+    return status != _NodeQualityStatus.ok;
+  }
+
+  bool _subtreeHasIssue(
+    GridNode node,
+    Map<String?, List<GridNode>> childrenById,
+    Set<String> nodesWithIssues,
+  ) {
+    if (nodesWithIssues.contains(node.id)) {
+      return true;
+    }
+
+    final children = childrenById[node.id] ?? const [];
+    for (final child in children) {
+      if (_subtreeHasIssue(child, childrenById, nodesWithIssues)) {
+        return true;
+      }
+    }
+
+    return false;
+  }
+
+  _NodeQualityStatus _resolveNodeStatus(
+      GridNode node, List<GridNode> allNodes) {
+    if (node.powerKw <= 0 || node.lengthM <= 0 || node.crossSectionMm2 <= 0) {
+      return _NodeQualityStatus.incomplete;
+    }
+
+    if (node is DistributionBoard) {
+      if (node.protectionSlots.isEmpty) {
+        return _NodeQualityStatus.warning;
+      }
+
+      final hasInvalidSlot = node.protectionSlots.any(
+        (slot) => !slot.hasCompleteDefinition,
+      );
+      if (hasInvalidSlot) {
+        return _NodeQualityStatus.warning;
+      }
+
+      final hasAssignedButMissingNode = node.protectionSlots.any((slot) {
+        final assignedId = slot.assignedNodeId;
+        if (assignedId == null || assignedId.isEmpty) {
+          return false;
+        }
+        return !allNodes.any((candidate) => candidate.id == assignedId);
+      });
+      if (hasAssignedButMissingNode) {
+        return _NodeQualityStatus.warning;
+      }
+    }
+
+    return _NodeQualityStatus.ok;
+  }
+
+  Widget _buildNodeStatusChip(
+    BuildContext context,
+    _NodeQualityStatus status,
+  ) {
+    final (label, color) = switch (status) {
+      _NodeQualityStatus.ok => ('Spójny', Colors.green),
+      _NodeQualityStatus.warning => ('Do weryfikacji', Colors.orange),
+      _NodeQualityStatus.incomplete => ('Braki danych', Colors.redAccent),
+    };
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.18),
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: color.withValues(alpha: 0.55)),
+      ),
+      child: Text(
+        label,
+        style: Theme.of(context).textTheme.labelSmall,
+      ),
+    );
+  }
+
   double _calculateIb(GridNode node, double powerKw) {
     if (node.isThreePhase) {
       return (powerKw * 1000) / (sqrt(3) * 400);
@@ -1574,58 +2433,351 @@ class _TopologyScreenState extends State<TopologyScreen> {
     return (powerKw * 1000) / 230;
   }
 
-  void _showAddNodeDialog(BuildContext context) {
-    final nameController = TextEditingController();
+  Future<void> _generateTopologyPdf(BuildContext context) async {
+    final provider = Provider.of<GridProvider>(context, listen: false);
+    final buildingName =
+        provider.buildingName.isEmpty ? 'nie podano' : provider.buildingName;
+
+    if (provider.nodes.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Brak danych topologii do wygenerowania schematu PDF.'),
+        ),
+      );
+      return;
+    }
+
+    try {
+      await PdfService.generateTopologyBlockSchematicPdf(
+        gridProvider: provider,
+        buildingName: buildingName,
+      );
+      if (!context.mounted) {
+        return;
+      }
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Wygenerowano schemat blokowy topologii (PDF).'),
+        ),
+      );
+    } catch (error) {
+      if (!context.mounted) {
+        return;
+      }
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Nie udało się wygenerować PDF: $error'),
+        ),
+      );
+    }
+  }
+
+  void _showAddNodeFromToolbarDialog(BuildContext context) {
+    final provider = Provider.of<GridProvider>(context, listen: false);
+    final boards = provider.nodes.whereType<DistributionBoard>().toList()
+      ..sort((a, b) => a.name.compareTo(b.name));
+
+    if (boards.isEmpty) {
+      _showAddFirstBoardDialog(context);
+      return;
+    }
+
+    String selectedParentId = boards.first.id;
 
     showDialog<void>(
       context: context,
-      builder: (context) {
-        return AlertDialog(
-          insetPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 24),
-          title: const Text('Dodaj nowy element'),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              TextField(
-                controller: nameController,
-                decoration: const InputDecoration(
-                  hintText: 'Nazwa (np. Gniazdko 400V)',
+      builder: (dialogContext) {
+        return StatefulBuilder(
+          builder: (context, setDialogState) => AlertDialog(
+            insetPadding:
+                const EdgeInsets.symmetric(horizontal: 12, vertical: 24),
+            title: const Text('Wybierz rozdzielnicę nadrzędną'),
+            content: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Align(
+                  alignment: Alignment.centerLeft,
+                  child: Text(
+                    'Wskaż, gdzie chcesz dodać nowy element.',
+                  ),
                 ),
+                const SizedBox(height: 10),
+                DropdownButtonFormField<String>(
+                  initialValue: selectedParentId,
+                  decoration: const InputDecoration(
+                    labelText: 'Rozdzielnica nadrzędna',
+                  ),
+                  items: boards
+                      .map(
+                        (board) => DropdownMenuItem<String>(
+                          value: board.id,
+                          child: Text(board.name),
+                        ),
+                      )
+                      .toList(),
+                  onChanged: (value) {
+                    if (value == null) {
+                      return;
+                    }
+                    setDialogState(() {
+                      selectedParentId = value;
+                    });
+                  },
+                ),
+              ],
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(dialogContext),
+                child: const Text('Anuluj'),
+              ),
+              ElevatedButton(
+                onPressed: () {
+                  final selectedParent = boards.firstWhere(
+                    (board) => board.id == selectedParentId,
+                  );
+                  Navigator.pop(dialogContext);
+                  _showAddTypeDialog(context, selectedParent);
+                },
+                child: const Text('Dalej'),
               ),
             ],
           ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(context),
-              child: const Text('Anuluj'),
-            ),
-            ElevatedButton(
-              onPressed: () {
-                if (nameController.text.isNotEmpty) {
-                  final provider =
-                      Provider.of<GridProvider>(context, listen: false);
-                  final newNode = DistributionBoard(
-                    id: DateTime.now().millisecondsSinceEpoch.toString(),
-                    name: nameController.text,
-                    powerKw: 10,
-                    lengthM: 50,
-                    crossSectionMm2: 2.5,
-                    ratedCurrentA: 16,
-                    material: ConductorMaterial.cu,
-                  );
-                  provider.addNode(newNode);
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(content: Text('Dodano: ${newNode.name}')),
-                  );
-                  Navigator.pop(context);
-                }
-              },
-              child: const Text('Dodaj'),
-            ),
-          ],
         );
       },
     );
+  }
+
+  Future<void> _showAddFirstBoardDialog(BuildContext context) async {
+    final provider = Provider.of<GridProvider>(context, listen: false);
+    final nameController = TextEditingController(text: 'RG');
+    final locationController = TextEditingController();
+    final powerController = TextEditingController(text: '15');
+    final lengthController = TextEditingController(text: '1');
+    final crossSectionController = TextEditingController(text: '10');
+    final ratedCurrentController = TextEditingController(text: '63');
+    final socket230Controller = TextEditingController();
+    final socket400Controller = TextEditingController();
+
+    var selectedMaterial = ConductorMaterial.cu;
+    var selectedCores = 5;
+    var isPenSplitPoint = false;
+
+    await showDialog<void>(
+      context: context,
+      builder: (dialogContext) {
+        return StatefulBuilder(
+          builder: (context, setDialogState) => AlertDialog(
+            insetPadding:
+                const EdgeInsets.symmetric(horizontal: 12, vertical: 24),
+            title: const Text('Pierwsza rozdzielnica w strukturze'),
+            content: ConstrainedBox(
+              constraints: BoxConstraints(
+                maxHeight: MediaQuery.sizeOf(dialogContext).height * 0.72,
+              ),
+              child: SingleChildScrollView(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    TextField(
+                      controller: nameController,
+                      decoration: const InputDecoration(
+                          labelText: 'Nazwa rozdzielnicy'),
+                    ),
+                    const SizedBox(height: 10),
+                    TextField(
+                      controller: locationController,
+                      decoration: const InputDecoration(
+                        labelText: 'Lokalizacja (opcjonalnie)',
+                        hintText: 'np. Kontener socjalny, poziom 0',
+                      ),
+                    ),
+                    const SizedBox(height: 10),
+                    TextField(
+                      controller: powerController,
+                      keyboardType:
+                          const TextInputType.numberWithOptions(decimal: true),
+                      decoration: const InputDecoration(labelText: 'Moc [kW]'),
+                    ),
+                    const SizedBox(height: 10),
+                    TextField(
+                      controller: ratedCurrentController,
+                      keyboardType:
+                          const TextInputType.numberWithOptions(decimal: true),
+                      decoration: const InputDecoration(
+                          labelText: 'Prąd znamionowy In [A]'),
+                    ),
+                    const SizedBox(height: 10),
+                    TextField(
+                      controller: lengthController,
+                      keyboardType:
+                          const TextInputType.numberWithOptions(decimal: true),
+                      decoration:
+                          const InputDecoration(labelText: 'Długość kabla [m]'),
+                    ),
+                    const SizedBox(height: 10),
+                    TextField(
+                      controller: crossSectionController,
+                      keyboardType:
+                          const TextInputType.numberWithOptions(decimal: true),
+                      decoration: const InputDecoration(
+                          labelText: 'Przekrój kabla [mm²]'),
+                    ),
+                    const SizedBox(height: 10),
+                    DropdownButtonFormField<ConductorMaterial>(
+                      initialValue: selectedMaterial,
+                      decoration:
+                          const InputDecoration(labelText: 'Materiał przewodu'),
+                      items: const [
+                        DropdownMenuItem(
+                            value: ConductorMaterial.cu, child: Text('Cu')),
+                        DropdownMenuItem(
+                            value: ConductorMaterial.al, child: Text('Al')),
+                      ],
+                      onChanged: (value) {
+                        if (value != null) {
+                          setDialogState(() {
+                            selectedMaterial = value;
+                          });
+                        }
+                      },
+                    ),
+                    const SizedBox(height: 10),
+                    DropdownButtonFormField<int>(
+                      initialValue: selectedCores,
+                      decoration:
+                          const InputDecoration(labelText: 'Liczba żył'),
+                      items: const [
+                        DropdownMenuItem(value: 4, child: Text('4-żyłowy')),
+                        DropdownMenuItem(value: 5, child: Text('5-żyłowy')),
+                      ],
+                      onChanged: (value) {
+                        if (value != null) {
+                          setDialogState(() {
+                            selectedCores = value;
+                          });
+                        }
+                      },
+                    ),
+                    const SizedBox(height: 10),
+                    TextField(
+                      controller: socket230Controller,
+                      keyboardType: TextInputType.number,
+                      decoration: const InputDecoration(
+                          labelText: 'Liczba gniazd 230V (opcjonalnie)'),
+                    ),
+                    const SizedBox(height: 10),
+                    TextField(
+                      controller: socket400Controller,
+                      keyboardType: TextInputType.number,
+                      decoration: const InputDecoration(
+                          labelText: 'Liczba gniazd 400V (opcjonalnie)'),
+                    ),
+                    const SizedBox(height: 10),
+                    CheckboxListTile(
+                      contentPadding: EdgeInsets.zero,
+                      title: const Text('Punkt podziału PEN'),
+                      value: isPenSplitPoint,
+                      onChanged: (value) {
+                        setDialogState(() {
+                          isPenSplitPoint = value ?? false;
+                        });
+                      },
+                    ),
+                  ],
+                ),
+              ),
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(dialogContext),
+                child: const Text('Anuluj'),
+              ),
+              ElevatedButton(
+                onPressed: () {
+                  final normalizedName = nameController.text.trim();
+                  final parsedPower =
+                      _parsePositiveNumber(powerController.text);
+                  final parsedLength =
+                      _parsePositiveNumber(lengthController.text);
+                  final parsedCrossSection =
+                      _parsePositiveNumber(crossSectionController.text);
+                  final parsedRatedCurrent =
+                      _parsePositiveNumber(ratedCurrentController.text);
+
+                  if (normalizedName.isEmpty ||
+                      parsedPower == null ||
+                      parsedLength == null ||
+                      parsedCrossSection == null ||
+                      parsedRatedCurrent == null) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(
+                        content: Text(
+                          'Uzupełnij poprawnie nazwę i parametry pierwszej rozdzielnicy (wartości > 0).',
+                        ),
+                      ),
+                    );
+                    return;
+                  }
+
+                  final hasPenSplit = provider.nodes
+                      .whereType<DistributionBoard>()
+                      .any((board) => board.isPenSplitPoint);
+                  if (isPenSplitPoint && hasPenSplit) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(
+                        content: Text(
+                          'Punkt podziału PEN jest już oznaczony w innej rozdzielnicy.',
+                        ),
+                      ),
+                    );
+                    return;
+                  }
+
+                  final newNode = DistributionBoard(
+                    id: DateTime.now().millisecondsSinceEpoch.toString(),
+                    name: normalizedName,
+                    location: locationController.text.trim(),
+                    powerKw: parsedPower,
+                    lengthM: parsedLength,
+                    crossSectionMm2: parsedCrossSection,
+                    cableCores: selectedCores,
+                    ratedCurrentA: parsedRatedCurrent,
+                    material: selectedMaterial,
+                    isPenSplitPoint: isPenSplitPoint,
+                    socketCount230V: _parseOptionalNonNegativeInt(
+                      socket230Controller.text,
+                    ),
+                    socketCount400V: _parseOptionalNonNegativeInt(
+                      socket400Controller.text,
+                    ),
+                  );
+
+                  provider.addNode(newNode);
+                  Navigator.pop(dialogContext);
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(
+                      content:
+                          Text('Dodano pierwszą rozdzielnicę: $normalizedName'),
+                    ),
+                  );
+                },
+                child: const Text('Dodaj'),
+              ),
+            ],
+          ),
+        );
+      },
+    );
+
+    nameController.dispose();
+    locationController.dispose();
+    powerController.dispose();
+    lengthController.dispose();
+    crossSectionController.dispose();
+    ratedCurrentController.dispose();
+    socket230Controller.dispose();
+    socket400Controller.dispose();
   }
 
   void _handleNodeAction(BuildContext context, GridNode node, String action) {
@@ -1636,6 +2788,9 @@ class _TopologyScreenState extends State<TopologyScreen> {
       case 'edit':
         _showEditNodeDialog(context, node);
         break;
+      case 'details':
+        _showNodeDetailsDialog(context, node);
+        break;
       case 'replace':
         _showReplaceNodeDialog(context, node);
         break;
@@ -1643,6 +2798,285 @@ class _TopologyScreenState extends State<TopologyScreen> {
         _showDeleteConfirmDialog(context, node);
         break;
     }
+  }
+
+  void _showNodeDetailsDialog(BuildContext context, GridNode node) {
+    final provider = Provider.of<GridProvider>(context, listen: false);
+    final allNodes = provider.nodes;
+
+    showDialog<void>(
+      context: context,
+      builder: (dialogContext) {
+        final nodeType =
+            node is DistributionBoard ? 'Rozdzielnica' : 'Odbiornik';
+        final cableMaterial =
+            node.material == ConductorMaterial.cu ? 'Cu' : 'Al';
+        final parentProtectionSlots = allNodes
+            .whereType<DistributionBoard>()
+            .expand((board) => board.protectionSlots)
+            .where((slot) => slot.assignedNodeId == node.id)
+            .toList();
+        final downstreamNodes = allNodes
+            .where((candidate) => candidate.parentId == node.id)
+            .toList();
+        final usedSlots = node is DistributionBoard
+            ? node.protectionSlots.where((slot) => !slot.isReserve).toList()
+            : const <BoardProtectionSlot>[];
+        final reserveSlots = node is DistributionBoard
+            ? node.protectionSlots.where((slot) => slot.isReserve).toList()
+            : const <BoardProtectionSlot>[];
+
+        return AlertDialog(
+          insetPadding:
+              const EdgeInsets.symmetric(horizontal: 12, vertical: 24),
+          title: Text('Szczegóły: ${node.name}'),
+          content: SizedBox(
+            width: double.maxFinite,
+            child: SingleChildScrollView(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text('Typ: $nodeType'),
+                  Text('Moc: ${node.powerKw.toStringAsFixed(2)} kW'),
+                  Text(
+                    'Kabel: ${node.cableCores} żył | ${node.crossSectionMm2.toStringAsFixed(1)} mm² | ${node.lengthM.toStringAsFixed(1)} m | $cableMaterial',
+                  ),
+                  Text('In: ${node.ratedCurrentA.toStringAsFixed(0)} A'),
+                  const SizedBox(height: 12),
+                  const Divider(),
+                  Text(
+                    'Zabezpieczenie zasilające (${parentProtectionSlots.length})',
+                    style: const TextStyle(fontWeight: FontWeight.bold),
+                  ),
+                  const SizedBox(height: 8),
+                  if (parentProtectionSlots.isEmpty)
+                    const Text(
+                      'Brak przypisanego zabezpieczenia w rozdzielnicy nadrzędnej.',
+                      style: TextStyle(color: Colors.grey),
+                    )
+                  else
+                    ...parentProtectionSlots.map(
+                      (slot) => Card(
+                        margin: const EdgeInsets.only(bottom: 8),
+                        child: ListTile(
+                          dense: true,
+                          title: Text(_protectionSlotTitle(slot)),
+                          subtitle:
+                              Text(_protectionSlotSubtitle(slot, allNodes)),
+                        ),
+                      ),
+                    ),
+                  const SizedBox(height: 4),
+                  if (node is DistributionBoard) ...[
+                    const Divider(),
+                    Text(
+                      'Podpięte odbiorniki i rozdzielnice (${downstreamNodes.length})',
+                      style: const TextStyle(fontWeight: FontWeight.bold),
+                    ),
+                    const SizedBox(height: 8),
+                    if (downstreamNodes.isEmpty)
+                      const Text(
+                        'Brak podpiętych elementów podrzędnych.',
+                        style: TextStyle(color: Colors.grey),
+                      )
+                    else
+                      ...downstreamNodes.map(
+                        (child) => Card(
+                          margin: const EdgeInsets.only(bottom: 8),
+                          child: Padding(
+                            padding: const EdgeInsets.all(10),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  child.name,
+                                  style: const TextStyle(
+                                      fontWeight: FontWeight.w600),
+                                ),
+                                const SizedBox(height: 2),
+                                Text(
+                                  '${child.isThreePhase ? '3F' : '1F'} | ${child.powerKw.toStringAsFixed(2)} kW | In ${child.ratedCurrentA.toStringAsFixed(0)}A',
+                                  style: Theme.of(context).textTheme.bodySmall,
+                                ),
+                                Text(
+                                  'Kabel: ${child.cableCores} żył | ${child.crossSectionMm2.toStringAsFixed(1)} mm² | ${child.lengthM.toStringAsFixed(1)} m | ${child.material == ConductorMaterial.cu ? 'Cu' : 'Al'}',
+                                  style: Theme.of(context).textTheme.bodySmall,
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+                      ),
+                    const SizedBox(height: 4),
+                  ] else ...[
+                    const Divider(),
+                    Text(
+                      'Obwody odbiornika (${node.circuitLines.length})',
+                      style: const TextStyle(fontWeight: FontWeight.bold),
+                    ),
+                    const SizedBox(height: 8),
+                    if (node.circuitLines.isEmpty)
+                      const Text(
+                        'Brak przypisanych obwodów.',
+                        style: TextStyle(color: Colors.grey),
+                      )
+                    else
+                      ...node.circuitLines.map(
+                        (line) => Padding(
+                          padding: const EdgeInsets.only(bottom: 4),
+                          child: Text(
+                            '${line.name} | ${line.protectionType} ${line.protectionCurrentA.toStringAsFixed(0)}A | ${line.cableLength.toStringAsFixed(1)}m | ${line.cableCrossSectionMm2.toStringAsFixed(1)}mm² ${line.cableMaterial}',
+                            style: Theme.of(context).textTheme.bodySmall,
+                          ),
+                        ),
+                      ),
+                    const SizedBox(height: 4),
+                  ],
+                  if (node is DistributionBoard) ...[
+                    const Divider(),
+                    Text(
+                      'Zabezpieczenia i rezerwy (${node.protectionSlots.length})',
+                      style: const TextStyle(fontWeight: FontWeight.bold),
+                    ),
+                    const SizedBox(height: 8),
+                    if (node.protectionSlots.isEmpty)
+                      const Text(
+                        'Brak zdefiniowanych zabezpieczeń.',
+                        style: TextStyle(color: Colors.grey),
+                      )
+                    else ...[
+                      Text(
+                        'Wykorzystane (${usedSlots.length})',
+                        style: const TextStyle(fontWeight: FontWeight.w600),
+                      ),
+                      const SizedBox(height: 6),
+                      if (usedSlots.isEmpty)
+                        const Padding(
+                          padding: EdgeInsets.only(bottom: 8),
+                          child: Text(
+                            'Brak wykorzystanych zabezpieczeń.',
+                            style: TextStyle(color: Colors.grey),
+                          ),
+                        )
+                      else
+                        ...usedSlots.map((slot) {
+                          GridNode? assignedNode;
+                          for (final candidate in allNodes) {
+                            if (candidate.id == slot.assignedNodeId) {
+                              assignedNode = candidate;
+                              break;
+                            }
+                          }
+
+                          return Card(
+                            margin: const EdgeInsets.only(bottom: 8),
+                            child: Padding(
+                              padding: const EdgeInsets.all(10),
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    _protectionSlotTitle(slot),
+                                    style: const TextStyle(
+                                        fontWeight: FontWeight.w600),
+                                  ),
+                                  const SizedBox(height: 2),
+                                  Text(
+                                    _protectionSlotSubtitle(slot, allNodes),
+                                    style:
+                                        Theme.of(context).textTheme.bodySmall,
+                                  ),
+                                  if (assignedNode != null &&
+                                      assignedNode.circuitLines.isNotEmpty) ...[
+                                    const SizedBox(height: 8),
+                                    const Text(
+                                      'Obwody przypisane:',
+                                      style: TextStyle(
+                                        fontSize: 12,
+                                        fontWeight: FontWeight.bold,
+                                      ),
+                                    ),
+                                    const SizedBox(height: 4),
+                                    ...assignedNode.circuitLines.map(
+                                      (line) => Padding(
+                                        padding:
+                                            const EdgeInsets.only(bottom: 4),
+                                        child: Text(
+                                          '${line.name} | ${line.protectionType} ${line.protectionCurrentA.toStringAsFixed(0)}A | ${line.cableLength.toStringAsFixed(1)}m | ${line.cableCrossSectionMm2.toStringAsFixed(1)}mm² ${line.cableMaterial}',
+                                          style: Theme.of(context)
+                                              .textTheme
+                                              .bodySmall,
+                                        ),
+                                      ),
+                                    ),
+                                  ] else if (assignedNode != null) ...[
+                                    const SizedBox(height: 8),
+                                    const Text(
+                                      'Brak przypisanych obwodów.',
+                                      style: TextStyle(
+                                          fontSize: 12, color: Colors.grey),
+                                    ),
+                                  ],
+                                ],
+                              ),
+                            ),
+                          );
+                        }),
+                      const SizedBox(height: 6),
+                      Text(
+                        'Rezerwy (${reserveSlots.length})',
+                        style: const TextStyle(fontWeight: FontWeight.w600),
+                      ),
+                      const SizedBox(height: 6),
+                      if (reserveSlots.isEmpty)
+                        const Padding(
+                          padding: EdgeInsets.only(bottom: 8),
+                          child: Text(
+                            'Brak zdefiniowanych rezerw.',
+                            style: TextStyle(color: Colors.grey),
+                          ),
+                        )
+                      else
+                        ...reserveSlots.map(
+                          (slot) => Card(
+                            margin: const EdgeInsets.only(bottom: 8),
+                            child: Padding(
+                              padding: const EdgeInsets.all(10),
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    _protectionSlotTitle(slot),
+                                    style: const TextStyle(
+                                        fontWeight: FontWeight.w600),
+                                  ),
+                                  const SizedBox(height: 2),
+                                  Text(
+                                    _protectionSlotSubtitle(slot, allNodes),
+                                    style:
+                                        Theme.of(context).textTheme.bodySmall,
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ),
+                        ),
+                    ],
+                  ],
+                ],
+              ),
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(dialogContext),
+              child: const Text('Zamknij'),
+            ),
+          ],
+        );
+      },
+    );
   }
 
   void _showAddTypeDialog(BuildContext context, GridNode parentNode) {
@@ -1767,7 +3201,8 @@ class _TopologyScreenState extends State<TopologyScreen> {
     DistributionBoard parentBoard,
     GridNode newNode,
   ) async {
-    final compatibleReserves = _findCompatibleReserveSlots(parentBoard, newNode);
+    final compatibleReserves =
+        _findCompatibleReserveSlots(parentBoard, newNode);
 
     if (compatibleReserves.isEmpty) {
       return null;
@@ -1821,7 +3256,8 @@ class _TopologyScreenState extends State<TopologyScreen> {
                         value: slot.id,
                         groupValue: selectedSlot.id,
                         title: Text(_protectionSlotTitle(slot)),
-                        subtitle: const Text('Pozycja rezerwowa w rozdzielnicy'),
+                        subtitle:
+                            const Text('Pozycja rezerwowa w rozdzielnicy'),
                         onChanged: (value) {
                           if (value == null) {
                             return;
@@ -1926,13 +3362,70 @@ class _TopologyScreenState extends State<TopologyScreen> {
             final protectionSlots =
                 board?.protectionSlots ?? const <BoardProtectionSlot>[];
             return AlertDialog(
-              insetPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 24),
+              insetPadding:
+                  const EdgeInsets.symmetric(horizontal: 12, vertical: 24),
               title: Text('Edytuj: ${node.name}'),
               content: SizedBox(
                 width: double.maxFinite,
                 child: ListView(
                   shrinkWrap: true,
                   children: [
+                    Card(
+                      margin: const EdgeInsets.only(bottom: 12),
+                      child: Padding(
+                        padding: const EdgeInsets.all(12),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Row(
+                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                              children: [
+                                const Expanded(
+                                  child: Text(
+                                    'Parametry węzła',
+                                    style:
+                                        TextStyle(fontWeight: FontWeight.bold),
+                                  ),
+                                ),
+                                ElevatedButton.icon(
+                                  onPressed: () {
+                                    _showEditNodeParametersDialog(
+                                      context,
+                                      provider,
+                                      node,
+                                    );
+                                  },
+                                  icon: const Icon(Icons.tune, size: 16),
+                                  label: const Text('Edytuj'),
+                                ),
+                              ],
+                            ),
+                            const SizedBox(height: 8),
+                            Text('Nazwa: ${node.name}'),
+                            Text(
+                              'Lokalizacja: ${node.location.trim().isEmpty ? '-' : node.location}',
+                            ),
+                            Text('Moc: ${node.powerKw.toStringAsFixed(2)} kW'),
+                            Text(
+                              'Kabel: ${node.cableCores} żył | ${node.crossSectionMm2.toStringAsFixed(1)} mm² | ${node.lengthM.toStringAsFixed(1)} m | ${node.material == ConductorMaterial.cu ? 'Cu' : 'Al'}',
+                            ),
+                            Text(
+                                'In: ${node.ratedCurrentA.toStringAsFixed(0)} A'),
+                            if (board != null) ...[
+                              const SizedBox(height: 4),
+                              Text(
+                                'Gniazda 230V: ${board.socketCount230V?.toString() ?? '-'} | 400V: ${board.socketCount400V?.toString() ?? '-'}',
+                              ),
+                              Text(
+                                board.isPenSplitPoint
+                                    ? 'Punkt podziału PEN: tak'
+                                    : 'Punkt podziału PEN: nie',
+                              ),
+                            ],
+                          ],
+                        ),
+                      ),
+                    ),
                     Padding(
                       padding: const EdgeInsets.only(bottom: 12),
                       child: Row(
@@ -2112,62 +3605,138 @@ class _TopologyScreenState extends State<TopologyScreen> {
                         )
                       else
                         ...protectionSlots.map((slot) {
+                          GridNode? assignedNode;
+                          for (final node in provider.nodes) {
+                            if (node.id == slot.assignedNodeId) {
+                              assignedNode = node;
+                              break;
+                            }
+                          }
+
                           return Card(
                             margin: const EdgeInsets.only(bottom: 8),
-                            child: ListTile(
-                              title: Text(_protectionSlotTitle(slot)),
-                              subtitle: Text(
-                                _protectionSlotSubtitle(slot, provider.nodes),
-                              ),
-                              trailing: PopupMenuButton<String>(
-                                onSelected: (value) {
-                                  if (value == 'edit') {
-                                    _showProtectionSlotDialog(
-                                      context,
-                                      provider,
-                                      board,
-                                      initialSlot: slot,
-                                    );
-                                  } else if (value == 'delete') {
-                                    provider.removeProtectionSlot(
-                                        board, slot.id);
-                                    ScaffoldMessenger.of(context).showSnackBar(
-                                      const SnackBar(
-                                        content: Text(
-                                          'Usunięto pozycję aparatury rozdzielnicy.',
+                            child: Padding(
+                              padding: const EdgeInsets.all(8.0),
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  ListTile(
+                                    title: Text(_protectionSlotTitle(slot)),
+                                    subtitle: Text(
+                                      _protectionSlotSubtitle(
+                                          slot, provider.nodes),
+                                    ),
+                                    trailing: PopupMenuButton<String>(
+                                      onSelected: (value) {
+                                        if (value == 'edit') {
+                                          _showProtectionSlotDialog(
+                                            context,
+                                            provider,
+                                            board,
+                                            initialSlot: slot,
+                                          );
+                                        } else if (value == 'delete') {
+                                          provider.removeProtectionSlot(
+                                              board, slot.id);
+                                          ScaffoldMessenger.of(context)
+                                              .showSnackBar(
+                                            const SnackBar(
+                                              content: Text(
+                                                'Usunięto pozycję aparatury rozdzielnicy.',
+                                              ),
+                                            ),
+                                          );
+                                        }
+                                      },
+                                      itemBuilder: (context) => const [
+                                        PopupMenuItem<String>(
+                                          value: 'edit',
+                                          child: Row(
+                                            children: [
+                                              Icon(Icons.edit, size: 16),
+                                              SizedBox(width: 8),
+                                              Text('Edytuj'),
+                                            ],
+                                          ),
                                         ),
+                                        PopupMenuItem<String>(
+                                          value: 'delete',
+                                          child: Row(
+                                            children: [
+                                              Icon(
+                                                Icons.delete,
+                                                size: 16,
+                                                color: Colors.red,
+                                              ),
+                                              SizedBox(width: 8),
+                                              Text(
+                                                'Usuń',
+                                                style: TextStyle(
+                                                    color: Colors.red),
+                                              ),
+                                            ],
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                  if (assignedNode != null &&
+                                      assignedNode.circuitLines.isNotEmpty)
+                                    Padding(
+                                      padding: const EdgeInsets.fromLTRB(
+                                          16, 8, 16, 4),
+                                      child: Column(
+                                        crossAxisAlignment:
+                                            CrossAxisAlignment.start,
+                                        children: [
+                                          const Text(
+                                            'Obwody przypisane:',
+                                            style: TextStyle(
+                                                fontSize: 12,
+                                                fontWeight: FontWeight.bold),
+                                          ),
+                                          ...assignedNode.circuitLines
+                                              .map((line) => Padding(
+                                                    padding:
+                                                        const EdgeInsets.only(
+                                                            top: 4),
+                                                    child: Column(
+                                                      crossAxisAlignment:
+                                                          CrossAxisAlignment
+                                                              .start,
+                                                      children: [
+                                                        Text(
+                                                          line.name,
+                                                          style: const TextStyle(
+                                                              fontSize: 11,
+                                                              fontWeight:
+                                                                  FontWeight
+                                                                      .w500),
+                                                        ),
+                                                        Text(
+                                                          '${line.protectionType} ${line.protectionCurrentA.toStringAsFixed(0)}A | Długość: ${line.cableLength.toStringAsFixed(1)}m | Kabel: ${line.cableCrossSectionMm2.toStringAsFixed(1)}mm² ${line.cableMaterial}',
+                                                          style:
+                                                              const TextStyle(
+                                                                  fontSize: 10,
+                                                                  color: Colors
+                                                                      .grey),
+                                                        ),
+                                                      ],
+                                                    ),
+                                                  )),
+                                        ],
                                       ),
-                                    );
-                                  }
-                                },
-                                itemBuilder: (context) => const [
-                                  PopupMenuItem<String>(
-                                    value: 'edit',
-                                    child: Row(
-                                      children: [
-                                        Icon(Icons.edit, size: 16),
-                                        SizedBox(width: 8),
-                                        Text('Edytuj'),
-                                      ],
+                                    )
+                                  else if (assignedNode != null)
+                                    const Padding(
+                                      padding:
+                                          EdgeInsets.fromLTRB(16, 8, 16, 4),
+                                      child: Text(
+                                        'Brak przypisanych obwodów',
+                                        style: TextStyle(
+                                            fontSize: 10, color: Colors.grey),
+                                      ),
                                     ),
-                                  ),
-                                  PopupMenuItem<String>(
-                                    value: 'delete',
-                                    child: Row(
-                                      children: [
-                                        Icon(
-                                          Icons.delete,
-                                          size: 16,
-                                          color: Colors.red,
-                                        ),
-                                        SizedBox(width: 8),
-                                        Text(
-                                          'Usuń',
-                                          style: TextStyle(color: Colors.red),
-                                        ),
-                                      ],
-                                    ),
-                                  ),
                                 ],
                               ),
                             ),
@@ -2257,7 +3826,8 @@ class _TopologyScreenState extends State<TopologyScreen> {
         return StatefulBuilder(
           builder: (context, setDialogState) {
             return AlertDialog(
-              insetPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 24),
+              insetPadding:
+                  const EdgeInsets.symmetric(horizontal: 12, vertical: 24),
               title: Text(
                 initialSlot == null
                     ? 'Dodaj aparaturę rozdzielnicy'
@@ -2283,7 +3853,7 @@ class _TopologyScreenState extends State<TopologyScreen> {
                         ),
                         DropdownMenuItem(
                           value: ProtectionDeviceType.fuseHolder,
-                          child: Text('Kieszeń wkładki bezpiecznikowej'),
+                          child: Text('Rozłącznik bezpiecznikowy'),
                         ),
                       ],
                       onChanged: (value) {
@@ -2292,10 +3862,10 @@ class _TopologyScreenState extends State<TopologyScreen> {
                         }
                         setDialogState(() {
                           selectedType = value;
-                          final allowedPoles = selectedType ==
-                                  ProtectionDeviceType.fuseHolder
-                              ? const [1, 3]
-                              : const [1, 2, 3, 4];
+                          final allowedPoles =
+                              selectedType == ProtectionDeviceType.fuseHolder
+                                  ? const [1, 3]
+                                  : const [1, 2, 3, 4];
                           if (!allowedPoles.contains(selectedPoleCount)) {
                             selectedPoleCount = allowedPoles.first;
                           }
@@ -2342,9 +3912,10 @@ class _TopologyScreenState extends State<TopologyScreen> {
                         decimal: true,
                       ),
                       decoration: InputDecoration(
-                        labelText: selectedType == ProtectionDeviceType.fuseHolder
-                            ? 'Prąd wkładki [A]'
-                            : 'Prąd znamionowy [A]',
+                        labelText:
+                            selectedType == ProtectionDeviceType.fuseHolder
+                                ? 'Prąd wkładki [A]'
+                                : 'Prąd znamionowy [A]',
                       ),
                     ),
                     if (selectedType ==
@@ -2551,7 +4122,8 @@ class _TopologyScreenState extends State<TopologyScreen> {
         return StatefulBuilder(
           builder: (context, setDialogState) {
             return AlertDialog(
-              insetPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 24),
+              insetPadding:
+                  const EdgeInsets.symmetric(horizontal: 12, vertical: 24),
               title: Text('Wyposażenie: ${board.name}'),
               content: SizedBox(
                 width: min(380, MediaQuery.sizeOf(dialogContext).width * 0.9),
@@ -2619,7 +4191,7 @@ class _TopologyScreenState extends State<TopologyScreen> {
       case ProtectionDeviceType.residualCurrentDevice:
         return 'Wyłącznik różnicowoprądowy$poles ${slot.ratedCurrentA?.toStringAsFixed(0) ?? '-'}A/${slot.residualCurrentmA?.toStringAsFixed(0) ?? '-'}mA';
       case ProtectionDeviceType.fuseHolder:
-        return 'Kieszeń wkładki bezpiecznikowej$poles ${slot.fuseLinkSize ?? '-'} ${slot.ratedCurrentA?.toStringAsFixed(0) ?? '-'}A';
+        return 'Rozłącznik bezpiecznikowy$poles ${slot.fuseLinkSize ?? '-'} ${slot.ratedCurrentA?.toStringAsFixed(0) ?? '-'}A';
     }
   }
 
@@ -2655,7 +4227,8 @@ class _TopologyScreenState extends State<TopologyScreen> {
       context: context,
       builder: (context) {
         return AlertDialog(
-          insetPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 24),
+          insetPadding:
+              const EdgeInsets.symmetric(horizontal: 12, vertical: 24),
           title: const Text('Zamień węzeł'),
           content:
               const Text('Funkcja zamiany węzła - implementacja w toku...'),
@@ -2670,12 +4243,328 @@ class _TopologyScreenState extends State<TopologyScreen> {
     );
   }
 
+  Future<void> _showEditNodeParametersDialog(
+    BuildContext context,
+    GridProvider provider,
+    GridNode node,
+  ) async {
+    final nameController = TextEditingController(text: node.name);
+    final locationController =
+        TextEditingController(text: node.location.trim());
+    final powerController = TextEditingController(
+      text: node.powerKw.toStringAsFixed(2),
+    );
+    final lengthController = TextEditingController(
+      text: node.lengthM.toStringAsFixed(1),
+    );
+    final crossSectionController = TextEditingController(
+      text: node.crossSectionMm2.toStringAsFixed(1),
+    );
+    final ratedCurrentController = TextEditingController(
+      text: node.ratedCurrentA.toStringAsFixed(0),
+    );
+    final socket230Controller = TextEditingController(
+      text: node is DistributionBoard && node.socketCount230V != null
+          ? node.socketCount230V.toString()
+          : '',
+    );
+    final socket400Controller = TextEditingController(
+      text: node is DistributionBoard && node.socketCount400V != null
+          ? node.socketCount400V.toString()
+          : '',
+    );
+
+    var selectedMaterial = node.material;
+    var selectedCores = node.cableCores;
+    var isThreePhaseReceiver =
+        node is PowerReceiver ? node.isThreePhaseReceiver : node.isThreePhase;
+    var isPenSplitPoint = node is DistributionBoard && node.isPenSplitPoint;
+    final forceFiveCore =
+        node.isThreePhase && _isDownstreamOfPenSplit(node, provider.nodes);
+
+    if (forceFiveCore && selectedCores < 5) {
+      selectedCores = 5;
+    }
+
+    await showDialog<void>(
+      context: context,
+      builder: (dialogContext) {
+        return StatefulBuilder(
+          builder: (context, setDialogState) {
+            final isThreePhase =
+                node is DistributionBoard ? true : isThreePhaseReceiver;
+            final availableCores = isThreePhase
+                ? (forceFiveCore ? const [5] : const [4, 5])
+                : const [3];
+
+            if (!availableCores.contains(selectedCores)) {
+              selectedCores = availableCores.first;
+            }
+
+            return AlertDialog(
+              insetPadding:
+                  const EdgeInsets.symmetric(horizontal: 12, vertical: 24),
+              title: Text('Parametry: ${node.name}'),
+              content: ConstrainedBox(
+                constraints: BoxConstraints(
+                  maxHeight: MediaQuery.sizeOf(dialogContext).height * 0.7,
+                ),
+                child: SingleChildScrollView(
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      TextField(
+                        controller: nameController,
+                        decoration: const InputDecoration(labelText: 'Nazwa'),
+                      ),
+                      const SizedBox(height: 10),
+                      TextField(
+                        controller: locationController,
+                        decoration: const InputDecoration(
+                          labelText: 'Lokalizacja (opcjonalnie)',
+                          hintText: 'np. Rozdzielnia główna, sektor B',
+                        ),
+                      ),
+                      const SizedBox(height: 10),
+                      if (node is PowerReceiver) ...[
+                        SwitchListTile(
+                          contentPadding: EdgeInsets.zero,
+                          title: const Text('Odbiornik 3-fazowy'),
+                          value: isThreePhaseReceiver,
+                          onChanged: (value) {
+                            setDialogState(() {
+                              isThreePhaseReceiver = value;
+                            });
+                          },
+                        ),
+                        const SizedBox(height: 10),
+                      ],
+                      TextField(
+                        controller: powerController,
+                        keyboardType: const TextInputType.numberWithOptions(
+                            decimal: true),
+                        decoration:
+                            const InputDecoration(labelText: 'Moc [kW]'),
+                      ),
+                      const SizedBox(height: 10),
+                      TextField(
+                        controller: ratedCurrentController,
+                        keyboardType: const TextInputType.numberWithOptions(
+                            decimal: true),
+                        decoration: const InputDecoration(
+                            labelText: 'Prąd znamionowy In [A]'),
+                      ),
+                      const SizedBox(height: 10),
+                      TextField(
+                        controller: lengthController,
+                        keyboardType: const TextInputType.numberWithOptions(
+                            decimal: true),
+                        decoration: const InputDecoration(
+                            labelText: 'Długość kabla [m]'),
+                      ),
+                      const SizedBox(height: 10),
+                      TextField(
+                        controller: crossSectionController,
+                        keyboardType: const TextInputType.numberWithOptions(
+                            decimal: true),
+                        decoration: const InputDecoration(
+                            labelText: 'Przekrój kabla [mm²]'),
+                      ),
+                      const SizedBox(height: 10),
+                      DropdownButtonFormField<ConductorMaterial>(
+                        initialValue: selectedMaterial,
+                        decoration: const InputDecoration(
+                            labelText: 'Materiał przewodu'),
+                        items: const [
+                          DropdownMenuItem(
+                              value: ConductorMaterial.cu, child: Text('Cu')),
+                          DropdownMenuItem(
+                              value: ConductorMaterial.al, child: Text('Al')),
+                        ],
+                        onChanged: (value) {
+                          if (value != null) {
+                            setDialogState(() {
+                              selectedMaterial = value;
+                            });
+                          }
+                        },
+                      ),
+                      const SizedBox(height: 10),
+                      DropdownButtonFormField<int>(
+                        initialValue: selectedCores,
+                        decoration:
+                            const InputDecoration(labelText: 'Liczba żył'),
+                        items: availableCores
+                            .map(
+                              (cores) => DropdownMenuItem<int>(
+                                value: cores,
+                                child: Text('${cores}-żyłowy'),
+                              ),
+                            )
+                            .toList(),
+                        onChanged: (value) {
+                          if (value != null) {
+                            setDialogState(() {
+                              selectedCores = value;
+                            });
+                          }
+                        },
+                      ),
+                      if (forceFiveCore)
+                        Padding(
+                          padding: const EdgeInsets.only(top: 8),
+                          child: Text(
+                            'Za punktem podziału PEN dla linii 3-fazowych dostępna jest konfiguracja 5-żyłowa.',
+                            style: Theme.of(context).textTheme.bodySmall,
+                          ),
+                        ),
+                      if (node is DistributionBoard) ...[
+                        const SizedBox(height: 10),
+                        TextField(
+                          controller: socket230Controller,
+                          keyboardType: TextInputType.number,
+                          decoration: const InputDecoration(
+                              labelText: 'Liczba gniazd 230V'),
+                        ),
+                        const SizedBox(height: 10),
+                        TextField(
+                          controller: socket400Controller,
+                          keyboardType: TextInputType.number,
+                          decoration: const InputDecoration(
+                              labelText: 'Liczba gniazd 400V'),
+                        ),
+                        const SizedBox(height: 10),
+                        CheckboxListTile(
+                          contentPadding: EdgeInsets.zero,
+                          title: const Text('Punkt podziału PEN'),
+                          value: isPenSplitPoint,
+                          onChanged: (value) {
+                            setDialogState(() {
+                              isPenSplitPoint = value ?? false;
+                            });
+                          },
+                        ),
+                      ],
+                    ],
+                  ),
+                ),
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(dialogContext),
+                  child: const Text('Anuluj'),
+                ),
+                ElevatedButton(
+                  onPressed: () {
+                    final parsedPower =
+                        _parsePositiveNumber(powerController.text);
+                    final parsedLength =
+                        _parsePositiveNumber(lengthController.text);
+                    final parsedCrossSection =
+                        _parsePositiveNumber(crossSectionController.text);
+                    final parsedRatedCurrent =
+                        _parsePositiveNumber(ratedCurrentController.text);
+                    final normalizedName = nameController.text.trim();
+
+                    if (normalizedName.isEmpty ||
+                        parsedPower == null ||
+                        parsedLength == null ||
+                        parsedCrossSection == null ||
+                        parsedRatedCurrent == null) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(
+                          content: Text(
+                            'Uzupełnij poprawnie nazwę oraz wszystkie parametry liczbowe (wartości > 0).',
+                          ),
+                        ),
+                      );
+                      return;
+                    }
+
+                    if (isThreePhase && forceFiveCore && selectedCores != 5) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(
+                          content: Text(
+                            'Za punktem podziału PEN dla linii 3-fazowych dostępny jest kabel 5-żyłowy.',
+                          ),
+                        ),
+                      );
+                      return;
+                    }
+
+                    if (node is DistributionBoard &&
+                        isPenSplitPoint &&
+                        provider.nodes.whereType<DistributionBoard>().any(
+                            (board) =>
+                                board.id != node.id && board.isPenSplitPoint)) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(
+                          content: Text(
+                            'Punkt podziału PEN jest już oznaczony w innej rozdzielnicy.',
+                          ),
+                        ),
+                      );
+                      return;
+                    }
+
+                    provider.updateNodeConfiguration(
+                      node,
+                      name: normalizedName,
+                      location: locationController.text,
+                      powerKw: parsedPower,
+                      lengthM: parsedLength,
+                      crossSectionMm2: parsedCrossSection,
+                      cableCores: selectedCores,
+                      ratedCurrentA: parsedRatedCurrent,
+                      material: selectedMaterial,
+                      isPenSplitPoint:
+                          node is DistributionBoard ? isPenSplitPoint : null,
+                      socketCount230V: node is DistributionBoard
+                          ? _parseOptionalNonNegativeInt(
+                              socket230Controller.text)
+                          : null,
+                      socketCount400V: node is DistributionBoard
+                          ? _parseOptionalNonNegativeInt(
+                              socket400Controller.text)
+                          : null,
+                      isThreePhaseReceiver:
+                          node is PowerReceiver ? isThreePhaseReceiver : null,
+                    );
+
+                    Navigator.pop(dialogContext);
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(
+                        content: Text(
+                            'Zaktualizowano parametry węzła: ${node.name}'),
+                      ),
+                    );
+                  },
+                  child: const Text('Zapisz'),
+                ),
+              ],
+            );
+          },
+        );
+      },
+    );
+
+    nameController.dispose();
+    locationController.dispose();
+    powerController.dispose();
+    lengthController.dispose();
+    crossSectionController.dispose();
+    ratedCurrentController.dispose();
+    socket230Controller.dispose();
+    socket400Controller.dispose();
+  }
+
   void _showDeleteConfirmDialog(BuildContext context, GridNode node) {
     showDialog<void>(
       context: context,
       builder: (context) {
         return AlertDialog(
-          insetPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 24),
+          insetPadding:
+              const EdgeInsets.symmetric(horizontal: 12, vertical: 24),
           title: const Text('Usuń węzeł?'),
           content: Text(
             'Czy na pewno chcesz usunąć węzeł "${node.name}"? '
@@ -2710,7 +4599,8 @@ class _TopologyScreenState extends State<TopologyScreen> {
       context: context,
       builder: (context) {
         return AlertDialog(
-          insetPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 24),
+          insetPadding:
+              const EdgeInsets.symmetric(horizontal: 12, vertical: 24),
           title: const Text('Informacja'),
           content: const Text(
             'Po zmianie zasilania wcześniejsze wyniki weryfikacji pętli zwarcia mogą być nieaktualne.',
@@ -2784,6 +4674,8 @@ class _NodeCurrentLimits {
 
 enum _ObservationLevel { info, warning }
 
+enum _NodeQualityStatus { ok, warning, incomplete }
+
 class _TopologyObservation {
   final _ObservationLevel level;
   final String message;
@@ -2841,6 +4733,7 @@ class _AddTypeDialogState extends State<_AddTypeDialog> {
   String _selectedDevicePresetId = 'custom';
   bool _isDeviceThreePhase = false;
   late TextEditingController _nameController;
+  late TextEditingController _locationController;
   late TextEditingController _powerController;
   late TextEditingController _lengthController;
   late TextEditingController _crossSectionController;
@@ -2921,6 +4814,7 @@ class _AddTypeDialogState extends State<_AddTypeDialog> {
   void initState() {
     super.initState();
     _nameController = TextEditingController();
+    _locationController = TextEditingController();
     _powerController = TextEditingController(text: '5');
     _lengthController = TextEditingController(text: '25');
     _crossSectionController = TextEditingController(text: '1.5');
@@ -2931,6 +4825,7 @@ class _AddTypeDialogState extends State<_AddTypeDialog> {
 
     for (final controller in [
       _nameController,
+      _locationController,
       _powerController,
       _lengthController,
       _crossSectionController,
@@ -2951,7 +4846,8 @@ class _AddTypeDialogState extends State<_AddTypeDialog> {
       _selectedProtectionSource = 'new';
     } else {
       _selectedProtectionSource = 'existing';
-      _selectedProtectionSlotId = availableSlots.first.id;
+      // Nie ustawiaj automatycznie - user musi wybrać
+      _selectedProtectionSlotId = null;
     }
 
     _applyDevicePreset(null);
@@ -2960,6 +4856,7 @@ class _AddTypeDialogState extends State<_AddTypeDialog> {
   @override
   void dispose() {
     _nameController.dispose();
+    _locationController.dispose();
     _powerController.dispose();
     _lengthController.dispose();
     _crossSectionController.dispose();
@@ -3003,6 +4900,15 @@ class _AddTypeDialogState extends State<_AddTypeDialog> {
                   decoration: InputDecoration(
                     labelText: 'Nazwa',
                     hintText: _nameHint,
+                    border: OutlineInputBorder(),
+                  ),
+                ),
+                const SizedBox(height: 12),
+                TextField(
+                  controller: _locationController,
+                  decoration: const InputDecoration(
+                    labelText: 'Lokalizacja (opcjonalnie)',
+                    hintText: 'np. Segment C, parter',
                     border: OutlineInputBorder(),
                   ),
                 ),
@@ -3265,12 +5171,6 @@ class _AddTypeDialogState extends State<_AddTypeDialog> {
                         }
                         setState(() {
                           _selectedProtectionSource = value;
-                          if (_selectedProtectionSource == 'existing' &&
-                              _selectedProtectionSlotId == null &&
-                              _availableAssignableProtectionSlots.isNotEmpty) {
-                            _selectedProtectionSlotId =
-                                _availableAssignableProtectionSlots.first.id;
-                          }
                         });
                       },
                     ),
@@ -3346,6 +5246,20 @@ class _AddTypeDialogState extends State<_AddTypeDialog> {
 
                 const SizedBox(height: 16),
 
+                if (!_canSubmit && _submitDisabledReason != null)
+                  Padding(
+                    padding: const EdgeInsets.only(bottom: 8),
+                    child: Align(
+                      alignment: Alignment.centerLeft,
+                      child: Text(
+                        _submitDisabledReason!,
+                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                              color: Colors.orangeAccent,
+                            ),
+                      ),
+                    ),
+                  ),
+
                 // Buttons
                 Row(
                   mainAxisAlignment: MainAxisAlignment.end,
@@ -3359,133 +5273,142 @@ class _AddTypeDialogState extends State<_AddTypeDialog> {
                       onPressed: !_canSubmit
                           ? null
                           : () async {
-                        if (_selectedType != 'rozdzielnica' &&
-                            _nameController.text.trim().isEmpty) {
-                          return;
-                        }
+                              if (_selectedType != 'rozdzielnica' &&
+                                  _nameController.text.trim().isEmpty) {
+                                return;
+                              }
 
-                        final parsedPower = _parsePositiveNumber(
-                          _powerController.text,
-                        );
-                        final parsedLength = _parsePositiveNumber(
-                          _lengthController.text,
-                        );
-                        final parsedCrossSection = _parsePositiveNumber(
-                          _crossSectionController.text,
-                        );
-                        final parsedRatedCurrent = _parsePositiveNumber(
-                          _ratedCurrentController.text,
-                        );
-
-                        if (_selectedType != 'linia' &&
-                            (parsedPower == null ||
-                                parsedLength == null ||
-                                parsedCrossSection == null ||
-                                parsedRatedCurrent == null)) {
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            const SnackBar(
-                              content: Text(
-                                'Uzupełnij poprawnie parametry kabla i węzła (wartości > 0).',
-                              ),
-                            ),
-                          );
-                          return;
-                        }
-
-                        final requiresParentProtection =
-                            widget.parentBoard != null && _selectedType != 'linia';
-
-                        if (requiresParentProtection) {
-                          if (_selectedProtectionSource == 'existing') {
-                            if (_availableAssignableProtectionSlots.isEmpty ||
-                                _selectedProtectionSlotId == null) {
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                const SnackBar(
-                                  content: Text(
-                                    'Wybierz zabezpieczenie lub utwórz nowe w rozdzielnicy nadrzędnej.',
-                                  ),
-                                ),
+                              final parsedPower = _parsePositiveNumber(
+                                _powerController.text,
                               );
-                              return;
-                            }
-                          } else {
-                            final newProtectionCurrent = _parsePositiveNumber(
-                              _newProtectionCurrentController.text,
-                            );
-                            if (newProtectionCurrent == null) {
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                const SnackBar(
-                                  content: Text(
-                                    'Podaj poprawny prąd nowego zabezpieczenia (wartość > 0).',
-                                  ),
-                                ),
+                              final parsedLength = _parsePositiveNumber(
+                                _lengthController.text,
                               );
-                              return;
-                            }
-                          }
-                        }
+                              final parsedCrossSection = _parsePositiveNumber(
+                                _crossSectionController.text,
+                              );
+                              final parsedRatedCurrent = _parsePositiveNumber(
+                                _ratedCurrentController.text,
+                              );
 
-                        GridNode newNode;
-                        final id =
-                            DateTime.now().millisecondsSinceEpoch.toString();
+                              if (_selectedType != 'linia' &&
+                                  (parsedPower == null ||
+                                      parsedLength == null ||
+                                      parsedCrossSection == null ||
+                                      parsedRatedCurrent == null)) {
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  const SnackBar(
+                                    content: Text(
+                                      'Uzupełnij poprawnie parametry kabla i węzła (wartości > 0).',
+                                    ),
+                                  ),
+                                );
+                                return;
+                              }
 
-                        if (_selectedType == 'odbiornik') {
-                          newNode = PowerReceiver(
-                            id: id,
-                            name: _nameController.text.trim(),
-                            powerKw: parsedPower ?? 5,
-                            lengthM: parsedLength ?? 25,
-                            crossSectionMm2: parsedCrossSection ?? 1.5,
-                            cableCores: _selectedCableCores,
-                            ratedCurrentA: parsedRatedCurrent ?? 10,
-                            material: _selectedMaterial!,
-                            isThreePhaseReceiver: _isDeviceThreePhase,
-                          );
-                        } else {
-                          final defaultName = _defaultBoardName;
-                          final boardName = _nameController.text.trim().isEmpty
-                              ? defaultName
-                              : _nameController.text.trim();
-                          newNode = DistributionBoard(
-                            id: id,
-                            name: boardName,
-                            powerKw: parsedPower ?? 5,
-                            lengthM: parsedLength ?? 25,
-                            crossSectionMm2: parsedCrossSection ?? 1.5,
-                            cableCores: _selectedCableCores,
-                            ratedCurrentA: parsedRatedCurrent ?? 10,
-                            material: _selectedMaterial!,
-                            isPenSplitPoint: _isPenSplitPoint,
-                            socketCount230V: _parseOptionalNonNegativeInt(
-                              _socket230CountController.text,
-                            ),
-                            socketCount400V: _parseOptionalNonNegativeInt(
-                              _socket400CountController.text,
-                            ),
-                          );
-                        }
+                              final requiresParentProtection =
+                                  widget.parentBoard != null &&
+                                      _selectedType != 'linia';
 
-                        final submission = _AddNodeSubmission(
-                          node: newNode,
-                          selectedProtectionSlotId:
-                              requiresParentProtection &&
-                                      _selectedProtectionSource == 'existing'
-                                  ? _selectedProtectionSlotId
-                                  : null,
-                          newProtectionCurrentA:
-                              requiresParentProtection &&
-                                      _selectedProtectionSource == 'new'
-                                  ? _parsePositiveNumber(
-                                      _newProtectionCurrentController.text,
-                                    )
-                                  : null,
-                        );
+                              if (requiresParentProtection) {
+                                if (_selectedProtectionSource == 'existing') {
+                                  if (_availableAssignableProtectionSlots
+                                          .isEmpty ||
+                                      _selectedProtectionSlotId == null) {
+                                    ScaffoldMessenger.of(context).showSnackBar(
+                                      const SnackBar(
+                                        content: Text(
+                                          'Wybierz zabezpieczenie lub utwórz nowe w rozdzielnicy nadrzędnej.',
+                                        ),
+                                      ),
+                                    );
+                                    return;
+                                  }
+                                } else {
+                                  final newProtectionCurrent =
+                                      _parsePositiveNumber(
+                                    _newProtectionCurrentController.text,
+                                  );
+                                  if (newProtectionCurrent == null) {
+                                    ScaffoldMessenger.of(context).showSnackBar(
+                                      const SnackBar(
+                                        content: Text(
+                                          'Podaj poprawny prąd nowego zabezpieczenia (wartość > 0).',
+                                        ),
+                                      ),
+                                    );
+                                    return;
+                                  }
+                                }
+                              }
 
-                        final didSave = await widget.onSave(submission);
-                        if (didSave && context.mounted) {
-                          Navigator.pop(context);
-                        }
-                      },
+                              GridNode newNode;
+                              final id = DateTime.now()
+                                  .millisecondsSinceEpoch
+                                  .toString();
+
+                              if (_selectedType == 'odbiornik') {
+                                newNode = PowerReceiver(
+                                  id: id,
+                                  name: _nameController.text.trim(),
+                                  location: _locationController.text.trim(),
+                                  powerKw: parsedPower ?? 5,
+                                  lengthM: parsedLength ?? 25,
+                                  crossSectionMm2: parsedCrossSection ?? 1.5,
+                                  cableCores: _selectedCableCores,
+                                  ratedCurrentA: parsedRatedCurrent ?? 10,
+                                  material: _selectedMaterial!,
+                                  isThreePhaseReceiver: _isDeviceThreePhase,
+                                );
+                              } else {
+                                final defaultName = _defaultBoardName;
+                                final boardName =
+                                    _nameController.text.trim().isEmpty
+                                        ? defaultName
+                                        : _nameController.text.trim();
+                                newNode = DistributionBoard(
+                                  id: id,
+                                  name: boardName,
+                                  location: _locationController.text.trim(),
+                                  powerKw: parsedPower ?? 5,
+                                  lengthM: parsedLength ?? 25,
+                                  crossSectionMm2: parsedCrossSection ?? 1.5,
+                                  cableCores: _selectedCableCores,
+                                  ratedCurrentA: parsedRatedCurrent ?? 10,
+                                  material: _selectedMaterial!,
+                                  isPenSplitPoint: _isPenSplitPoint,
+                                  socketCount230V: _parseOptionalNonNegativeInt(
+                                    _socket230CountController.text,
+                                  ),
+                                  socketCount400V: _parseOptionalNonNegativeInt(
+                                    _socket400CountController.text,
+                                  ),
+                                );
+                              }
+
+                              final submission = _AddNodeSubmission(
+                                node: newNode,
+                                selectedProtectionSlotId:
+                                    requiresParentProtection &&
+                                            _selectedProtectionSource ==
+                                                'existing'
+                                        ? _selectedProtectionSlotId
+                                        : null,
+                                newProtectionCurrentA:
+                                    requiresParentProtection &&
+                                            _selectedProtectionSource == 'new'
+                                        ? _parsePositiveNumber(
+                                            _newProtectionCurrentController
+                                                .text,
+                                          )
+                                        : null,
+                              );
+
+                              final didSave = await widget.onSave(submission);
+                              if (didSave && context.mounted) {
+                                Navigator.pop(context);
+                              }
+                            },
                       style: ElevatedButton.styleFrom(
                         backgroundColor: GridTheme.electricYellow,
                         foregroundColor: GridTheme.deepNavy,
@@ -3572,20 +5495,23 @@ class _AddTypeDialogState extends State<_AddTypeDialog> {
       case ProtectionDeviceType.residualCurrentDevice:
         return 'Wyłącznik różnicowoprądowy$poles ${slot.ratedCurrentA?.toStringAsFixed(0) ?? '-'}A/${slot.residualCurrentmA?.toStringAsFixed(0) ?? '-'}mA';
       case ProtectionDeviceType.fuseHolder:
-        return 'Kieszeń wkładki$poles ${slot.fuseLinkSize ?? '-'} ${slot.ratedCurrentA?.toStringAsFixed(0) ?? '-'}A';
+        return 'Rozłącznik bezpiecznikowy$poles ${slot.fuseLinkSize ?? '-'} ${slot.ratedCurrentA?.toStringAsFixed(0) ?? '-'}A';
     }
   }
 
   bool get _canSubmit {
-    if (_selectedType != 'rozdzielnica' && _nameController.text.trim().isEmpty) {
+    if (_selectedType != 'rozdzielnica' &&
+        _nameController.text.trim().isEmpty) {
       return false;
     }
 
     if (_selectedType != 'linia') {
       final parsedPower = _parsePositiveNumber(_powerController.text);
       final parsedLength = _parsePositiveNumber(_lengthController.text);
-      final parsedCrossSection = _parsePositiveNumber(_crossSectionController.text);
-      final parsedRatedCurrent = _parsePositiveNumber(_ratedCurrentController.text);
+      final parsedCrossSection =
+          _parsePositiveNumber(_crossSectionController.text);
+      final parsedRatedCurrent =
+          _parsePositiveNumber(_ratedCurrentController.text);
 
       if (parsedPower == null ||
           parsedLength == null ||
@@ -3600,7 +5526,7 @@ class _AddTypeDialogState extends State<_AddTypeDialog> {
     }
 
     final requiresParentProtection =
-    widget.parentBoard != null && _selectedType != 'linia';
+        widget.parentBoard != null && _selectedType != 'linia';
 
     if (!requiresParentProtection) {
       return true;
@@ -3617,6 +5543,70 @@ class _AddTypeDialogState extends State<_AddTypeDialog> {
     }
 
     return _parsePositiveNumber(_newProtectionCurrentController.text) != null;
+  }
+
+  String? get _submitDisabledReason {
+    if (_selectedType != 'rozdzielnica' &&
+        _nameController.text.trim().isEmpty) {
+      return 'Proszę uzupełnić rubrykę: Nazwa.';
+    }
+
+    if (_selectedType != 'linia') {
+      final parsedPower = _parsePositiveNumber(_powerController.text);
+      if (parsedPower == null) {
+        return 'Proszę uzupełnić rubrykę: Moc [kW] (wartość > 0).';
+      }
+
+      final parsedLength = _parsePositiveNumber(_lengthController.text);
+      if (parsedLength == null) {
+        return 'Proszę uzupełnić rubrykę: Długość (m) (wartość > 0).';
+      }
+
+      final parsedCrossSection =
+          _parsePositiveNumber(_crossSectionController.text);
+      if (parsedCrossSection == null) {
+        return 'Proszę uzupełnić rubrykę: Przekrój (mm²) (wartość > 0).';
+      }
+
+      final parsedRatedCurrent =
+          _parsePositiveNumber(_ratedCurrentController.text);
+      if (parsedRatedCurrent == null) {
+        return 'Proszę uzupełnić rubrykę: In (A) (wartość > 0).';
+      }
+
+      if (_selectedMaterial == null) {
+        return 'Proszę uzupełnić rubrykę: Materiał żyły kabla.';
+      }
+    }
+
+    final requiresParentProtection =
+        widget.parentBoard != null && _selectedType != 'linia';
+
+    if (!requiresParentProtection) {
+      return null;
+    }
+
+    if (_selectedProtectionSource == 'existing') {
+      if (_availableAssignableProtectionSlots.isEmpty) {
+        return 'Brak wolnych zabezpieczeń. Wybierz opcję: Utwórz nowe zabezpieczenie.';
+      }
+      if (_selectedProtectionSlotId == null) {
+        return 'Proszę uzupełnić rubrykę: Wybór zabezpieczenia.';
+      }
+      final exists = _availableAssignableProtectionSlots.any(
+        (slot) => slot.id == _selectedProtectionSlotId,
+      );
+      if (!exists) {
+        return 'Wybrane zabezpieczenie jest niedostępne. Wybierz je ponownie.';
+      }
+      return null;
+    }
+
+    if (_parsePositiveNumber(_newProtectionCurrentController.text) == null) {
+      return 'Proszę uzupełnić rubrykę: Prąd nowego zabezpieczenia [A] (wartość > 0).';
+    }
+
+    return null;
   }
 
   double? _parsePositiveNumber(String value) {

@@ -36,10 +36,13 @@ Future<void> main() async {
       if (webOptions != null) {
         await Firebase.initializeApp(options: webOptions);
         firebaseEnabled = true;
-      } else if (kDebugMode) {
-        print(
-          'Firebase Web is not configured. Add FIREBASE_WEB_* --dart-define values to enable auth/subscriptions.',
-        );
+      } else {
+        firebaseEnabled = false;
+        if (kDebugMode) {
+          print(
+            'Firebase Web is disabled for this run (missing FIREBASE_WEB_* values). Running in local mode.',
+          );
+        }
       }
     } else {
       await Firebase.initializeApp();

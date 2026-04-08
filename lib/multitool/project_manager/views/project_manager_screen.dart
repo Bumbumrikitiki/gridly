@@ -1,11 +1,14 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:gridly/multitool/project_manager/models/project_models.dart';
+import 'package:gridly/multitool/project_manager/logic/project_area_catalog.dart';
 import 'package:gridly/multitool/project_manager/logic/project_manager_provider.dart';
 import 'package:gridly/multitool/project_manager/views/unit_detail_screen.dart';
+import 'package:gridly/multitool/project_manager/views/project_area_detail_screen.dart';
 import 'package:gridly/multitool/project_manager/views/configuration_wizard_screen.dart';
 import 'package:gridly/services/wykaz_zbiorczy_service.dart';
 import 'package:gridly/services/excel_service.dart';
+import 'package:gridly/services/local_notifications_service.dart';
 
 class ProjectManagerScreen extends StatefulWidget {
   const ProjectManagerScreen({super.key});
@@ -17,11 +20,33 @@ class ProjectManagerScreen extends StatefulWidget {
 class _ProjectManagerScreenState extends State<ProjectManagerScreen>
     with SingleTickerProviderStateMixin {
   late TabController _tabController;
+  static const String _customRecurringAlertKey = '__custom__';
+  static const List<int> _reminderOptionsMinutes = [0, 15, 30, 60, 120, 1440];
+
+  static const Map<String, String> _recurringAlertTemplates = {
+    'sporządzenie protokołu przerobowego': 'Sporządzenie protokołu przerobowego',
+    'sporządzenie protokołu czystości': 'Sporządzenie protokołu czystości',
+    'przejście kontrolne bhp': 'Przejście kontrolne BHP',
+    'przejście kontrolne czystości': 'Przejście kontrolne czystości',
+    'narada koordynacyjna': 'Narada koordynacyjna',
+    'raport stanu osobowego': 'Raport stanu osobowego',
+    'kontrola trzeźwości': 'Kontrola trzeźwości',
+    'pomiary okresowe instalacji zasilania budowlanego':
+        'Pomiary okresowe instalacji zasilania budowlanego',
+    'pomiary okresowe urządzeń elektrycznych':
+        'Pomiary okresowe urządzeń elektrycznych',
+    _customRecurringAlertKey: 'Własny',
+  };
 
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: 4, vsync: this);
+    _tabController = TabController(length: 10, vsync: this);
+    _tabController.addListener(() {
+      if (!_tabController.indexIsChanging && _tabController.index == 1) {
+        context.read<ProjectManagerProvider>().syncRecurringAlerts();
+      }
+    });
   }
 
   @override
@@ -59,10 +84,16 @@ class _ProjectManagerScreenState extends State<ProjectManagerScreen>
                     controller: _tabController,
                     isScrollable: true,
                     tabs: const [
-                      Tab(icon: Icon(Icons.list), text: 'Lista'),
                       Tab(icon: Icon(Icons.timeline), text: 'Timeline'),
                       Tab(icon: Icon(Icons.notifications), text: 'Alerty'),
                       Tab(icon: Icon(Icons.apartment), text: 'Mieszkania'),
+                      Tab(icon: Icon(Icons.meeting_room), text: 'Pomieszczenia'),
+                      Tab(icon: Icon(Icons.apartment_outlined), text: 'Klatki'),
+                      Tab(icon: Icon(Icons.elevator), text: 'Windy'),
+                      Tab(icon: Icon(Icons.local_parking), text: 'Garaż'),
+                      Tab(icon: Icon(Icons.roofing), text: 'Dach'),
+                      Tab(icon: Icon(Icons.park), text: 'Teren zewn.'),
+                      Tab(icon: Icon(Icons.groups_2), text: 'Podwykonawcy'),
                     ],
                   ),
           ),
@@ -71,10 +102,52 @@ class _ProjectManagerScreenState extends State<ProjectManagerScreen>
               : TabBarView(
                   controller: _tabController,
                   children: [
-                    _buildChecklistTab(context, provider),
                     _buildTimelineTab(context, provider),
                     _buildAlertsTab(context, provider),
                     _buildUnitsTab(context, provider),
+                    _buildProjectAreaTab(
+                      context,
+                      provider,
+                      title: 'Pomieszczenia',
+                      emptyMessage: 'Brak pomieszczeń dodatkowych w projekcie.',
+                      types: const {ProjectAreaType.room},
+                    ),
+                    _buildProjectAreaTab(
+                      context,
+                      provider,
+                      title: 'Klatki schodowe',
+                      emptyMessage: 'Brak klatek schodowych w projekcie.',
+                      types: const {ProjectAreaType.stairCase},
+                    ),
+                    _buildProjectAreaTab(
+                      context,
+                      provider,
+                      title: 'Windy',
+                      emptyMessage: 'Brak wind w projekcie.',
+                      types: const {ProjectAreaType.elevator},
+                    ),
+                    _buildProjectAreaTab(
+                      context,
+                      provider,
+                      title: 'Garaż',
+                      emptyMessage: 'Brak garażu lub parkingu w projekcie.',
+                      types: const {ProjectAreaType.garage},
+                    ),
+                    _buildProjectAreaTab(
+                      context,
+                      provider,
+                      title: 'Dach',
+                      emptyMessage: 'Brak zakresów dachowych w projekcie.',
+                      types: const {ProjectAreaType.roof},
+                    ),
+                    _buildProjectAreaTab(
+                      context,
+                      provider,
+                      title: 'Teren zewnętrzny',
+                      emptyMessage: 'Brak zewnętrznych stref robót w projekcie.',
+                      types: const {ProjectAreaType.externalArea},
+                    ),
+                    _buildSubcontractorsTab(context, provider),
                   ],
                 ),
         );
@@ -132,11 +205,11 @@ class _ProjectManagerScreenState extends State<ProjectManagerScreen>
                       ),
                     ),
                   );
-                  
+
                   // If wizard completed successfully, reload provider
                   if (result == true && mounted) {
                     setState(() {}); // Trigger rebuild
-                    
+
                     if (context.mounted) {
                       ScaffoldMessenger.of(context).showSnackBar(
                         const SnackBar(
@@ -192,6 +265,12 @@ class _ProjectManagerScreenState extends State<ProjectManagerScreen>
             const SizedBox(height: 20),
           ],
 
+          _buildDailyPrioritiesCard(context, provider),
+          const SizedBox(height: 20),
+
+          _buildWeeklyExecutionCard(context, provider),
+          const SizedBox(height: 20),
+
           // TASKAMI DLA AKTUALNEJ FAZY
           const Text(
             'Zadania dla bieżącej fazy',
@@ -199,8 +278,7 @@ class _ProjectManagerScreenState extends State<ProjectManagerScreen>
           ),
           const SizedBox(height: 12),
           ...provider.tasksForCurrentPhase
-              .map((task) => _buildTaskCard(context, task, provider))
-              ,
+              .map((task) => _buildTaskCard(context, task, provider)),
 
           if (provider.tasksForCurrentPhase.isEmpty)
             const Padding(
@@ -223,8 +301,7 @@ class _ProjectManagerScreenState extends State<ProjectManagerScreen>
           const SizedBox(height: 12),
           ...project.phases
               .where((p) => p.stage != project.activePhase?.stage)
-              .map((phase) => _buildPhaseListItem(phase))
-              ,
+              .map((phase) => _buildPhaseListItem(phase)),
         ],
       ),
     );
@@ -339,7 +416,8 @@ class _ProjectManagerScreenState extends State<ProjectManagerScreen>
                       ),
                       Text(
                         'Dni pozostałe: $daysRemaining',
-                        style: TextStyle(fontSize: 12, color: Colors.grey.shade700),
+                        style: TextStyle(
+                            fontSize: 12, color: Colors.grey.shade700),
                       ),
                     ],
                   ),
@@ -394,8 +472,7 @@ class _ProjectManagerScreenState extends State<ProjectManagerScreen>
               ),
             ),
             if (isDelayed)
-              Icon(Icons.warning_amber_rounded,
-                  color: Colors.red, size: 18),
+              Icon(Icons.warning_amber_rounded, color: Colors.red, size: 18),
           ],
         ),
         children: [
@@ -408,6 +485,19 @@ class _ProjectManagerScreenState extends State<ProjectManagerScreen>
                   task.description,
                   style: TextStyle(fontSize: 12, color: Colors.grey.shade700),
                 ),
+                if (task.dueDate != null) ...[
+                  const SizedBox(height: 8),
+                  Text(
+                    task.isDelayed
+                        ? 'Termin: ${_formatDate(task.dueDate!)} (opóźnione)'
+                        : 'Termin: ${_formatDate(task.dueDate!)}',
+                    style: TextStyle(
+                      fontSize: 11,
+                      fontWeight: FontWeight.w600,
+                      color: task.isDelayed ? Colors.red.shade700 : Colors.grey,
+                    ),
+                  ),
+                ],
                 const SizedBox(height: 12),
                 if (task.notes.isNotEmpty)
                   Container(
@@ -432,7 +522,8 @@ class _ProjectManagerScreenState extends State<ProjectManagerScreen>
                         },
                         icon: const Icon(Icons.note_add, size: 16),
                         label: const Text('Dodaj notatkę'),
-                        style: ElevatedButton.styleFrom(visualDensity: VisualDensity.compact),
+                        style: ElevatedButton.styleFrom(
+                            visualDensity: VisualDensity.compact),
                       ),
                     ),
                     const SizedBox(width: 8),
@@ -446,7 +537,8 @@ class _ProjectManagerScreenState extends State<ProjectManagerScreen>
                         },
                         icon: const Icon(Icons.camera_alt, size: 16),
                         label: const Text('Zdjęcie'),
-                        style: ElevatedButton.styleFrom(visualDensity: VisualDensity.compact),
+                        style: ElevatedButton.styleFrom(
+                            visualDensity: VisualDensity.compact),
                       ),
                     ),
                   ],
@@ -457,6 +549,352 @@ class _ProjectManagerScreenState extends State<ProjectManagerScreen>
         ],
       ),
     );
+  }
+
+  Widget _buildDailyPrioritiesCard(
+    BuildContext context,
+    ProjectManagerProvider provider,
+  ) {
+    final dueToday = provider.tasksDueToday;
+    final delayed = provider.delayedTasks;
+    final upcoming = provider.getUpcomingTasks(withinDays: 3);
+
+    return Card(
+      color: Colors.orange.shade50,
+      child: Padding(
+        padding: const EdgeInsets.all(14),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text(
+              'Priorytety na dziś',
+              style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold),
+            ),
+            const SizedBox(height: 8),
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: [
+                _buildPriorityChip(
+                  label: 'Dziś: ${dueToday.length}',
+                  color: Colors.blue.shade100,
+                ),
+                _buildPriorityChip(
+                  label: 'Opóźnione: ${delayed.length}',
+                  color: delayed.isEmpty
+                      ? Colors.green.shade100
+                      : Colors.red.shade100,
+                ),
+                _buildPriorityChip(
+                  label: 'Następne 3 dni: ${upcoming.length}',
+                  color: Colors.amber.shade100,
+                ),
+              ],
+            ),
+            if (dueToday.isNotEmpty) ...[
+              const SizedBox(height: 10),
+              ...dueToday.take(3).map(
+                    (task) => Padding(
+                      padding: const EdgeInsets.only(bottom: 4),
+                      child: Row(
+                        children: [
+                          const Icon(Icons.radio_button_checked,
+                              size: 10, color: Colors.blue),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: Text(
+                              task.title,
+                              style: const TextStyle(fontSize: 12),
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+            ],
+            const SizedBox(height: 10),
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: [
+                OutlinedButton.icon(
+                  onPressed: () => _shiftScheduleFromMobile(
+                    context,
+                    provider,
+                    days: 3,
+                    label: 'Przesuń +3 dni',
+                  ),
+                  icon: const Icon(Icons.event, size: 16),
+                  label: const Text('Przesuń +3 dni'),
+                ),
+                OutlinedButton.icon(
+                  onPressed: () => _shiftScheduleFromMobile(
+                    context,
+                    provider,
+                    days: 7,
+                    label: 'Przesuń +7 dni',
+                  ),
+                  icon: const Icon(Icons.event_repeat, size: 16),
+                  label: const Text('Przesuń +7 dni'),
+                ),
+                OutlinedButton.icon(
+                  onPressed: () => _shiftScheduleFromMobile(
+                    context,
+                    provider,
+                    days: -3,
+                    label: 'Cofnij -3 dni',
+                  ),
+                  icon: const Icon(Icons.undo, size: 16),
+                  label: const Text('Cofnij -3 dni'),
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Future<void> _shiftScheduleFromMobile(
+    BuildContext context,
+    ProjectManagerProvider provider, {
+    required int days,
+    required String label,
+  }) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Szybkie replanowanie'),
+        content: Text(
+          'Czy chcesz wykonać: $label?\n\nZmiana obejmie aktywną fazę i kolejne etapy.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(false),
+            child: const Text('Anuluj'),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.of(dialogContext).pop(true),
+            child: const Text('Potwierdź'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed != true) return;
+
+    await provider.shiftSchedule(
+      days: days,
+      reason: 'Szybki replan mobilny',
+    );
+
+    if (!context.mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text('Harmonogram zaktualizowany: $label'),
+        duration: const Duration(seconds: 2),
+      ),
+    );
+  }
+
+  Widget _buildPriorityChip({required String label, required Color color}) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+      decoration: BoxDecoration(
+        color: color,
+        borderRadius: BorderRadius.circular(18),
+      ),
+      child: Text(
+        label,
+        style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w600),
+      ),
+    );
+  }
+
+  Widget _buildWeeklyExecutionCard(
+    BuildContext context,
+    ProjectManagerProvider provider,
+  ) {
+    final snapshot = provider.getWeeklyExecutionSnapshot();
+
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(14),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                const Text(
+                  'Tydzień: Plan vs Wykonanie',
+                  style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold),
+                ),
+                Text(
+                  '${_formatDate(snapshot.weekStart)} - ${_formatDate(snapshot.weekEnd)}',
+                  style: const TextStyle(fontSize: 11, color: Colors.grey),
+                ),
+              ],
+            ),
+            const SizedBox(height: 10),
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: [
+                _buildPriorityChip(
+                  label: 'Plan: ${snapshot.plannedCount}',
+                  color: Colors.blue.shade50,
+                ),
+                _buildPriorityChip(
+                  label: 'Wykonane: ${snapshot.completedCount}',
+                  color: Colors.green.shade50,
+                ),
+                _buildPriorityChip(
+                  label: 'Odchyłka: ${snapshot.varianceLabel}',
+                  color: snapshot.varianceCount >= 0
+                      ? Colors.green.shade100
+                      : Colors.orange.shade100,
+                ),
+                _buildPriorityChip(
+                  label: 'Przeniesione: ${snapshot.carryOverCount}',
+                  color: Colors.amber.shade50,
+                ),
+              ],
+            ),
+            const SizedBox(height: 10),
+            ClipRRect(
+              borderRadius: BorderRadius.circular(8),
+              child: LinearProgressIndicator(
+                value: snapshot.planCompletionRate,
+                minHeight: 8,
+              ),
+            ),
+            const SizedBox(height: 6),
+            Text(
+              'Realizacja planu tygodnia: ${(snapshot.planCompletionRate * 100).toStringAsFixed(0)}% • Otwarte w planie: ${snapshot.plannedOpenCount}',
+              style: const TextStyle(fontSize: 11, color: Colors.grey),
+            ),
+            const SizedBox(height: 8),
+            Align(
+              alignment: Alignment.centerRight,
+              child: TextButton.icon(
+                onPressed: () => _showWeeklyExecutionDetails(context, snapshot),
+                icon: const Icon(Icons.insights, size: 16),
+                label: const Text('Szczegóły tygodnia'),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Future<void> _showWeeklyExecutionDetails(
+    BuildContext context,
+    WeeklyExecutionSnapshot snapshot,
+  ) async {
+    await showDialog<void>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Odchyłki tygodnia'),
+        content: SizedBox(
+          width: 420,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text('Plan zadań: ${snapshot.plannedCount}'),
+              Text('Wykonane zadania: ${snapshot.completedCount}'),
+              Text('Wykonane z planu: ${snapshot.plannedCompletedCount}'),
+              Text('Otwarte z planu: ${snapshot.plannedOpenCount}'),
+              Text('Przeterminowane: ${snapshot.overdueOpenCount}'),
+              const SizedBox(height: 10),
+              const Text(
+                'Najbardziej przeterminowane:',
+                style: TextStyle(fontWeight: FontWeight.w600),
+              ),
+              const SizedBox(height: 6),
+              if (snapshot.topOverdueTasks.isEmpty)
+                const Text('Brak przeterminowanych zadań.')
+              else
+                ...snapshot.topOverdueTasks.take(5).map(
+                      (task) => Padding(
+                        padding: const EdgeInsets.only(bottom: 4),
+                        child: Text(
+                          '- ${task.title} (${task.dueDate != null ? _formatDate(task.dueDate!) : 'brak terminu'})',
+                          style: const TextStyle(fontSize: 12),
+                        ),
+                      ),
+                    ),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(),
+            child: const Text('Zamknij'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  String _formatDate(DateTime date) {
+    return '${date.day.toString().padLeft(2, '0')}.${date.month.toString().padLeft(2, '0')}.${date.year}';
+  }
+
+  String _formatTimeOfDay(TimeOfDay time) {
+    final hour = time.hour.toString().padLeft(2, '0');
+    final minute = time.minute.toString().padLeft(2, '0');
+    return '$hour:$minute';
+  }
+
+  String _formatDateTime(DateTime date) {
+    return '${_formatDate(date)} ${date.hour.toString().padLeft(2, '0')}:${date.minute.toString().padLeft(2, '0')}';
+  }
+
+  String _weekdayLabel(int weekday) {
+    switch (weekday) {
+      case DateTime.monday:
+        return 'poniedziałek';
+      case DateTime.tuesday:
+        return 'wtorek';
+      case DateTime.wednesday:
+        return 'środa';
+      case DateTime.thursday:
+        return 'czwartek';
+      case DateTime.friday:
+        return 'piątek';
+      case DateTime.saturday:
+        return 'sobota';
+      case DateTime.sunday:
+        return 'niedziela';
+      default:
+        return 'dzień tygodnia';
+    }
+  }
+
+  String _remindBeforeLabel(int minutes) {
+    if (minutes <= 0) return 'dokładnie o terminie';
+    if (minutes < 60) return '$minutes min wcześniej';
+    if (minutes < 1440) return '${minutes ~/ 60} godz wcześniej';
+    return '${minutes ~/ 1440} dzień wcześniej';
+  }
+
+  DateTime _combineDateAndTime(DateTime date, TimeOfDay time) {
+    return DateTime(
+      date.year,
+      date.month,
+      date.day,
+      time.hour,
+      time.minute,
+    );
+  }
+
+  DateTime _alignDateToWeekday(DateTime date, int weekday) {
+    final delta = (weekday - date.weekday + 7) % 7;
+    return DateTime(date.year, date.month, date.day + delta);
   }
 
   Widget _buildPhaseListItem(ProjectPhase phase) {
@@ -470,8 +908,7 @@ class _ProjectManagerScreenState extends State<ProjectManagerScreen>
         ),
         child: Row(
           children: [
-            Icon(Icons.schedule,
-                color: Colors.grey.shade600, size: 18),
+            Icon(Icons.schedule, color: Colors.grey.shade600, size: 18),
             const SizedBox(width: 12),
             Expanded(
               child: Column(
@@ -479,7 +916,8 @@ class _ProjectManagerScreenState extends State<ProjectManagerScreen>
                 children: [
                   Text(
                     _getPhaseName(phase.stage),
-                    style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
+                    style: const TextStyle(
+                        fontSize: 12, fontWeight: FontWeight.w600),
                   ),
                   Text(
                     '${phase.duration.inDays} dni',
@@ -518,10 +956,14 @@ class _ProjectManagerScreenState extends State<ProjectManagerScreen>
             'Harmonogram budowy',
             style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
           ),
+          const SizedBox(height: 8),
+          Text(
+            'Wybierz etap jako aktualny bez utrzymywania osobnej checklisty harmonogramowej.',
+            style: TextStyle(fontSize: 12, color: Colors.grey.shade700),
+          ),
           const SizedBox(height: 16),
           ...project.phases
-              .map((phase) => _buildTimelinePhase(phase))
-              ,
+              .map((phase) => _buildTimelinePhase(context, phase, provider)),
           const SizedBox(height: 24),
           _buildProjectSummary(project),
         ],
@@ -529,7 +971,11 @@ class _ProjectManagerScreenState extends State<ProjectManagerScreen>
     );
   }
 
-  Widget _buildTimelinePhase(ProjectPhase phase) {
+  Widget _buildTimelinePhase(
+    BuildContext context,
+    ProjectPhase phase,
+    ProjectManagerProvider provider,
+  ) {
     final isActive = phase.isActive;
     final progress = phase.progress;
     final daysRemaining = phase.endDate.difference(DateTime.now()).inDays;
@@ -601,6 +1047,32 @@ class _ProjectManagerScreenState extends State<ProjectManagerScreen>
             Text(
               'Postęp: ${(progress * 100).toStringAsFixed(0)}%',
               style: const TextStyle(fontSize: 10, color: Colors.grey),
+            ),
+            const SizedBox(height: 8),
+            Align(
+              alignment: Alignment.centerRight,
+              child: OutlinedButton.icon(
+                onPressed: isActive
+                    ? null
+                    : () async {
+                        await provider.alignScheduleToStage(
+                          phase.stage,
+                          reason: 'Ręczne ustawienie etapu z timeline',
+                        );
+
+                        if (!context.mounted) return;
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(
+                            content: Text(
+                              'Ustawiono etap: ${_getPhaseName(phase.stage)}',
+                            ),
+                            duration: const Duration(seconds: 2),
+                          ),
+                        );
+                      },
+                icon: const Icon(Icons.flag, size: 16),
+                label: Text(isActive ? 'Etap aktualny' : 'Ustaw jako aktualny'),
+              ),
             ),
           ],
         ),
@@ -685,23 +1157,72 @@ class _ProjectManagerScreenState extends State<ProjectManagerScreen>
 
     final alerts = project.alerts;
 
-    if (alerts.isEmpty) {
-      return const Center(
-        child: Padding(
-          padding: EdgeInsets.all(32),
-          child: Text(
-            'Brak alertów',
-            style: TextStyle(color: Colors.grey),
-          ),
-        ),
-      );
-    }
-
     return SingleChildScrollView(
       padding: const EdgeInsets.all(16),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
+          Card(
+            child: Padding(
+              padding: const EdgeInsets.all(12),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      const Expanded(
+                        child: Text(
+                          'Alerty cykliczne',
+                          style: TextStyle(
+                            fontSize: 14,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      ),
+                      ElevatedButton.icon(
+                        onPressed: () =>
+                            _showAddRecurringAlertDialog(context, provider),
+                        icon: const Icon(Icons.add_alert, size: 16),
+                        label: const Text('Dodaj cykliczny'),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 8),
+                  if (project.recurringAlerts.isEmpty)
+                    Text(
+                      'Brak zdefiniowanych przypomnień cyklicznych.',
+                      style: TextStyle(fontSize: 12, color: Colors.grey.shade600),
+                    )
+                  else
+                    ...project.recurringAlerts.map(
+                      (recurring) => ListTile(
+                        contentPadding: EdgeInsets.zero,
+                        dense: true,
+                        isThreeLine: true,
+                        title: Text(recurring.title),
+                        subtitle: Text(
+                          'Co ${_recurrenceLabel(recurring.intervalDays)} • termin: ${_formatDateTime(recurring.nextOccurrenceAt)}${recurring.preferredWeekday != null ? ' • ${_weekdayLabel(recurring.preferredWeekday!)}' : ''}\nPrzypomnienie: ${_remindBeforeLabel(recurring.remindBeforeMinutes)}',
+                        ),
+                        trailing: IconButton(
+                          tooltip: 'Usuń przypomnienie',
+                          icon: const Icon(Icons.delete_outline),
+                          onPressed: () =>
+                              provider.removeRecurringAlert(recurring.id),
+                        ),
+                      ),
+                    ),
+                ],
+              ),
+            ),
+          ),
+          const SizedBox(height: 16),
+          if (alerts.isEmpty)
+            Text(
+              'Brak alertów jednorazowych',
+              style: TextStyle(color: Colors.grey.shade600),
+            ),
+
           // NIEPRZECZYTANE
           if (alerts.where((a) => !a.isRead).isNotEmpty) ...[
             const Text(
@@ -711,8 +1232,7 @@ class _ProjectManagerScreenState extends State<ProjectManagerScreen>
             const SizedBox(height: 12),
             ...alerts
                 .where((a) => !a.isRead)
-                .map((alert) => _buildAlertCard(context, alert, provider))
-                ,
+                .map((alert) => _buildAlertCard(context, alert, provider)),
             const SizedBox(height: 24),
           ],
 
@@ -725,10 +1245,315 @@ class _ProjectManagerScreenState extends State<ProjectManagerScreen>
             const SizedBox(height: 12),
             ...alerts
                 .where((a) => a.isRead)
-                .map((alert) => _buildAlertCard(context, alert, provider))
-                ,
+                .map((alert) => _buildAlertCard(context, alert, provider)),
           ],
         ],
+      ),
+    );
+  }
+
+  String _recurrenceLabel(int days) {
+    if (days == 1) return '1 dzień';
+    if (days == 7) return '7 dni';
+    if (days == 14) return '14 dni';
+    if (days == 30) return '30 dni';
+    return '$days dni';
+  }
+
+  Future<void> _showAddRecurringAlertDialog(
+    BuildContext context,
+    ProjectManagerProvider provider,
+  ) async {
+    String selectedTemplateKey = _recurringAlertTemplates.keys.first;
+    String customTitle = '';
+    int intervalDays = 7;
+    final now = DateTime.now();
+    DateTime selectedDate = DateTime(
+      now.year,
+      now.month,
+      now.day,
+    ).add(const Duration(days: 7));
+    TimeOfDay selectedTime = const TimeOfDay(hour: 9, minute: 0);
+    int remindBeforeMinutes = 0;
+    int? preferredWeekday = DateTime.now().add(const Duration(days: 7)).weekday;
+    String? scheduleError;
+
+    final save = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) {
+        return StatefulBuilder(
+          builder: (context, setDialogState) {
+            final needsCustom = selectedTemplateKey == _customRecurringAlertKey;
+            final isCustomValid = !needsCustom || customTitle.trim().isNotEmpty;
+            final supportsWeekday = intervalDays % 7 == 0;
+            final occurrenceAt = _combineDateAndTime(selectedDate, selectedTime);
+
+            return AlertDialog(
+              title: const Text('Nowy alert cykliczny'),
+              content: SizedBox(
+                width: 460,
+                child: SingleChildScrollView(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Text('Typ przypomnienia'),
+                      const SizedBox(height: 6),
+                      DropdownButtonFormField<String>(
+                        initialValue: selectedTemplateKey,
+                        items: _recurringAlertTemplates.entries
+                            .map(
+                              (entry) => DropdownMenuItem<String>(
+                                value: entry.key,
+                                child: Text(entry.value),
+                              ),
+                            )
+                            .toList(),
+                        onChanged: (value) {
+                          if (value == null) return;
+                          setDialogState(() {
+                            selectedTemplateKey = value;
+                            scheduleError = null;
+                          });
+                        },
+                        decoration: const InputDecoration(
+                          border: OutlineInputBorder(),
+                          isDense: true,
+                        ),
+                      ),
+                      if (needsCustom) ...[
+                        const SizedBox(height: 10),
+                        TextField(
+                          onChanged: (value) {
+                            setDialogState(() {
+                              customTitle = value;
+                              scheduleError = null;
+                            });
+                          },
+                          decoration: InputDecoration(
+                            labelText: 'Własna nazwa alertu',
+                            border: const OutlineInputBorder(),
+                            isDense: true,
+                            errorText: isCustomValid
+                                ? null
+                                : 'Podaj nazwę własnego alertu',
+                          ),
+                        ),
+                      ],
+                      const SizedBox(height: 12),
+                      const Text('Cykliczność'),
+                      const SizedBox(height: 6),
+                      DropdownButtonFormField<int>(
+                        initialValue: intervalDays,
+                        items: const [
+                          DropdownMenuItem(value: 1, child: Text('Codziennie')),
+                          DropdownMenuItem(value: 7, child: Text('Co tydzień')),
+                          DropdownMenuItem(value: 14, child: Text('Co 2 tygodnie')),
+                          DropdownMenuItem(value: 30, child: Text('Co miesiąc (30 dni)')),
+                        ],
+                        onChanged: (value) {
+                          if (value == null) return;
+                          setDialogState(() {
+                            intervalDays = value;
+                            if (intervalDays % 7 != 0) {
+                              preferredWeekday = null;
+                            } else {
+                              preferredWeekday ??= selectedDate.weekday;
+                              selectedDate =
+                                  _alignDateToWeekday(selectedDate, preferredWeekday!);
+                            }
+                            scheduleError = null;
+                          });
+                        },
+                        decoration: const InputDecoration(
+                          border: OutlineInputBorder(),
+                          isDense: true,
+                        ),
+                      ),
+                      if (supportsWeekday) ...[
+                        const SizedBox(height: 12),
+                        const Text('Dzień tygodnia'),
+                        const SizedBox(height: 6),
+                        DropdownButtonFormField<int>(
+                          initialValue: preferredWeekday,
+                          items: List.generate(
+                            7,
+                            (index) => DropdownMenuItem<int>(
+                              value: index + 1,
+                              child: Text(_weekdayLabel(index + 1)),
+                            ),
+                          ),
+                          onChanged: (value) {
+                            if (value == null) return;
+                            setDialogState(() {
+                              preferredWeekday = value;
+                              selectedDate =
+                                  _alignDateToWeekday(selectedDate, value);
+                              scheduleError = null;
+                            });
+                          },
+                          decoration: const InputDecoration(
+                            border: OutlineInputBorder(),
+                            isDense: true,
+                          ),
+                        ),
+                      ],
+                      const SizedBox(height: 12),
+                      const Text('Data pierwszego terminu'),
+                      const SizedBox(height: 6),
+                      OutlinedButton.icon(
+                        onPressed: () async {
+                          final pickedDate = await showDatePicker(
+                            context: dialogContext,
+                            initialDate: selectedDate,
+                            firstDate: DateTime(now.year - 1),
+                            lastDate: DateTime(now.year + 10),
+                          );
+                          if (pickedDate == null) return;
+                          setDialogState(() {
+                            selectedDate = supportsWeekday && preferredWeekday != null
+                                ? _alignDateToWeekday(pickedDate, preferredWeekday!)
+                                : pickedDate;
+                            if (supportsWeekday) {
+                              preferredWeekday = selectedDate.weekday;
+                            }
+                            scheduleError = null;
+                          });
+                        },
+                        icon: const Icon(Icons.event),
+                        label: Text(_formatDate(selectedDate)),
+                      ),
+                      const SizedBox(height: 12),
+                      const Text('Godzina terminu'),
+                      const SizedBox(height: 6),
+                      OutlinedButton.icon(
+                        onPressed: () async {
+                          final pickedTime = await showTimePicker(
+                            context: dialogContext,
+                            initialTime: selectedTime,
+                          );
+                          if (pickedTime == null) return;
+                          setDialogState(() {
+                            selectedTime = pickedTime;
+                            scheduleError = null;
+                          });
+                        },
+                        icon: const Icon(Icons.schedule),
+                        label: Text(_formatTimeOfDay(selectedTime)),
+                      ),
+                      const SizedBox(height: 12),
+                      const Text('Przypomnij wcześniej'),
+                      const SizedBox(height: 6),
+                      DropdownButtonFormField<int>(
+                        initialValue: remindBeforeMinutes,
+                        items: _reminderOptionsMinutes
+                            .map(
+                              (minutes) => DropdownMenuItem<int>(
+                                value: minutes,
+                                child: Text(_remindBeforeLabel(minutes)),
+                              ),
+                            )
+                            .toList(),
+                        onChanged: (value) {
+                          if (value == null) return;
+                          setDialogState(() {
+                            remindBeforeMinutes = value;
+                            scheduleError = null;
+                          });
+                        },
+                        decoration: const InputDecoration(
+                          border: OutlineInputBorder(),
+                          isDense: true,
+                        ),
+                      ),
+                      const SizedBox(height: 12),
+                      Text(
+                        'Pierwszy termin: ${_formatDateTime(occurrenceAt)}',
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: Colors.grey.shade700,
+                        ),
+                      ),
+                      if (scheduleError != null) ...[
+                        const SizedBox(height: 8),
+                        Text(
+                          scheduleError!,
+                          style: const TextStyle(
+                            color: Colors.red,
+                            fontSize: 12,
+                          ),
+                        ),
+                      ],
+                    ],
+                  ),
+                ),
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.of(dialogContext).pop(false),
+                  child: const Text('Anuluj'),
+                ),
+                ElevatedButton(
+                  onPressed: isCustomValid
+                      ? () {
+                          final firstOccurrenceAt =
+                              _combineDateAndTime(selectedDate, selectedTime);
+                          final reminderAt = firstOccurrenceAt.subtract(
+                            Duration(minutes: remindBeforeMinutes),
+                          );
+                          if (!firstOccurrenceAt.isAfter(now)) {
+                            setDialogState(() {
+                              scheduleError =
+                                  'Ustaw przyszłą datę i godzinę pierwszego terminu.';
+                            });
+                            return;
+                          }
+                          if (!reminderAt.isAfter(now)) {
+                            setDialogState(() {
+                              scheduleError =
+                                  'Przypomnienie wypada w przeszłości. Zmień datę, godzinę lub offset.';
+                            });
+                            return;
+                          }
+                          Navigator.of(dialogContext).pop(true);
+                        }
+                      : null,
+                  child: const Text('Zapisz'),
+                ),
+              ],
+            );
+          },
+        );
+      },
+    );
+
+    if (save != true) return;
+
+    final title = selectedTemplateKey == _customRecurringAlertKey
+        ? customTitle.trim()
+        : (_recurringAlertTemplates[selectedTemplateKey] ?? '').trim();
+    if (title.isEmpty) return;
+
+    provider.addRecurringAlert(
+      title: title,
+      message: 'Przypomnienie cykliczne: $title',
+      intervalDays: intervalDays,
+      severity: AlertSeverity.warning,
+      actionSuggestion: 'Wykonaj czynność i potwierdź realizację.',
+      firstOccurrenceAt: _combineDateAndTime(selectedDate, selectedTime),
+      remindBeforeMinutes: remindBeforeMinutes,
+      preferredWeekday: intervalDays % 7 == 0 ? preferredWeekday : null,
+    );
+
+    final permissionGranted =
+        await LocalNotificationsService.instance.requestPermissions();
+    if (!mounted || permissionGranted) return;
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text(
+          'Alert zapisany, ale powiadomienia systemowe sa wylaczone. Wlacz je w ustawieniach telefonu.',
+        ),
+        duration: Duration(seconds: 5),
       ),
     );
   }
@@ -858,8 +1683,9 @@ class _ProjectManagerScreenState extends State<ProjectManagerScreen>
     for (final unit in project.units) {
       unitsByFloor.putIfAbsent(unit.floor, () => []).add(unit);
     }
-    
-    final sortedFloors = unitsByFloor.keys.toList()..sort((a, b) => b.compareTo(a)); // Od najwyższego
+
+    final sortedFloors = unitsByFloor.keys.toList()
+      ..sort((a, b) => b.compareTo(a)); // Od najwyższego
 
     return SingleChildScrollView(
       padding: const EdgeInsets.all(16),
@@ -958,6 +1784,14 @@ class _ProjectManagerScreenState extends State<ProjectManagerScreen>
     final completion = unit.completionPercentage;
     final hasPhotos = unit.photoPaths.isNotEmpty;
     final hasDefects = unit.defectsNotes.isNotEmpty;
+    final project = provider.currentProject;
+    final assignedSubcontractors = project == null
+        ? const <SubcontractorAssignment>[]
+        : _subcontractorsForTarget(
+            project,
+            targetType: SubcontractorTargetType.unit,
+            targetId: _unitTargetId(project, unit),
+          );
 
     Color cardColor;
     if (completion >= 100) {
@@ -990,7 +1824,7 @@ class _ProjectManagerScreenState extends State<ProjectManagerScreen>
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
                   Text(
-                    unit.unitId,
+                    provider.currentProject?.displayUnitId(unit) ?? unit.unitId,
                     style: const TextStyle(
                       fontSize: 16,
                       fontWeight: FontWeight.bold,
@@ -1018,7 +1852,26 @@ class _ProjectManagerScreenState extends State<ProjectManagerScreen>
                     ),
                 ],
               ),
-              
+              if (assignedSubcontractors.isNotEmpty)
+                Padding(
+                  padding: const EdgeInsets.only(top: 6),
+                  child: Wrap(
+                    alignment: WrapAlignment.center,
+                    spacing: 4,
+                    runSpacing: 4,
+                    children: assignedSubcontractors
+                        .map(
+                          (subcontractor) => Chip(
+                            label: Text(subcontractor.companyName),
+                            visualDensity: VisualDensity.compact,
+                            materialTapTargetSize:
+                                MaterialTapTargetSize.shrinkWrap,
+                          ),
+                        )
+                        .toList(),
+                  ),
+                ),
+
               // Procent ukończenia
               Column(
                 children: [
@@ -1038,16 +1891,18 @@ class _ProjectManagerScreenState extends State<ProjectManagerScreen>
                   ),
                 ],
               ),
-              
+
               // Ikony
               Row(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
                   if (hasPhotos)
-                    Icon(Icons.camera_alt, size: 14, color: Colors.blue.shade700),
+                    Icon(Icons.camera_alt,
+                        size: 14, color: Colors.blue.shade700),
                   if (hasPhotos && hasDefects) const SizedBox(width: 4),
                   if (hasDefects)
-                    Icon(Icons.warning, size: 14, color: Colors.orange.shade700),
+                    Icon(Icons.warning,
+                        size: 14, color: Colors.orange.shade700),
                 ],
               ),
             ],
@@ -1055,6 +1910,896 @@ class _ProjectManagerScreenState extends State<ProjectManagerScreen>
         ),
       ),
     );
+  }
+
+  Widget _buildProjectAreaTab(
+    BuildContext context,
+    ProjectManagerProvider provider, {
+    required String title,
+    required String emptyMessage,
+    required Set<ProjectAreaType> types,
+  }) {
+    final project = provider.currentProject;
+    if (project == null) {
+      return const SizedBox.shrink();
+    }
+
+    final definitions = ProjectAreaCatalog.buildDefinitions(project)
+        .where((item) => types.contains(item.type))
+        .toList()
+      ..sort((a, b) => a.title.compareTo(b.title));
+
+    return SingleChildScrollView(
+      padding: const EdgeInsets.all(16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Card(
+            color: Colors.blue.shade50,
+            child: Padding(
+              padding: const EdgeInsets.all(16),
+              child: Row(
+                children: [
+                  const Icon(Icons.assignment_turned_in,
+                      size: 40, color: Colors.blue),
+                  const SizedBox(width: 16),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          '$title: ${definitions.length}',
+                          style: const TextStyle(
+                            fontSize: 18,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          'Każda pozycja ma zestaw informacji z generatora i osobną checklistę wykonania.',
+                          style: TextStyle(
+                            fontSize: 13,
+                            color: Colors.grey.shade700,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+          const SizedBox(height: 16),
+          if (definitions.isEmpty)
+            Padding(
+              padding: const EdgeInsets.all(24),
+              child: Text(
+                emptyMessage,
+                style: const TextStyle(color: Colors.grey),
+              ),
+            )
+          else
+            ...definitions.map(
+              (definition) => _buildProjectAreaCard(
+                context,
+                provider,
+                definition,
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildProjectAreaCard(
+    BuildContext context,
+    ProjectManagerProvider provider,
+    ProjectAreaDefinition definition,
+  ) {
+    final progress = provider.getAreaProgress(definition.id);
+    final completion = progress?.completionPercentage ?? 0.0;
+    final completed = progress?.taskStatuses.values
+            .where((status) => status == TaskStatus.completed)
+            .length ??
+        0;
+    final total = definition.checklist.length;
+    final hasPhotos = progress != null && progress.photoPaths.isNotEmpty;
+    final hasNotes = progress != null && progress.notes.isNotEmpty;
+
+    return Card(
+      margin: const EdgeInsets.only(bottom: 12),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(12),
+        onTap: () {
+          Navigator.of(context).push(
+            MaterialPageRoute(
+              builder: (_) => ProjectAreaDetailScreen(areaId: definition.id),
+            ),
+          );
+        },
+        child: Padding(
+          padding: const EdgeInsets.all(14),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      definition.title,
+                      style: const TextStyle(
+                        fontSize: 15,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                  ),
+                  if (hasPhotos)
+                    Padding(
+                      padding: const EdgeInsets.only(right: 4),
+                      child: Icon(Icons.camera_alt,
+                          size: 16, color: Colors.blue.shade700),
+                    ),
+                  if (hasNotes)
+                    Padding(
+                      padding: const EdgeInsets.only(right: 4),
+                      child: Icon(Icons.note_alt,
+                          size: 16, color: Colors.orange.shade700),
+                    ),
+                  const Icon(Icons.chevron_right),
+                ],
+              ),
+              const SizedBox(height: 6),
+              Text(
+                definition.subtitle,
+                style: TextStyle(
+                  fontSize: 12,
+                  color: Colors.grey.shade700,
+                ),
+              ),
+              const SizedBox(height: 10),
+              LinearProgressIndicator(
+                value: total == 0 ? 0.0 : completed / total,
+                backgroundColor: Colors.grey.shade300,
+                color: completion >= 100 ? Colors.green : Colors.blue,
+                minHeight: 8,
+              ),
+              const SizedBox(height: 8),
+              Text(
+                'Checklista: $completed/$total · ${completion.toStringAsFixed(0)}%',
+                style: TextStyle(
+                  fontSize: 12,
+                  color: Colors.grey.shade700,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildSubcontractorsTab(
+    BuildContext context,
+    ProjectManagerProvider provider,
+  ) {
+    final project = provider.currentProject;
+    if (project == null) {
+      return const SizedBox.shrink();
+    }
+
+    final subcontractors = project.config.subcontractors;
+
+    return SingleChildScrollView(
+      padding: const EdgeInsets.all(16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Card(
+            color: Colors.blue.shade50,
+            child: Padding(
+              padding: const EdgeInsets.all(16),
+              child: Row(
+                children: [
+                  const Icon(Icons.groups_2, size: 40, color: Colors.blue),
+                  const SizedBox(width: 16),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'Podwykonawcy: ${subcontractors.length}',
+                          style: const TextStyle(
+                            fontSize: 18,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          'Zakładka zbiera firmy oraz ich przypisania do budynków, klatek, pięter, lokali, pomieszczeń, systemów i OZE/EV.',
+                          style: TextStyle(
+                            fontSize: 13,
+                            color: Colors.grey.shade700,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  ElevatedButton.icon(
+                    onPressed: () =>
+                        _openSubcontractorEditor(context, provider),
+                    icon: const Icon(Icons.edit),
+                    label: const Text('Edytuj'),
+                  ),
+                ],
+              ),
+            ),
+          ),
+          const SizedBox(height: 16),
+          if (subcontractors.isEmpty)
+            const Text(
+              'Brak podwykonawców w projekcie. Dodaj ich w konfiguracji projektu.',
+            )
+          else ...[
+            ...subcontractors.map((subcontractor) {
+              final linkLabels = project.config.subcontractorLinks
+                  .where((link) => link.subcontractorId == subcontractor.id)
+                  .map((link) => _resolveSubcontractorLinkLabel(project, link))
+                  .where((label) => label.trim().isNotEmpty)
+                  .toSet()
+                  .toList()
+                ..sort();
+
+              return Card(
+                margin: const EdgeInsets.only(bottom: 12),
+                child: Padding(
+                  padding: const EdgeInsets.all(14),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        subcontractor.companyName,
+                        style: const TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                      const SizedBox(height: 6),
+                      Text(
+                        _formatSubcontractorAreas(subcontractor.areas),
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: Colors.grey.shade700,
+                        ),
+                      ),
+                      if (subcontractor.responsibilities.trim().isNotEmpty) ...[
+                        const SizedBox(height: 8),
+                        Text('Zakres: ${subcontractor.responsibilities}'),
+                      ],
+                      if (subcontractor.details.trim().isNotEmpty) ...[
+                        const SizedBox(height: 6),
+                        Text(
+                          subcontractor.details,
+                          style: TextStyle(color: Colors.grey.shade800),
+                        ),
+                      ],
+                      const SizedBox(height: 8),
+                      Text(
+                        linkLabels.isEmpty
+                            ? 'Brak przypisań szczegółowych'
+                            : 'Przypisania: ${linkLabels.join(' • ')}',
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: Colors.grey.shade700,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              );
+            }),
+            const SizedBox(height: 12),
+            _buildAssignmentOverviewSection(
+              title: 'Budynki',
+              onEdit: () => _openSubcontractorEditor(
+                context,
+                provider,
+                initialStep: 5,
+              ),
+              entries: [
+                for (var index = 0;
+                    index < project.config.buildings.length;
+                    index++)
+                  (
+                    label: project.config.buildings[index].buildingName,
+                    subcontractors: _subcontractorsForTarget(
+                      project,
+                      targetType: SubcontractorTargetType.building,
+                      targetId: 'building:$index',
+                    ),
+                  ),
+              ],
+            ),
+            _buildAssignmentOverviewSection(
+              title: 'Klatki',
+              onEdit: () => _openSubcontractorEditor(
+                context,
+                provider,
+                initialStep: 5,
+              ),
+              entries: [
+                for (var buildingIndex = 0;
+                    buildingIndex < project.config.buildings.length;
+                    buildingIndex++)
+                  for (final stairCase
+                      in project.config.buildings[buildingIndex].stairCases)
+                    if (_subcontractorsForTarget(
+                      project,
+                      targetType: SubcontractorTargetType.stairCase,
+                      targetId:
+                          'staircase:$buildingIndex:${stairCase.stairCaseName}',
+                    ).isNotEmpty)
+                      (
+                        label:
+                            '${project.config.buildings[buildingIndex].buildingName} • Klatka ${stairCase.stairCaseName}',
+                        subcontractors: _subcontractorsForTarget(
+                          project,
+                          targetType: SubcontractorTargetType.stairCase,
+                          targetId:
+                              'staircase:$buildingIndex:${stairCase.stairCaseName}',
+                        ),
+                      ),
+              ],
+            ),
+            _buildAssignmentOverviewSection(
+              title: 'Piętra',
+              onEdit: () => _openSubcontractorEditor(
+                context,
+                provider,
+                initialStep: 5,
+              ),
+              entries: [
+                for (var buildingIndex = 0;
+                    buildingIndex < project.config.buildings.length;
+                    buildingIndex++)
+                  for (final stairCase
+                      in project.config.buildings[buildingIndex].stairCases)
+                    for (var floor = 1;
+                        floor <= stairCase.numberOfLevels;
+                        floor++)
+                      if (_subcontractorsForTarget(
+                        project,
+                        targetType: SubcontractorTargetType.floor,
+                        targetId:
+                            'floor:$buildingIndex:${stairCase.stairCaseName}:$floor',
+                      ).isNotEmpty)
+                        (
+                          label:
+                              '${project.config.buildings[buildingIndex].buildingName} • Klatka ${stairCase.stairCaseName} • ${stairCase.getFloorName(floor)}',
+                          subcontractors: _subcontractorsForTarget(
+                            project,
+                            targetType: SubcontractorTargetType.floor,
+                            targetId:
+                                'floor:$buildingIndex:${stairCase.stairCaseName}:$floor',
+                          ),
+                        ),
+              ],
+            ),
+            _buildAssignmentOverviewSection(
+              title: 'Lokale',
+              onEdit: () => _openSubcontractorEditor(
+                context,
+                provider,
+                initialStep: 5,
+              ),
+              entries: [
+                for (final unit in project.units)
+                  if (_subcontractorsForTarget(
+                    project,
+                    targetType: SubcontractorTargetType.unit,
+                    targetId: _unitTargetId(project, unit),
+                  ).isNotEmpty)
+                    (
+                      label:
+                          'Lokal ${project.displayUnitId(unit)} • Klatka ${unit.stairCase} • Piętro ${unit.floor}',
+                      subcontractors: _subcontractorsForTarget(
+                        project,
+                        targetType: SubcontractorTargetType.unit,
+                        targetId: _unitTargetId(project, unit),
+                      ),
+                    ),
+              ],
+            ),
+            _buildAssignmentOverviewSection(
+              title: 'Pomieszczenia',
+              onEdit: () => _openSubcontractorEditor(
+                context,
+                provider,
+                initialStep: 6,
+              ),
+              entries: [
+                for (final room in project.config.additionalRooms)
+                  (
+                    label: room.name,
+                    subcontractors: _subcontractorsForTarget(
+                      project,
+                      targetType: SubcontractorTargetType.additionalRoom,
+                      targetId: 'room:${room.id}',
+                    ),
+                  ),
+              ],
+            ),
+            _buildAssignmentOverviewSection(
+              title: 'Systemy',
+              entries: [
+                for (final system
+                    in project.config.selectedSystems.toList()
+                      ..sort((a, b) => a.name.compareTo(b.name)))
+                  (
+                    label: _subcontractorSystemLabel(system),
+                    subcontractors: _subcontractorsForTarget(
+                      project,
+                      targetType: SubcontractorTargetType.system,
+                      targetId: 'system:${system.name}',
+                    ),
+                  ),
+              ],
+            ),
+            _buildAssignmentOverviewSection(
+              title: 'OZE i EV',
+              entries: [
+                if (project
+                        .config.renewableEnergyConfig?.photovoltaic.isEnabled ??
+                    false)
+                  (
+                    label: 'Fotowoltaika (PV)',
+                    subcontractors: _subcontractorsForTarget(
+                      project,
+                      targetType: SubcontractorTargetType.renewable,
+                      targetId: 'renewable:pv',
+                    ),
+                  ),
+                if (project.config.renewableEnergyConfig?.batteryStorage
+                        .isEnabled ??
+                    false)
+                  (
+                    label: 'Magazyn energii (BESS)',
+                    subcontractors: _subcontractorsForTarget(
+                      project,
+                      targetType: SubcontractorTargetType.renewable,
+                      targetId: 'renewable:bess',
+                    ),
+                  ),
+                if (project.config.renewableEnergyConfig?.electricMobility
+                        .isEnabled ??
+                    false)
+                  (
+                    label: 'Ładowarki EV',
+                    subcontractors: _subcontractorsForTarget(
+                      project,
+                      targetType: SubcontractorTargetType.ev,
+                      targetId: 'ev:charging',
+                    ),
+                  ),
+              ],
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
+  List<SubcontractorAssignment> _directSubcontractorsForTarget(
+    ConstructionProject project, {
+    required SubcontractorTargetType targetType,
+    required String targetId,
+  }) {
+    final assignedIds = project.config.subcontractorLinks
+        .where(
+          (link) =>
+              !link.blockInheritance &&
+              link.targetType == targetType &&
+              link.targetId == targetId,
+        )
+        .map((link) => link.subcontractorId)
+        .toSet();
+
+    return project.config.subcontractors
+        .where((subcontractor) => assignedIds.contains(subcontractor.id))
+        .toList()
+      ..sort((a, b) => a.companyName.compareTo(b.companyName));
+  }
+
+  bool _isInheritanceBlockedForTarget(
+    ConstructionProject project, {
+    required SubcontractorTargetType targetType,
+    required String targetId,
+  }) {
+    return project.config.subcontractorLinks.any(
+      (link) =>
+          link.blockInheritance &&
+          link.targetType == targetType &&
+          link.targetId == targetId,
+    );
+  }
+
+  List<({SubcontractorTargetType targetType, String targetId})>
+      _subcontractorTargetFallbackChain({
+    required SubcontractorTargetType targetType,
+    required String targetId,
+  }) {
+    switch (targetType) {
+      case SubcontractorTargetType.building:
+      case SubcontractorTargetType.additionalRoom:
+      case SubcontractorTargetType.system:
+      case SubcontractorTargetType.renewable:
+      case SubcontractorTargetType.ev:
+        return [(targetType: targetType, targetId: targetId)];
+      case SubcontractorTargetType.stairCase:
+        final parts = targetId.split(':');
+        if (parts.length < 3) {
+          return [(targetType: targetType, targetId: targetId)];
+        }
+        final buildingIndex = int.tryParse(parts[1]);
+        final stairCaseName = parts[2];
+        if (buildingIndex == null) {
+          return [(targetType: targetType, targetId: targetId)];
+        }
+        return [
+          (targetType: SubcontractorTargetType.stairCase, targetId: targetId),
+          (
+            targetType: SubcontractorTargetType.building,
+            targetId: 'building:$buildingIndex',
+          ),
+        ];
+      case SubcontractorTargetType.floor:
+        final parts = targetId.split(':');
+        if (parts.length < 4) {
+          return [(targetType: targetType, targetId: targetId)];
+        }
+        final buildingIndex = int.tryParse(parts[1]);
+        final stairCaseName = parts[2];
+        if (buildingIndex == null) {
+          return [(targetType: targetType, targetId: targetId)];
+        }
+        return [
+          (targetType: SubcontractorTargetType.floor, targetId: targetId),
+          (
+            targetType: SubcontractorTargetType.stairCase,
+            targetId: 'staircase:$buildingIndex:$stairCaseName',
+          ),
+          (
+            targetType: SubcontractorTargetType.building,
+            targetId: 'building:$buildingIndex',
+          ),
+        ];
+      case SubcontractorTargetType.unit:
+        final parts = targetId.split(':');
+        if (parts.length < 5) {
+          return [(targetType: targetType, targetId: targetId)];
+        }
+        final buildingIndex = int.tryParse(parts[1]);
+        final stairCaseName = parts[2];
+        final floor = int.tryParse(parts[3]);
+        if (buildingIndex == null || floor == null) {
+          return [(targetType: targetType, targetId: targetId)];
+        }
+        return [
+          (targetType: SubcontractorTargetType.unit, targetId: targetId),
+          (
+            targetType: SubcontractorTargetType.floor,
+            targetId: 'floor:$buildingIndex:$stairCaseName:$floor',
+          ),
+          (
+            targetType: SubcontractorTargetType.stairCase,
+            targetId: 'staircase:$buildingIndex:$stairCaseName',
+          ),
+          (
+            targetType: SubcontractorTargetType.building,
+            targetId: 'building:$buildingIndex',
+          ),
+        ];
+    }
+  }
+
+  List<SubcontractorAssignment> _subcontractorsForTarget(
+    ConstructionProject project, {
+    required SubcontractorTargetType targetType,
+    required String targetId,
+  }) {
+    final chain = _subcontractorTargetFallbackChain(
+      targetType: targetType,
+      targetId: targetId,
+    );
+    for (final candidate in chain) {
+      if (_isInheritanceBlockedForTarget(
+        project,
+        targetType: candidate.targetType,
+        targetId: candidate.targetId,
+      )) {
+        return const <SubcontractorAssignment>[];
+      }
+
+      final subcontractors = _directSubcontractorsForTarget(
+        project,
+        targetType: candidate.targetType,
+        targetId: candidate.targetId,
+      );
+      if (subcontractors.isNotEmpty) {
+        return subcontractors;
+      }
+    }
+    return const <SubcontractorAssignment>[];
+  }
+
+  String _unitTargetId(ConstructionProject project, ProjectUnit unit) {
+    final match = RegExp(r'^B(\d+)-').firstMatch(unit.unitId);
+    final buildingIndex = match == null
+        ? 0
+        : ((int.tryParse(match.group(1)!) ?? 1) - 1).clamp(0, 9999);
+
+    if (buildingIndex >= 0 && buildingIndex < project.config.buildings.length) {
+      final building = project.config.buildings[buildingIndex];
+      for (final stairCase in building.stairCases) {
+        for (var floor = 1; floor <= stairCase.numberOfLevels; floor++) {
+          final constructionLabels = stairCase.getFloorUnitLabels(
+              floor, UnitNamingScheme.construction);
+          final targetLabels =
+              stairCase.getFloorUnitLabels(floor, UnitNamingScheme.target);
+
+          final constructionIndex =
+              constructionLabels.indexOf(unit.constructionUnitId);
+          if (constructionIndex >= 0) {
+            return 'unit:$buildingIndex:${stairCase.stairCaseName}:$floor:$constructionIndex';
+          }
+
+          final targetIndex = targetLabels.indexOf(unit.targetUnitId);
+          if (targetIndex >= 0) {
+            return 'unit:$buildingIndex:${stairCase.stairCaseName}:$floor:$targetIndex';
+          }
+        }
+      }
+    }
+
+    final unitPosition = _unitPositionFromUnitId(unit.unitId);
+    return 'unit:$buildingIndex:${unit.stairCase}:${unit.floor}:$unitPosition';
+  }
+
+  int _unitPositionFromUnitId(String unitId) {
+    final parts = unitId.split('-');
+    final core = parts.length > 1 ? parts.last : unitId;
+    if (core.length < 2) {
+      return 0;
+    }
+    final numericPart = int.tryParse(core.substring(1));
+    if (numericPart == null) {
+      return 0;
+    }
+    final unitNumber = numericPart % 100;
+    return unitNumber > 0 ? unitNumber - 1 : 0;
+  }
+
+  Widget _buildAssignmentOverviewSection({
+    required String title,
+    required List<
+            ({String label, List<SubcontractorAssignment> subcontractors})>
+        entries,
+    VoidCallback? onEdit,
+  }) {
+    if (entries.isEmpty) {
+      return const SizedBox.shrink();
+    }
+
+    return Padding(
+      padding: const EdgeInsets.only(top: 8, bottom: 16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Expanded(
+                child: Text(
+                  title,
+                  style: const TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+              ),
+              if (onEdit != null)
+                TextButton.icon(
+                  onPressed: onEdit,
+                  icon: const Icon(Icons.edit, size: 16),
+                  label: const Text('Edytuj przypisania'),
+                ),
+            ],
+          ),
+          const SizedBox(height: 10),
+          ...entries.map((entry) {
+            return Card(
+              margin: const EdgeInsets.only(bottom: 10),
+              child: Padding(
+                padding: const EdgeInsets.all(12),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      entry.label,
+                      style: const TextStyle(
+                        fontSize: 14,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    if (entry.subcontractors.isEmpty)
+                      Text(
+                        'Brak przypisanych podwykonawców',
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: Colors.grey.shade600,
+                        ),
+                      )
+                    else
+                      Wrap(
+                        spacing: 6,
+                        runSpacing: 6,
+                        children: entry.subcontractors
+                            .map(
+                              (subcontractor) => Chip(
+                                label: Text(subcontractor.companyName),
+                                visualDensity: VisualDensity.compact,
+                              ),
+                            )
+                            .toList(),
+                      ),
+                  ],
+                ),
+              ),
+            );
+          }),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _openSubcontractorEditor(
+    BuildContext context,
+    ProjectManagerProvider provider, {
+    int initialStep = 2,
+  }) async {
+    if (provider.currentProject == null) {
+      return;
+    }
+
+    final result = await Navigator.of(context).push<bool>(
+      MaterialPageRoute(
+        builder: (_) => ConfigurationWizardScreen(
+          editMode: true,
+          existingConfig: provider.currentProject?.config,
+          initialStep: initialStep,
+        ),
+      ),
+    );
+
+    if (result == true && mounted) {
+      setState(() {});
+    }
+  }
+
+  String _formatSubcontractorAreas(Set<SubcontractorArea> areas) {
+    if (areas.isEmpty) {
+      return 'Brak przypisanych obszarów ogólnych';
+    }
+
+    final labels = areas.map((area) {
+      switch (area) {
+        case SubcontractorArea.elevators:
+          return 'Dźwigi osobowe';
+        case SubcontractorArea.garage:
+          return 'Garaż';
+        case SubcontractorArea.externalArea:
+          return 'Teren zewnętrzny';
+        case SubcontractorArea.stairCases:
+          return 'Klatki schodowe';
+        case SubcontractorArea.residentialUnits:
+          return 'Lokale mieszkalne';
+        case SubcontractorArea.additionalRooms:
+          return 'Pomieszczenia dodatkowe';
+        case SubcontractorArea.parking:
+          return 'Parking';
+      }
+    }).toList()
+      ..sort();
+
+    return labels.join(' • ');
+  }
+
+  String _resolveSubcontractorLinkLabel(
+    ConstructionProject project,
+    SubcontractorLink link,
+  ) {
+    switch (link.targetType) {
+      case SubcontractorTargetType.building:
+        final index = int.tryParse(link.targetId.split(':').last);
+        if (index == null ||
+            index < 0 ||
+            index >= project.config.buildings.length) {
+          return 'Budynek';
+        }
+        return project.config.buildings[index].buildingName;
+      case SubcontractorTargetType.stairCase:
+        final stairCaseParts = link.targetId.split(':');
+        if (stairCaseParts.length < 3) {
+          return 'Klatka';
+        }
+        final buildingIndex = int.tryParse(stairCaseParts[1]);
+        final stairCaseName = stairCaseParts[2];
+        if (buildingIndex == null ||
+            buildingIndex < 0 ||
+            buildingIndex >= project.config.buildings.length) {
+          return 'Klatka $stairCaseName';
+        }
+        return '${project.config.buildings[buildingIndex].buildingName} • Klatka $stairCaseName';
+      case SubcontractorTargetType.floor:
+        final floorParts = link.targetId.split(':');
+        if (floorParts.length < 4) {
+          return 'Piętro';
+        }
+        final buildingIndex = int.tryParse(floorParts[1]);
+        final stairCaseName = floorParts[2];
+        final floor = int.tryParse(floorParts[3]);
+        if (buildingIndex == null ||
+            floor == null ||
+            buildingIndex < 0 ||
+            buildingIndex >= project.config.buildings.length) {
+          return 'Piętro';
+        }
+        final stairCase =
+            project.config.buildings[buildingIndex].stairCases.where(
+          (item) => item.stairCaseName == stairCaseName,
+        );
+        final floorLabel = stairCase.isEmpty
+            ? 'Piętro $floor'
+            : stairCase.first.getFloorName(floor);
+        return '${project.config.buildings[buildingIndex].buildingName} • Klatka $stairCaseName • $floorLabel';
+      case SubcontractorTargetType.unit:
+        final matchedUnit = project.units.where(
+          (unit) => _unitTargetId(project, unit) == link.targetId,
+        );
+        if (matchedUnit.isNotEmpty) {
+          final unit = matchedUnit.first;
+          return 'Lokal ${project.displayUnitId(unit)}';
+        }
+        return 'Lokal';
+      case SubcontractorTargetType.additionalRoom:
+        final roomId = link.targetId.split(':').last;
+        final room =
+            project.config.additionalRooms.where((item) => item.id == roomId);
+        return room.isEmpty ? 'Pomieszczenie' : room.first.name;
+      case SubcontractorTargetType.system:
+        final systemName = link.targetId.split(':').last;
+        final system = ElectricalSystemType.values.where(
+          (item) => item.name == systemName,
+        );
+        return system.isEmpty
+            ? 'System'
+            : _subcontractorSystemLabel(system.first);
+      case SubcontractorTargetType.renewable:
+        final key = link.targetId.split(':').last;
+        switch (key) {
+          case 'pv':
+            return 'Fotowoltaika (PV)';
+          case 'bess':
+            return 'Magazyn energii (BESS)';
+          default:
+            return 'OZE';
+        }
+      case SubcontractorTargetType.ev:
+        return 'Ładowarki EV';
+    }
+  }
+
+  String _subcontractorSystemLabel(ElectricalSystemType system) {
+    return system.displayName;
   }
 
   // ═══════════════════════════════════════════════════════════════════════════
@@ -1116,17 +2861,20 @@ class _ProjectManagerScreenState extends State<ProjectManagerScreen>
 
       // Przygotuj dane dla wszystkich lokali
       final lokalEntries = <Map<String, dynamic>>[];
-      
+
       for (final unit in project.units) {
         final entry = <String, dynamic>{
-          'nrLokalu': unit.unitId,
+          'nrLokalu': project.displayUnitId(unit),
         };
 
         // Zmapuj statusy zadań
-        for (int i = 0; i < stageNames.length && i < project.allTasks.length; i++) {
+        for (int i = 0;
+            i < stageNames.length && i < project.allTasks.length;
+            i++) {
           final task = project.allTasks[i];
           final status = unit.taskStatuses[task.id] ?? TaskStatus.pending;
-          entry[stageNames[i]] = status == TaskStatus.completed ? 'true' : 'false';
+          entry[stageNames[i]] =
+              status == TaskStatus.completed ? 'true' : 'false';
         }
 
         lokalEntries.add(entry);
@@ -1142,7 +2890,8 @@ class _ProjectManagerScreenState extends State<ProjectManagerScreen>
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Wykaz Zbiorczy dla projektu ${project.name} został wygenerowany!'),
+            content: Text(
+                'Wykaz Zbiorczy dla projektu ${project.name} został wygenerowany!'),
             backgroundColor: Colors.green,
             duration: const Duration(seconds: 3),
           ),
@@ -1218,10 +2967,12 @@ class _ProjectManagerScreenState extends State<ProjectManagerScreen>
 
       for (final unit in project.units) {
         final entry = <String, dynamic>{
-          'nrLokalu': unit.unitId,
+          'nrLokalu': project.displayUnitId(unit),
         };
 
-        for (int i = 0; i < stageNames.length && i < project.allTasks.length; i++) {
+        for (int i = 0;
+            i < stageNames.length && i < project.allTasks.length;
+            i++) {
           final task = project.allTasks[i];
           final status = task.status;
           entry[stageNames[i]] = status == TaskStatus.completed ? true : false;
@@ -1305,13 +3056,16 @@ class _ProjectManagerScreenState extends State<ProjectManagerScreen>
 
       for (final unit in project.units) {
         final entry = <String, dynamic>{
-          'nrLokalu': unit.unitId,
+          'nrLokalu': project.displayUnitId(unit),
         };
 
-        for (int i = 0; i < stageNames.length && i < project.allTasks.length; i++) {
+        for (int i = 0;
+            i < stageNames.length && i < project.allTasks.length;
+            i++) {
           final task = project.allTasks[i];
           final status = task.status;
-          entry[stageNames[i]] = status == TaskStatus.completed ? 'true' : 'false';
+          entry[stageNames[i]] =
+              status == TaskStatus.completed ? 'true' : 'false';
         }
 
         lokalEntries.add(entry);
@@ -1327,7 +3081,8 @@ class _ProjectManagerScreenState extends State<ProjectManagerScreen>
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
-            content: Text('Wykaz Lokali (Excel) został wygenerowany i pobrany!'),
+            content:
+                Text('Wykaz Lokali (Excel) został wygenerowany i pobrany!'),
             backgroundColor: Colors.green,
             duration: Duration(seconds: 3),
           ),
