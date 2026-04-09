@@ -2863,8 +2863,18 @@ class _ProjectManagerScreenState extends State<ProjectManagerScreen>
       final lokalEntries = <Map<String, dynamic>>[];
 
       for (final unit in project.units) {
+        final subcontractors = _subcontractorsForTarget(
+          project,
+          targetType: SubcontractorTargetType.unit,
+          targetId: _unitTargetId(project, unit),
+        );
+        final subcontractorLabel = subcontractors.isEmpty
+            ? '-'
+            : subcontractors.map((s) => s.companyName).join(', ');
+
         final entry = <String, dynamic>{
           'nrLokalu': project.displayUnitId(unit),
+          'podwykonawca': subcontractorLabel,
         };
 
         // Zmapuj statusy zadań
@@ -2966,8 +2976,18 @@ class _ProjectManagerScreenState extends State<ProjectManagerScreen>
       final lokalEntries = <Map<String, dynamic>>[];
 
       for (final unit in project.units) {
+        final subcontractors = _subcontractorsForTarget(
+          project,
+          targetType: SubcontractorTargetType.unit,
+          targetId: _unitTargetId(project, unit),
+        );
+        final subcontractorLabel = subcontractors.isEmpty
+            ? '-'
+            : subcontractors.map((s) => s.companyName).join(', ');
+
         final entry = <String, dynamic>{
           'nrLokalu': project.displayUnitId(unit),
+          'podwykonawca': subcontractorLabel,
         };
 
         for (int i = 0;
@@ -3055,8 +3075,18 @@ class _ProjectManagerScreenState extends State<ProjectManagerScreen>
       final lokalEntries = <Map<String, dynamic>>[];
 
       for (final unit in project.units) {
+        final subcontractors = _subcontractorsForTarget(
+          project,
+          targetType: SubcontractorTargetType.unit,
+          targetId: _unitTargetId(project, unit),
+        );
+        final subcontractorLabel = subcontractors.isEmpty
+            ? '-'
+            : subcontractors.map((s) => s.companyName).join(', ');
+
         final entry = <String, dynamic>{
           'nrLokalu': project.displayUnitId(unit),
+          'podwykonawca': subcontractorLabel,
         };
 
         for (int i = 0;
