@@ -543,6 +543,13 @@ class ProjectManagerProvider extends ChangeNotifier {
     if (intervalDays <= 0) return;
     if (remindBeforeMinutes < 0) return;
 
+    final normalizedWeekday = intervalDays % 7 == 0
+        ? preferredWeekday?.clamp(1, 7)
+        : null;
+    final normalizedOccurrenceAt = normalizedWeekday != null
+        ? _alignDateTimeToWeekday(firstOccurrenceAt, normalizedWeekday)
+        : firstOccurrenceAt;
+
     final recurring = RecurringProjectAlert(
       id: _uuid.v4(),
       severity: severity,
@@ -550,9 +557,9 @@ class ProjectManagerProvider extends ChangeNotifier {
       message: message,
       actionSuggestion: actionSuggestion,
       intervalDays: intervalDays,
-      nextOccurrenceAt: firstOccurrenceAt,
+      nextOccurrenceAt: normalizedOccurrenceAt,
       remindBeforeMinutes: remindBeforeMinutes,
-      preferredWeekday: preferredWeekday,
+      preferredWeekday: normalizedWeekday,
     );
 
     final recurringAlerts = List<RecurringProjectAlert>.from(
@@ -653,7 +660,16 @@ class ProjectManagerProvider extends ChangeNotifier {
         continue;
       }
 
-      var nextOccurrence = recurring.nextOccurrenceAt;
+      final normalizedWeekday = recurring.intervalDays % 7 == 0
+          ? recurring.preferredWeekday?.clamp(1, 7)
+          : null;
+      var nextOccurrence = normalizedWeekday != null
+          ? _alignDateTimeToWeekday(recurring.nextOccurrenceAt, normalizedWeekday)
+          : recurring.nextOccurrenceAt;
+      if (nextOccurrence != recurring.nextOccurrenceAt ||
+          normalizedWeekday != recurring.preferredWeekday) {
+        hasChanges = true;
+      }
       var generated = 0;
       while (!recurring
           .copyWith(nextOccurrenceAt: nextOccurrence)
@@ -677,10 +693,18 @@ class ProjectManagerProvider extends ChangeNotifier {
       if (generated > 0) {
         hasChanges = true;
         updatedRecurring.add(
-          recurring.copyWith(nextOccurrenceAt: nextOccurrence),
+          recurring.copyWith(
+            nextOccurrenceAt: nextOccurrence,
+            preferredWeekday: normalizedWeekday,
+          ),
         );
       } else {
-        updatedRecurring.add(recurring);
+        updatedRecurring.add(
+          recurring.copyWith(
+            nextOccurrenceAt: nextOccurrence,
+            preferredWeekday: normalizedWeekday,
+          ),
+        );
       }
     }
 
@@ -1263,6 +1287,21 @@ class ProjectManagerProvider extends ChangeNotifier {
     final normalized = DateTime(date.year, date.month, date.day);
     final offset = normalized.weekday - DateTime.monday;
     return normalized.subtract(Duration(days: offset));
+  }
+
+  DateTime _alignDateTimeToWeekday(DateTime dateTime, int weekday) {
+    final targetWeekday = weekday.clamp(1, 7);
+    final delta = (targetWeekday - dateTime.weekday + 7) % 7;
+    return DateTime(
+      dateTime.year,
+      dateTime.month,
+      dateTime.day + delta,
+      dateTime.hour,
+      dateTime.minute,
+      dateTime.second,
+      dateTime.millisecond,
+      dateTime.microsecond,
+    );
   }
 
   /// Pobierz zadania oczekujące

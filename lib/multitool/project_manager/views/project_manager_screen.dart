@@ -85,7 +85,7 @@ class _ProjectManagerScreenState extends State<ProjectManagerScreen>
                     isScrollable: true,
                     tabs: const [
                       Tab(icon: Icon(Icons.timeline), text: 'Timeline'),
-                      Tab(icon: Icon(Icons.notifications), text: 'Alerty'),
+                      Tab(icon: Icon(Icons.groups_2), text: 'Podwykonawcy'),
                       Tab(icon: Icon(Icons.apartment), text: 'Mieszkania'),
                       Tab(icon: Icon(Icons.meeting_room), text: 'Pomieszczenia'),
                       Tab(icon: Icon(Icons.apartment_outlined), text: 'Klatki'),
@@ -93,7 +93,7 @@ class _ProjectManagerScreenState extends State<ProjectManagerScreen>
                       Tab(icon: Icon(Icons.local_parking), text: 'Garaż'),
                       Tab(icon: Icon(Icons.roofing), text: 'Dach'),
                       Tab(icon: Icon(Icons.park), text: 'Teren zewn.'),
-                      Tab(icon: Icon(Icons.groups_2), text: 'Podwykonawcy'),
+                      Tab(icon: Icon(Icons.notifications), text: 'Alerty'),
                     ],
                   ),
           ),
@@ -103,7 +103,7 @@ class _ProjectManagerScreenState extends State<ProjectManagerScreen>
                   controller: _tabController,
                   children: [
                     _buildTimelineTab(context, provider),
-                    _buildAlertsTab(context, provider),
+                    _buildSubcontractorsTab(context, provider),
                     _buildUnitsTab(context, provider),
                     _buildProjectAreaTab(
                       context,
@@ -147,7 +147,7 @@ class _ProjectManagerScreenState extends State<ProjectManagerScreen>
                       emptyMessage: 'Brak zewnętrznych stref robót w projekcie.',
                       types: const {ProjectAreaType.externalArea},
                     ),
-                    _buildSubcontractorsTab(context, provider),
+                    _buildAlertsTab(context, provider),
                   ],
                 ),
         );
@@ -1407,15 +1407,16 @@ class _ProjectManagerScreenState extends State<ProjectManagerScreen>
                             initialDate: selectedDate,
                             firstDate: DateTime(now.year - 1),
                             lastDate: DateTime(now.year + 10),
+                            selectableDayPredicate: supportsWeekday &&
+                                    preferredWeekday != null
+                                ? (day) => day.weekday == preferredWeekday
+                                : null,
                           );
                           if (pickedDate == null) return;
                           setDialogState(() {
                             selectedDate = supportsWeekday && preferredWeekday != null
                                 ? _alignDateToWeekday(pickedDate, preferredWeekday!)
                                 : pickedDate;
-                            if (supportsWeekday) {
-                              preferredWeekday = selectedDate.weekday;
-                            }
                             scheduleError = null;
                           });
                         },
@@ -1511,6 +1512,15 @@ class _ProjectManagerScreenState extends State<ProjectManagerScreen>
                             setDialogState(() {
                               scheduleError =
                                   'Przypomnienie wypada w przeszłości. Zmień datę, godzinę lub offset.';
+                            });
+                            return;
+                          }
+                          if (intervalDays % 7 == 0 &&
+                              preferredWeekday != null &&
+                              selectedDate.weekday != preferredWeekday) {
+                            setDialogState(() {
+                              scheduleError =
+                                  'Data musi odpowiadać wybranemu dniu tygodnia.';
                             });
                             return;
                           }
