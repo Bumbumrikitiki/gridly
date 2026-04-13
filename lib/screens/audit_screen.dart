@@ -498,6 +498,7 @@ class _CircuitAssessmentScreenState extends State<CircuitAssessmentScreen> {
           constraints: const BoxConstraints(minHeight: 50),
           child: DropdownButtonFormField<CableWires>(
             initialValue: _selectedWires,
+            isExpanded: true,
             decoration: InputDecoration(
               border: OutlineInputBorder(
                 borderRadius: BorderRadius.circular(8),
@@ -514,6 +515,12 @@ class _CircuitAssessmentScreenState extends State<CircuitAssessmentScreen> {
                 child: Text('5-żyłowy (3L + N + PE)'),
               ),
             ],
+            selectedItemBuilder: (context) {
+              return const [
+                Text('4-żyłowy'),
+                Text('5-żyłowy'),
+              ];
+            },
             onChanged: (value) {
               if (value != null) {
                 setState(() {
@@ -582,6 +589,7 @@ class _CircuitAssessmentScreenState extends State<CircuitAssessmentScreen> {
         const SizedBox(height: 8),
         DropdownButtonFormField<ReceiverType>(
           initialValue: _receiverType,
+          isExpanded: true,
           decoration: InputDecoration(
             border: OutlineInputBorder(
               borderRadius: BorderRadius.circular(8),
@@ -602,6 +610,13 @@ class _CircuitAssessmentScreenState extends State<CircuitAssessmentScreen> {
               child: Text('Mieszany / ogólny'),
             ),
           ],
+          selectedItemBuilder: (context) {
+            return const [
+              Text('Rezystancyjny'),
+              Text('Silnikowy'),
+              Text('Mieszany'),
+            ];
+          },
           onChanged: (value) {
             if (value == null) {
               return;
@@ -680,76 +695,78 @@ class _CircuitAssessmentScreenState extends State<CircuitAssessmentScreen> {
   }
 
   Widget _buildVoltageAndPhaseInput() {
+    final compact = MediaQuery.sizeOf(context).width < 420;
+    final voltageField = Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          'Napięcie [V]',
+          style: Theme.of(context).textTheme.titleMedium,
+        ),
+        const SizedBox(height: 8),
+        TextField(
+          keyboardType: const TextInputType.numberWithOptions(decimal: true),
+          inputFormatters: [
+            FilteringTextInputFormatter.allow(RegExp(r'[0-9\.,]')),
+            LengthLimitingTextInputFormatter(7),
+          ],
+          decoration: InputDecoration(
+            border: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(8),
+            ),
+            hintText: '400',
+            helperText: 'Zakres: 12–1000 V',
+            errorText: _voltageInputError,
+          ),
+          controller: _voltageController,
+          onChanged: (value) {
+            _handleVoltageInputChanged(value);
+          },
+          onEditingComplete: () {
+            _normalizeAndApplyVoltageInput();
+            FocusScope.of(context).unfocus();
+          },
+        ),
+      ],
+    );
+    final phaseToggle = Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text('Układ', style: Theme.of(context).textTheme.titleMedium),
+        const SizedBox(height: 8),
+        SwitchListTile(
+          title: Text(_isThreePhase ? '3-fazowy' : '1-fazowy'),
+          value: _isThreePhase,
+                    controlAffinity: ListTileControlAffinity.leading,
+          onChanged: (value) {
+            setState(() {
+              _isThreePhase = value;
+              _voltage = value ? 400 : 230;
+              _voltageController.text = _voltage.toStringAsFixed(0);
+              _voltageInputError = null;
+              _resultCalculated = false;
+            });
+          },
+          contentPadding: EdgeInsets.zero,
+        ),
+      ],
+    );
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Row(
-          children: [
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    'Napięcie [V]',
-                    style: Theme.of(context).textTheme.titleMedium,
-                  ),
-                  const SizedBox(height: 8),
-                  TextField(
-                    keyboardType: const TextInputType.numberWithOptions(
-                      decimal: true,
-                    ),
-                    inputFormatters: [
-                      FilteringTextInputFormatter.allow(
-                        RegExp(r'[0-9\.,]'),
-                      ),
-                      LengthLimitingTextInputFormatter(7),
-                    ],
-                    decoration: InputDecoration(
-                      border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(8),
-                      ),
-                      hintText: '400',
-                      helperText: 'Zakres: 12–1000 V',
-                      errorText: _voltageInputError,
-                    ),
-                    controller: _voltageController,
-                    onChanged: (value) {
-                      _handleVoltageInputChanged(value);
-                    },
-                    onEditingComplete: () {
-                      _normalizeAndApplyVoltageInput();
-                      FocusScope.of(context).unfocus();
-                    },
-                  ),
-                ],
-              ),
-            ),
-            const SizedBox(width: 16),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text('Układ', style: Theme.of(context).textTheme.titleMedium),
-                  const SizedBox(height: 8),
-                  SwitchListTile(
-                    title: Text(_isThreePhase ? '3-fazowy' : '1-fazowy'),
-                    value: _isThreePhase,
-                    onChanged: (value) {
-                      setState(() {
-                        _isThreePhase = value;
-                        _voltage = value ? 400 : 230;
-                        _voltageController.text = _voltage.toStringAsFixed(0);
-                        _voltageInputError = null;
-                        _resultCalculated = false;
-                      });
-                    },
-                    contentPadding: EdgeInsets.zero,
-                  ),
-                ],
-              ),
-            ),
-          ],
-        ),
+        if (compact) ...[
+          voltageField,
+          const SizedBox(height: 16),
+          phaseToggle,
+        ] else
+          Row(
+            children: [
+              Expanded(child: voltageField),
+              const SizedBox(width: 16),
+              Expanded(child: phaseToggle),
+            ],
+          ),
       ],
     );
   }
@@ -832,6 +849,7 @@ class _CircuitAssessmentScreenState extends State<CircuitAssessmentScreen> {
     return CheckboxListTile(
       contentPadding: EdgeInsets.zero,
       controlAffinity: ListTileControlAffinity.leading,
+      isThreeLine: true,
       value: _decisionSupportConfirmed,
       onChanged: (value) {
         setState(() {
@@ -851,6 +869,8 @@ class _CircuitAssessmentScreenState extends State<CircuitAssessmentScreen> {
       children: [
         SwitchListTile(
           contentPadding: EdgeInsets.zero,
+          isThreeLine: true,
+          controlAffinity: ListTileControlAffinity.leading,
           title: const Text('Brak danych zwarciowych (tryb częściowy)'),
           subtitle: const Text(
             'Włącz, jeśli nie masz danych Zs/Zext. Wynik będzie orientacyjny i niepełny.',
@@ -887,13 +907,14 @@ class _CircuitAssessmentScreenState extends State<CircuitAssessmentScreen> {
             ),
           ),
         if (_missingShortCircuitData) const SizedBox(height: 8),
-        Row(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text(
               'Impedancja pętli zwarcia',
               style: Theme.of(context).textTheme.titleMedium,
             ),
+            const SizedBox(height: 8),
             Row(
               mainAxisSize: MainAxisSize.min,
               children: [
@@ -1016,6 +1037,9 @@ class _CircuitAssessmentScreenState extends State<CircuitAssessmentScreen> {
         ConstrainedBox(
           constraints: const BoxConstraints(minHeight: 50),
           child: SwitchListTile(
+            contentPadding: EdgeInsets.zero,
+            isThreeLine: true,
+            controlAffinity: ListTileControlAffinity.leading,
             title: Text(
               'Punkt podziału PEN',
               style: Theme.of(context).textTheme.titleMedium,

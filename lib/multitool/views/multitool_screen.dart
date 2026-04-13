@@ -65,7 +65,13 @@ class MultitoolScreen extends StatelessWidget {
             child: Consumer<MultitoolProvider>(
               builder: (context, provider, _) {
                 final isMobile = MediaQuery.of(context).size.width < 600;
-                final crossAxisCount = isMobile ? 2 : 4;
+                final viewportWidth = MediaQuery.of(context).size.width;
+                final crossAxisCount = isMobile
+                  ? (viewportWidth < 430 ? 1 : 2)
+                  : 4;
+                final childAspectRatio = isMobile
+                  ? (crossAxisCount == 1 ? 2.4 : 1.1)
+                  : 0.95;
 
                 return Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -92,7 +98,7 @@ class MultitoolScreen extends StatelessWidget {
                           crossAxisCount: crossAxisCount,
                           mainAxisSpacing: 10,
                           crossAxisSpacing: 10,
-                          childAspectRatio: 0.95,
+                          childAspectRatio: childAspectRatio,
                         ),
                         itemCount: provider.items.length,
                         itemBuilder: (context, index) {
@@ -263,53 +269,98 @@ class _ToolCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Material(
-      color: _cardNavy,
-      borderRadius: BorderRadius.circular(16),
-      child: InkWell(
-        borderRadius: BorderRadius.circular(16),
-        onTap: onTap,
-        child: Container(
-          padding: const EdgeInsets.all(12),
-          decoration: BoxDecoration(
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final compactCard = constraints.maxWidth < 120;
+
+        return Material(
+          color: _cardNavy,
+          borderRadius: BorderRadius.circular(16),
+          child: InkWell(
             borderRadius: BorderRadius.circular(16),
-            border: Border.all(color: _deepNavy, width: 1),
+            onTap: onTap,
+            child: Container(
+              padding: EdgeInsets.all(compactCard ? 8 : 12),
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(16),
+                border: Border.all(color: _deepNavy, width: 1),
+              ),
+              child: SizedBox.expand(
+                child: compactCard
+                    ? Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Container(
+                            width: 28,
+                            height: 28,
+                            decoration: BoxDecoration(
+                              color: _deepNavy,
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                            child: Icon(item.icon, color: _amber, size: 16),
+                          ),
+                          const SizedBox(height: 6),
+                          Text(
+                            item.title,
+                            textAlign: TextAlign.center,
+                            maxLines: 3,
+                            overflow: TextOverflow.ellipsis,
+                            style: Theme.of(context).textTheme.bodySmall
+                                ?.copyWith(
+                                  color: Colors.white,
+                                  fontSize: 10,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                          ),
+                        ],
+                      )
+                    : Column(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        mainAxisAlignment: MainAxisAlignment.start,
+                        children: [
+                          Align(
+                            alignment: Alignment.centerLeft,
+                            child: Container(
+                              width: 36,
+                              height: 36,
+                              decoration: BoxDecoration(
+                                color: _deepNavy,
+                                borderRadius: BorderRadius.circular(10),
+                              ),
+                              child: Icon(item.icon, color: _amber, size: 20),
+                            ),
+                          ),
+                          const SizedBox(height: 10),
+                          Text(
+                            item.title,
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis,
+                            style: Theme.of(context).textTheme.titleSmall
+                                ?.copyWith(
+                                  color: Colors.white,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                          ),
+                          const SizedBox(height: 4),
+                          Expanded(
+                            child: Text(
+                              item.description,
+                              style: Theme.of(context).textTheme.bodySmall
+                                  ?.copyWith(
+                                    color: Colors.white70,
+                                    fontSize: 11,
+                                  ),
+                              maxLines: 3,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
+                        ],
+                      ),
+              ),
+            ),
           ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Container(
-                width: 36,
-                height: 36,
-                decoration: BoxDecoration(
-                  color: _deepNavy,
-                  borderRadius: BorderRadius.circular(10),
-                ),
-                child: Icon(item.icon, color: _amber, size: 20),
-              ),
-              const SizedBox(height: 10),
-              Text(
-                item.title,
-                style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                  color: Colors.white,
-                  fontWeight: FontWeight.w600,
-                ),
-              ),
-              const SizedBox(height: 4),
-              Text(
-                item.description,
-                style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                  color: Colors.white70,
-                  fontSize: 11,
-                ),
-                maxLines: 2,
-                overflow: TextOverflow.ellipsis,
-              ),
-            ],
-          ),
-        ),
-      ),
+        );
+      },
     );
   }
 }

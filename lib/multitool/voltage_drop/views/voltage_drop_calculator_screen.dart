@@ -55,7 +55,12 @@ class _VoltageDropCalculatorScreenState
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     return Scaffold(
-      appBar: AppBar(title: const Text('Obliczanie spadku napięcia')),
+      appBar: AppBar(
+        title: const Text(
+          'Spadek napięcia',
+          overflow: TextOverflow.ellipsis,
+        ),
+      ),
       body: SafeArea(
         child: SingleChildScrollView(
           padding: const EdgeInsets.all(16),
@@ -299,6 +304,7 @@ class _VoltageDropCalculatorScreenState
             const SizedBox(height: 10),
             DropdownButtonFormField<_CircuitCategory>(
               initialValue: _category,
+              isExpanded: true,
               style: const TextStyle(color: Colors.black87),
               dropdownColor: Colors.white,
               decoration: const InputDecoration(
@@ -321,6 +327,10 @@ class _VoltageDropCalculatorScreenState
                     style: TextStyle(color: Colors.black87),
                   ),
                 ),
+              ],
+              selectedItemBuilder: (context) => const [
+                Text('Oświetleniowy (3%)', style: TextStyle(color: Colors.black87)),
+                Text('Pozostałe odbiorcze (5%)', style: TextStyle(color: Colors.black87)),
               ],
               onChanged: (value) {
                 if (value == null) return;

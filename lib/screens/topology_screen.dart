@@ -16,6 +16,8 @@ enum _MobileTopologyAction {
   manageStructures,
   temporarySupply,
   editBuildingName,
+  exportPdf,
+  addNode,
 }
 
 class TopologyScreen extends StatefulWidget {
@@ -92,100 +94,38 @@ class _TopologyScreenState extends State<TopologyScreen>
 
     return Scaffold(
       appBar: AppBar(
-        title: Selector<GridProvider,
-            ({String buildingName, String structureName})>(
-          selector: (context, provider) => (
-            buildingName: provider.buildingName.isEmpty
-                ? 'nie podano'
-                : provider.buildingName,
-            structureName: provider.currentStructureName,
-          ),
-          builder: (context, headerData, _) {
-            return Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                const Text('Zasilanie placu budowy'),
-                Text(
-                  'Struktura: ${headerData.structureName}',
-                  style: Theme.of(context).textTheme.bodySmall,
+        title: isMobile
+            ? const Text(
+                'Topologia',
+                overflow: TextOverflow.ellipsis,
+              )
+            : Selector<GridProvider,
+                ({String buildingName, String structureName})>(
+                selector: (context, provider) => (
+                  buildingName: provider.buildingName.isEmpty
+                      ? 'nie podano'
+                      : provider.buildingName,
+                  structureName: provider.currentStructureName,
                 ),
-                Text(
-                  'Plac budowy: ${headerData.buildingName}',
-                  style: Theme.of(context).textTheme.bodySmall,
-                ),
-              ],
-            );
-          },
-        ),
-        actions: [
-          if (isMobile)
-            PopupMenuButton<_MobileTopologyAction>(
-              tooltip: 'Więcej opcji',
-              onSelected: (action) {
-                switch (action) {
-                  case _MobileTopologyAction.manageStructures:
-                    _showStructureManagerDialog(context);
-                    break;
-                  case _MobileTopologyAction.temporarySupply:
-                    _showTemporarySupplyConfigDialog(context);
-                    break;
-                  case _MobileTopologyAction.editBuildingName:
-                    _showBuildingNameDialog(context);
-                    break;
-                }
-              },
-              itemBuilder: (context) => const [
-                PopupMenuItem(
-                  value: _MobileTopologyAction.manageStructures,
-                  child: Text('Zarządzaj strukturami'),
-                ),
-                PopupMenuItem(
-                  value: _MobileTopologyAction.temporarySupply,
-                  child: Text('Parametry zasilania tymczasowego'),
-                ),
-                PopupMenuItem(
-                  value: _MobileTopologyAction.editBuildingName,
-                  child: Text('Edytuj nazwę budowy'),
-                ),
-              ],
-            )
-          else
-            IconButton(
-              icon: const Icon(Icons.account_tree_outlined),
-              onPressed: () => _showStructureManagerDialog(context),
-              tooltip: 'Zarządzaj strukturami',
-            ),
-          if (!isMobile)
-            IconButton(
-              icon: const Icon(Icons.settings_input_component_outlined),
-              onPressed: () => _showTemporarySupplyConfigDialog(context),
-              tooltip: 'Parametry zasilania tymczasowego',
-            ),
-          if (isMobile)
-            IconButton(
-              icon: const Icon(Icons.picture_as_pdf),
-              onPressed: () => _generateTopologyPdf(context),
-              tooltip: 'Schemat blokowy (PDF)',
-            )
-          else
-            TextButton.icon(
-              onPressed: () => _generateTopologyPdf(context),
-              icon: const Icon(Icons.picture_as_pdf, size: 18),
-              label: const Text('Schemat blokowy'),
-            ),
-          if (!isMobile)
-            IconButton(
-              icon: const Icon(Icons.edit_note),
-              onPressed: () => _showBuildingNameDialog(context),
-              tooltip: 'Edytuj nazwę budowy',
-            ),
-          IconButton(
-            icon: const Icon(Icons.add),
-            onPressed: () => _showAddNodeFromToolbarDialog(context),
-            tooltip: 'Dodaj element do rozdzielnicy',
-          ),
-        ],
+                builder: (context, headerData, _) {
+                  return Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const Text('Zasilanie placu budowy'),
+                      Text(
+                        'Struktura: ${headerData.structureName}',
+                        style: Theme.of(context).textTheme.bodySmall,
+                      ),
+                      Text(
+                        'Plac budowy: ${headerData.buildingName}',
+                        style: Theme.of(context).textTheme.bodySmall,
+                      ),
+                    ],
+                  );
+                },
+              ),
+        actions: const [],
       ),
       bottomNavigationBar: isMobile
           ? const MainMobileNavBar(currentRoute: '/construction-power')
@@ -205,22 +145,28 @@ class _TopologyScreenState extends State<TopologyScreen>
               const SizedBox(height: 10),
               Row(
                 children: [
-                  ElevatedButton.icon(
-                    onPressed: () {
-                      setState(() {
-                        _showDistributionBoardTimeline =
-                            !_showDistributionBoardTimeline;
-                      });
-                    },
-                    icon: Icon(
-                      _showDistributionBoardTimeline
-                          ? Icons.visibility_off
-                          : Icons.visibility,
-                    ),
-                    label: Text(
-                      _showDistributionBoardTimeline
-                          ? 'Ukryj topologię rozdzielnic'
-                          : 'Pokaż topologię rozdzielnic',
+                  Expanded(
+                    child: ElevatedButton.icon(
+                      onPressed: () {
+                        setState(() {
+                          _showDistributionBoardTimeline =
+                              !_showDistributionBoardTimeline;
+                        });
+                      },
+                      icon: Icon(
+                        _showDistributionBoardTimeline
+                            ? Icons.visibility_off
+                            : Icons.visibility,
+                      ),
+                      label: Text(
+                        _showDistributionBoardTimeline
+                            ? (isMobile
+                                ? 'Ukryj topologię'
+                                : 'Ukryj topologię rozdzielnic')
+                            : (isMobile
+                                ? 'Pokaż topologię'
+                                : 'Pokaż topologię rozdzielnic'),
+                      ),
                     ),
                   ),
                 ],
