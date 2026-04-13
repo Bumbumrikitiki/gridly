@@ -1,0 +1,35 @@
+TestID,StageName,Category,Subcategory,RiskLevel,Status,Notes_PortraitOK,Notes_LandscapeOK,PerformanceMs,DataPersisted,Contractor_AddRemove,CheckboxToggle
+S1T1.1,Przygotowanie placu budowy,Unit,Mieszkaniowa,Critical,PENDING,Awaiting_manual_test,Awaiting_manual_test,0,No,N/A,N/A
+S1T1.2,Prace przygotowawcze - Dom mieszkalny,Unit,Mieszkaniowa,Critical,PENDING,Awaiting_manual_test,Awaiting_manual_test,0,No,N/A,N/A
+S1T1.3,Posadowienie,Unit,Mieszkaniowa,High,PENDING,Awaiting_manual_test,Awaiting_manual_test,0,No,N/A,N/A
+S1T1.4,Prace budowlano-montażowe,Unit,Mieszkaniowa,High,PENDING,Awaiting_manual_test,Awaiting_manual_test,0,No,N/A,N/A
+S1T1.5,Osłony i zabudowy,Unit,Mieszkaniowa,Medium,PENDING,Awaiting_manual_test,Awaiting_manual_test,0,No,N/A,N/A
+S1T1.6,Hydroizolacja,Unit,Mieszkaniowa,Medium,PENDING,Awaiting_manual_test,Awaiting_manual_test,0,No,N/A,N/A
+S1T1.7,Kominki i przewody spalinowe,Unit,Mieszkaniowa,Medium,PENDING,Awaiting_manual_test,Awaiting_manual_test,0,No,N/A,N/A
+S1T1.8,Dachy,Unit,Mieszkaniowa,High,PENDING,Awaiting_manual_test,Awaiting_manual_test,0,No,N/A,N/A
+S1T1.9,Systemy hydrauliczne i gaz,Unit,Mieszkaniowa,Critical,PENDING,Awaiting_manual_test,Awaiting_manual_test,0,No,N/A,N/A
+S1T1.10,Wykonanie dokumentacji fotograficznej,Unit,Mieszkaniowa,High,PENDING,Awaiting_manual_test,Awaiting_manual_test,0,No,N/A,N/A
+S1T1.11,Oddanie do użytku i rozliczenie,Unit,Mieszkaniowa,Critical,PENDING,Awaiting_manual_test,Awaiting_manual_test,0,No,N/A,N/A
+S1T1.12,Prace przygotowawcze,Common,Klatki_Schodowe,High,PENDING,Awaiting_manual_test,Awaiting_manual_test,0,No,Yes,N/A
+S1T1.13,Infrastruktura niskiego prądu,Common,Klatki_Schodowe,Critical,PENDING,Awaiting_manual_test,Awaiting_manual_test,0,No,No,N/A
+S1T1.14,Zabudowy i obudowy,Common,Klatki_Schodowe,Medium,PENDING,Awaiting_manual_test,Awaiting_manual_test,0,No,No,N/A
+S1T1.15,Oddymianie,Common,Klatki_Schodowe,High,PENDING,Awaiting_manual_test,Awaiting_manual_test,0,No,No,N/A
+S1T1.16,Systemy teletechniczne,Common,Klatki_Schodowe,Critical,PENDING,Awaiting_manual_test,Awaiting_manual_test,0,No,No,N/A
+S1T1.17,Wykonanie dokumentacji fotograficznej (klatki),Common,Klatki_Schodowe,High,PENDING,Awaiting_manual_test,Awaiting_manual_test,0,No,No,N/A
+S1T1.18,Pomieszczenia - Przygotowanie,Common,Pomieszczenia,High,PENDING,Awaiting_manual_test,Awaiting_manual_test,0,No,No,N/A
+S1T1.19,Systemy grzewcze,Common,Pomieszczenia,High,PENDING,Awaiting_manual_test,Awaiting_manual_test,0,No,No,N/A
+S1T1.20,Wentylacja,Common,Pomieszczenia,High,PENDING,Awaiting_manual_test,Awaiting_manual_test,0,No,No,N/A
+S1T1.21,Oświetlenie wewnętrzne,Common,Pomieszczenia,Medium,PENDING,Awaiting_manual_test,Awaiting_manual_test,0,No,No,N/A
+S1T1.22,Systemy zasilania awaryjnego,Common,Pomieszczenia,High,PENDING,Awaiting_manual_test,Awaiting_manual_test,0,No,No,N/A
+S1T1.23,Filar konstrukcyjny schematu bezpieczeństwa elektrycznego,Common,Pomieszczenia,Critical,PENDING,Awaiting_manual_test,Awaiting_manual_test,0,No,No,N/A
+S1T1.24,Ochrona,Common,Pomieszczenia,Medium,PENDING,Awaiting_manual_test,Awaiting_manual_test,0,No,No,N/A
+S1T1.25,Wykonanie inwentaryzacji geodezyjnej,Common,Pomieszczenia,Medium,PENDING,Awaiting_manual_test,Awaiting_manual_test,0,No,No,N/A
+S1T1.26,Części wspólne - Przygotowanie,Common,Czeci_Wspólne,Medium,PENDING,Awaiting_manual_test,Awaiting_manual_test,0,No,No,N/A
+S1T1.27,Piętra,Common,Czeci_Wspólne,High,PENDING,Awaiting_manual_test,Awaiting_manual_test,0,No,No,N/A
+S1T1.28,Metadane projektowe,Common,Czeci_Wspólne,Critical,PENDING,Awaiting_manual_test,Awaiting_manual_test,0,No,No,N/A
+S1T1.29,Tereny zewnętrzne - Niskie prądy,External,Tereny_Zewnetrzne,High,PENDING,Awaiting_manual_test,Awaiting_manual_test,0,No,No,N/A
+S1T1.30,Parkingi i drogi dojazdowe,External,Tereny_Zewnetrzne,Medium,PENDING,Awaiting_manual_test,Awaiting_manual_test,0,No,No,N/A
+S1T1.31,Odbiór i przekazanie,External,Tereny_Zewnetrzne,Critical,PENDING,Awaiting_manual_test,Awaiting_manual_test,0,No,No,N/A
+S1T1.32,Performance: Large Project Load (100 units),Unit,CrossCutting,Critical,PENDING,Awaiting_manual_test,Awaiting_manual_test,0,N/A,N/A,N/A
+S1T1.33,Data Persistence: App Kill & Restart,Unit,CrossCutting,Critical,PENDING,Awaiting_manual_test,Awaiting_manual_test,0,Yes,N/A,N/A
+S1T1.34,Contractor Assignment Workflow,Unit,CrossCutting,High,PENDING,Awaiting_manual_test,Awaiting_manual_test,0,Yes,Yes,N/A
