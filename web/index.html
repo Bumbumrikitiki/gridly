@@ -112,51 +112,42 @@
       transform-origin: center;
     }
 
-    .ring {
+    .ring-svg {
       position: absolute;
-      border-radius: 50%;
-      top: 50%;
-      left: 50%;
-      transform-origin: center;
-      border-style: solid;
-      border-color: transparent;
+      inset: 0;
+      width: 100%;
+      height: 100%;
+      overflow: visible;
     }
 
-    .ring-1 {
-      width: 212px;
-      height: 212px;
-      margin: -106px 0 0 -106px;
-      border-width: 2px;
-      border-top-color: #F7B500;
-      border-right-color: rgba(247, 181, 0, 0.6);
-      border-bottom-color: rgba(247, 181, 0, 0.10);
-      border-left-color: rgba(247, 181, 0, 0.35);
-      animation: spin 2.4s linear infinite;
-      box-shadow: 0 0 18px rgba(247,181,0,0.18);
+    .ring-svg .track {
+      opacity: 0.12;
     }
 
-    .ring-2 {
-      width: 178px;
-      height: 178px;
-      margin: -89px 0 0 -89px;
-      border-width: 2px;
-      border-bottom-color: rgba(247, 181, 0, 0.80);
-      border-left-color: rgba(247, 181, 0, 0.50);
-      border-top-color: rgba(247, 181, 0, 0.08);
-      border-right-color: rgba(247, 181, 0, 0.20);
-      animation: spin 1.7s linear infinite reverse;
+    .ring-svg .orbit {
+      fill: none;
+      stroke-linecap: round;
     }
 
-    .ring-3 {
-      width: 148px;
-      height: 148px;
-      margin: -74px 0 0 -74px;
-      border-width: 1.5px;
-      border-top-color: rgba(247, 181, 0, 0.45);
-      border-left-color: rgba(247, 181, 0, 0.25);
-      border-bottom-color: transparent;
-      border-right-color: transparent;
-      animation: spin 3.2s linear infinite;
+    .ring-svg-1 .orbit {
+      stroke: #F7B500;
+      stroke-width: 2.5;
+      stroke-dasharray: 90 696;
+      animation: orbit1 2.4s linear infinite;
+    }
+
+    .ring-svg-2 .orbit {
+      stroke: rgba(247, 181, 0, 0.85);
+      stroke-width: 2;
+      stroke-dasharray: 70 591;
+      animation: orbit2 1.7s linear infinite;
+    }
+
+    .ring-svg-3 .orbit {
+      stroke: rgba(247, 181, 0, 0.50);
+      stroke-width: 1.5;
+      stroke-dasharray: 55 494;
+      animation: orbit3 3.2s linear infinite;
     }
 
     .app-name {
@@ -204,11 +195,9 @@
       color: rgba(241, 245, 249, 0.85);
     }
 
-    @keyframes spin {
-      to {
-        transform: rotate(360deg);
-      }
-    }
+    @keyframes orbit1 { from { stroke-dashoffset: 0; } to { stroke-dashoffset: -786; } }
+    @keyframes orbit2 { from { stroke-dashoffset: 0; } to { stroke-dashoffset: 661; } }
+    @keyframes orbit3 { from { stroke-dashoffset: 0; } to { stroke-dashoffset: -549; } }
 
     @keyframes pulse {
       0%, 100% {
@@ -224,9 +213,21 @@
   <div id="splash" aria-live="polite" aria-label="Ekran ladowania aplikacji">
     <div class="splash-card">
       <div class="logo-wrap">
-        <div class="ring ring-1"></div>
-        <div class="ring ring-2"></div>
-        <div class="ring ring-3"></div>
+        <!-- outer ring: 212×212, r=36, perimeter≈786 -->
+        <svg class="ring-svg ring-svg-1" viewBox="0 0 216 216" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+          <rect class="track" x="2" y="2" width="212" height="212" rx="36" fill="none" stroke="#F7B500" stroke-width="1.5"/>
+          <rect class="orbit" x="2" y="2" width="212" height="212" rx="36"/>
+        </svg>
+        <!-- mid ring: 178×178, r=30, perimeter≈661 -->
+        <svg class="ring-svg ring-svg-2" viewBox="0 0 216 216" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+          <rect class="track" x="19" y="19" width="178" height="178" rx="30" fill="none" stroke="#F7B500" stroke-width="1.5"/>
+          <rect class="orbit" x="19" y="19" width="178" height="178" rx="30"/>
+        </svg>
+        <!-- inner ring: 148×148, r=25, perimeter≈549 -->
+        <svg class="ring-svg ring-svg-3" viewBox="0 0 216 216" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+          <rect class="track" x="34" y="34" width="148" height="148" rx="25" fill="none" stroke="#F7B500" stroke-width="1"/>
+          <rect class="orbit" x="34" y="34" width="148" height="148" rx="25"/>
+        </svg>
         <div class="logo-glyph">
           <img src="assets/assets/images/logo_mark.png" alt="Gridly logo" />
         </div>
