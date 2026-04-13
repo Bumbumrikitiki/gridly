@@ -81,8 +81,8 @@
     }
 
     .logo-wrap {
-      width: 168px;
-      height: 168px;
+      width: 216px;
+      height: 216px;
       display: grid;
       place-items: center;
       position: relative;
@@ -90,15 +90,17 @@
     }
 
     .logo-glyph {
-      width: 124px;
-      height: 124px;
-      border-radius: 22px;
+      width: 120px;
+      height: 120px;
+      border-radius: 20px;
       overflow: hidden;
+      position: relative;
+      z-index: 2;
       box-shadow:
-        0 0 56px rgba(247, 181, 0, 0.40),
-        0 0 18px rgba(247, 181, 0, 0.20),
-        0 10px 32px rgba(0, 0, 0, 0.75);
-      animation: pulse 1.8s ease-in-out infinite;
+        0 0 60px rgba(247, 181, 0, 0.45),
+        0 0 20px rgba(247, 181, 0, 0.25),
+        0 10px 32px rgba(0, 0, 0, 0.80);
+      animation: pulse 2s ease-in-out infinite;
     }
 
     .logo-glyph img {
@@ -110,35 +112,80 @@
       transform-origin: center;
     }
 
-    .logo-wrap::before,
-    .logo-wrap::after {
-      content: "";
+    .ring {
       position: absolute;
-      inset: 0;
       border-radius: 50%;
-      border: 4px solid transparent;
-      animation: spin 1.6s linear infinite;
+      top: 50%;
+      left: 50%;
+      transform-origin: center;
+      border-style: solid;
+      border-color: transparent;
     }
 
-    .logo-wrap::before {
+    .ring-1 {
+      width: 212px;
+      height: 212px;
+      margin: -106px 0 0 -106px;
+      border-width: 2px;
       border-top-color: #F7B500;
-      border-right-color: #F7B500;
-      box-shadow: 0 0 28px rgba(247, 181, 0, 0.35);
+      border-right-color: rgba(247, 181, 0, 0.6);
+      border-bottom-color: rgba(247, 181, 0, 0.10);
+      border-left-color: rgba(247, 181, 0, 0.35);
+      animation: spin 2.4s linear infinite;
+      box-shadow: 0 0 18px rgba(247,181,0,0.18);
     }
 
-    .logo-wrap::after {
-      inset: 12px;
-      border-bottom-color: rgba(247, 181, 0, 0.55);
-      border-left-color: rgba(247, 181, 0, 0.55);
-      animation-direction: reverse;
-      animation-duration: 2.3s;
+    .ring-2 {
+      width: 178px;
+      height: 178px;
+      margin: -89px 0 0 -89px;
+      border-width: 2px;
+      border-bottom-color: rgba(247, 181, 0, 0.80);
+      border-left-color: rgba(247, 181, 0, 0.50);
+      border-top-color: rgba(247, 181, 0, 0.08);
+      border-right-color: rgba(247, 181, 0, 0.20);
+      animation: spin 1.7s linear infinite reverse;
     }
 
-    h1 {
+    .ring-3 {
+      width: 148px;
+      height: 148px;
+      margin: -74px 0 0 -74px;
+      border-width: 1.5px;
+      border-top-color: rgba(247, 181, 0, 0.45);
+      border-left-color: rgba(247, 181, 0, 0.25);
+      border-bottom-color: transparent;
+      border-right-color: transparent;
+      animation: spin 3.2s linear infinite;
+    }
+
+    .app-name {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 5px;
+    }
+
+    .name-gridly {
       margin: 0;
-      font-size: clamp(22px, 4vw, 30px);
-      letter-spacing: 0.02em;
-      font-weight: 700;
+      font-size: clamp(30px, 5.5vw, 40px);
+      font-weight: 900;
+      letter-spacing: 0.14em;
+      text-transform: uppercase;
+      background: linear-gradient(135deg, #FFD566 0%, #F7B500 45%, #FF8C00 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+      filter: drop-shadow(0 0 10px rgba(247, 181, 0, 0.55));
+    }
+
+    .name-sub {
+      margin: 0;
+      font-size: clamp(10px, 2vw, 12px);
+      font-weight: 600;
+      letter-spacing: 0.22em;
+      text-transform: uppercase;
+      color: #9fb2c8;
     }
 
     .disclaimer {
@@ -177,11 +224,17 @@
   <div id="splash" aria-live="polite" aria-label="Ekran ladowania aplikacji">
     <div class="splash-card">
       <div class="logo-wrap">
+        <div class="ring ring-1"></div>
+        <div class="ring ring-2"></div>
+        <div class="ring ring-3"></div>
         <div class="logo-glyph">
           <img src="assets/assets/images/logo_mark.png" alt="Gridly logo" />
         </div>
       </div>
-      <h1>Gridly Electrical Checker</h1>
+      <div class="app-name">
+        <span class="name-gridly">Gridly</span>
+        <span class="name-sub">Electrical Checker</span>
+      </div>
       <p class="loading-copy">Ladowanie aplikacji...</p>
       <p class="disclaimer">
         Wyniki analiz maja charakter pomocniczy i nie zastepuja projektu ani odbioru przez uprawnionego specjaliste.
