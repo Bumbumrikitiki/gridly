@@ -14,6 +14,10 @@
 
 import 'package:flutter_test/flutter_test.dart';
 
+void main() {
+  runSmokeTests();
+}
+
 class SmokeTestCase {
   final String id;
   final String name;
