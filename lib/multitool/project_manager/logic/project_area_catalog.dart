@@ -347,6 +347,11 @@ class ProjectAreaCatalog {
         description: 'Zamontuj i podłącz systemy bezpieczeństwa klatki schodowej.',
       ),
       ProjectAreaChecklistTemplate(
+        id: 'dokumentacja_foto',
+        title: 'Wykonanie dokumentacji fotograficznej',
+        description: 'Wykonaj zdjęcia tras kablowych i instalacji SSP/teletechniki przed zakryciem.',
+      ),
+      ProjectAreaChecklistTemplate(
         id: 'osprzet',
         title: 'Osprzęt i oznaczenia',
         description: 'Zamontuj osprzęt, oznaczenia i przygotuj dokumentację powykonawczą.',
@@ -375,6 +380,11 @@ class ProjectAreaCatalog {
         id: 'sterowanie',
         title: 'Sterowanie i sygnały',
         description: 'Podłącz sterowanie, sygnały alarmowe i współpracę z SSP.',
+      ),
+      ProjectAreaChecklistTemplate(
+        id: 'dokumentacja_foto',
+        title: 'Wykonanie dokumentacji fotograficznej',
+        description: 'Wykonaj zdjęcia tras i podłączeń w szybie/maszynowni przed zamknięciem zabudów.',
       ),
       ProjectAreaChecklistTemplate(
         id: 'koordynacja',
@@ -407,6 +417,11 @@ class ProjectAreaCatalog {
         id: 'systemy',
         title: 'Systemy garażowe',
         description: 'Podłącz bramy, wentylację, SSP, CCTV i inne systemy wspólne.',
+      ),
+      const ProjectAreaChecklistTemplate(
+        id: 'dokumentacja_foto',
+        title: 'Wykonanie dokumentacji fotograficznej',
+        description: 'Wykonaj zdjęcia tras i instalacji garażowych przed zakryciem lub zabudową.',
       ),
       if (config.renewableEnergyConfig?.electricMobility.isEnabled ?? false)
         const ProjectAreaChecklistTemplate(
@@ -474,12 +489,22 @@ class ProjectAreaCatalog {
         title: 'Systemy niskoprądowe',
         description: 'Podłącz CCTV, KD, domofony, bramy i inne systemy zewnętrzne.',
       ),
+      const ProjectAreaChecklistTemplate(
+        id: 'dokumentacja_foto',
+        title: 'Wykonanie dokumentacji fotograficznej',
+        description: 'Wykonaj zdjęcia tras i instalacji zewnętrznych przed zasypaniem lub zakryciem.',
+      ),
       if (config.hasParking)
         const ProjectAreaChecklistTemplate(
           id: 'parking',
           title: 'Parking i infrastruktura',
           description: 'Wykonaj zasilanie parkingu, szlabanów i elementów towarzyszących.',
         ),
+      const ProjectAreaChecklistTemplate(
+        id: 'inwentaryzacja_geodezyjna',
+        title: 'Wykonanie inwentaryzacji geodezyjnej',
+        description: 'Zleć i odbierz inwentaryzację geodezyjną powykonawczą instalacji terenu zewnętrznego.',
+      ),
       const ProjectAreaChecklistTemplate(
         id: 'odbior',
         title: 'Pomiary i odbiór',

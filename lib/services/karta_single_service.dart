@@ -50,32 +50,88 @@ class KartaSingleGenerator {
           return pw.Column(
             crossAxisAlignment: pw.CrossAxisAlignment.start,
             children: [
+              // NAGŁÓWEK trzech kolumn: GRIDLY | Karta lokalowa | Numery lokalu
+              pw.Row(
+                mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+                crossAxisAlignment: pw.CrossAxisAlignment.center,
+                children: [
+                  pw.Text(
+                    'GRIDLY',
+                    style: pw.TextStyle(
+                      font: boldFont,
+                      fontSize: 16,
+                      fontWeight: pw.FontWeight.bold,
+                    ),
+                  ),
+                  pw.Text(
+                    'KARTA LOKALOWA',
+                    style: pw.TextStyle(
+                      font: boldFont,
+                      fontSize: 14,
+                      fontWeight: pw.FontWeight.bold,
+                    ),
+                  ),
+                  pw.Column(
+                    crossAxisAlignment: pw.CrossAxisAlignment.end,
+                    children: [
+                      pw.Text(
+                        'Budowlany: ${_sanitizePolish(safeNrLokalu)}',
+                        style: pw.TextStyle(font: regularFont, fontSize: 9),
+                      ),
+                      pw.SizedBox(height: 2),
+                      pw.Text(
+                        'Docelowy: -',
+                        style: pw.TextStyle(font: regularFont, fontSize: 9),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+              pw.Divider(thickness: 1),
+              pw.SizedBox(height: 8),
+              
+              // RUBRYKI - dane lokalu
+              pw.Row(
+                mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+                children: [
+                  pw.Column(
+                    crossAxisAlignment: pw.CrossAxisAlignment.start,
+                    children: [
+                      pw.Text('Budowa: ${_sanitizePolish(safeNazwaBudowy)}', style: bodyStyle),
+                      pw.SizedBox(height: 3),
+                      pw.Text('Data: $normalizedData', style: bodyStyle),
+                    ],
+                  ),
+                  pw.Column(
+                    crossAxisAlignment: pw.CrossAxisAlignment.start,
+                    children: [
+                      pw.Text('Budynek: ${_sanitizePolish(nrBudynku ?? '-')}', style: bodyStyle),
+                      pw.SizedBox(height: 3),
+                      pw.Text('Klatka: ${_sanitizePolish(klatka ?? '-')}', style: bodyStyle),
+                    ],
+                  ),
+                  pw.Column(
+                    crossAxisAlignment: pw.CrossAxisAlignment.start,
+                    children: [
+                      pw.Text('Piętro: ${_sanitizePolish((pietro ?? '-').toString())}', style: bodyStyle),
+                      pw.SizedBox(height: 3),
+                      pw.Text('Podwykonawca: ${_sanitizePolish(podwykonawca ?? '-')}', style: bodyStyle),
+                    ],
+                  ),
+                ],
+              ),
+              pw.SizedBox(height: 12),
+              
+              // TABELA - Etapy i statusy
               pw.Text(
-                'Karta Lokalowa',
+                'Etapy i statusy prac:',
                 style: pw.TextStyle(
                   font: boldFont,
-                  fontSize: 18,
+                  fontSize: 11,
                   fontWeight: pw.FontWeight.bold,
                 ),
               ),
-              pw.SizedBox(height: 6),
-              pw.Text('Budowa: ${_sanitizePolish(safeNazwaBudowy)}', style: bodyStyle),
-              pw.Text('Data: $normalizedData', style: bodyStyle),
-              pw.Text('Lokal: ${_sanitizePolish(safeNrLokalu)}', style: bodyStyle),
-              pw.Text('Budynek: ${_sanitizePolish(nrBudynku ?? '-')}', style: bodyStyle),
-              pw.Text('Klatka: ${_sanitizePolish(klatka ?? '-')}', style: bodyStyle),
-              pw.Text('Piętro: ${_sanitizePolish((pietro ?? '-').toString())}', style: bodyStyle),
-              pw.Text('Podwykonawca: ${_sanitizePolish(podwykonawca ?? '-')}', style: bodyStyle),
-              pw.SizedBox(height: 10),
-              pw.Text(
-                'Postępy prac',
-                style: pw.TextStyle(
-                  font: boldFont,
-                  fontSize: 12,
-                  fontWeight: pw.FontWeight.bold,
-                ),
-              ),
-              pw.SizedBox(height: 6),
+              pw.SizedBox(height: 4),
               if (stageRows.isEmpty)
                 pw.Container(
                   width: double.infinity,
@@ -112,21 +168,30 @@ class KartaSingleGenerator {
                     1: pw.FlexColumnWidth(1.2),
                   },
                 ),
-              pw.Spacer(),
+              pw.SizedBox(height: 12),
+              
+              // SEKCJA - UWAGI na dole strony
               pw.Text(
-                'Uwagi',
+                'Uwagi:',
                 style: pw.TextStyle(
                   font: boldFont,
-                  fontSize: 12,
+                  fontSize: 11,
                   fontWeight: pw.FontWeight.bold,
                 ),
               ),
               pw.SizedBox(height: 4),
               pw.Container(
                 width: double.infinity,
-                height: 96,
+                height: 100,
                 decoration: pw.BoxDecoration(
-                  border: pw.Border.all(color: PdfColors.grey400),
+                  border: pw.Border.all(color: PdfColors.grey600, width: 1),
+                ),
+                child: pw.Column(
+                  children: [
+                    pw.Expanded(
+                      child: pw.Container(),
+                    )
+                  ],
                 ),
               ),
             ],

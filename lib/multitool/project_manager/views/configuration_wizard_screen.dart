@@ -1195,6 +1195,22 @@ class _ConfigurationWizardScreenState extends State<ConfigurationWizardScreen> {
                                 },
                         );
                       }),
+                      const SizedBox(height: 12),
+                      OutlinedButton.icon(
+                        onPressed: () async {
+                          Navigator.of(dialogContext).pop(false);
+                          await _openSubcontractorDialog();
+                          if (mounted) {
+                            await _openTargetAssignmentDialog(
+                              title: title,
+                              targetType: targetType,
+                              targetId: targetId,
+                            );
+                          }
+                        },
+                        icon: const Icon(Icons.add),
+                        label: const Text('Dodaj nowego podwykonawcę'),
+                      ),
                     ],
                   ),
                 ),
@@ -1832,7 +1848,7 @@ class _ConfigurationWizardScreenState extends State<ConfigurationWizardScreen> {
                 // Dodaj nowe budynki
                 for (int i = _buildings.length; i < newCount; i++) {
                   _buildings.add(BuildingDetails(
-                    buildingName: '${i + 1}',
+                    buildingName: 'Budynek ${i + 1}',
                     stairCases: [
                       StairCaseDetails(stairCaseName: 'A', numberOfLevels: 3),
                     ],

@@ -84,6 +84,20 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreen>
     return stairCases.toList()..sort();
   }
 
+  String _displayBuildingName(String rawName, {int? fallbackIndex}) {
+    final trimmed = rawName.trim();
+    if (trimmed.isEmpty) {
+      return fallbackIndex != null ? 'Budynek ${fallbackIndex + 1}' : 'Budynek';
+    }
+
+    final numeric = int.tryParse(trimmed);
+    if (numeric != null) {
+      return 'Budynek $numeric';
+    }
+
+    return trimmed;
+  }
+
   @override
   Widget build(BuildContext context) {
     return Consumer<ProjectManagerProvider>(
@@ -942,10 +956,14 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreen>
     ConstructionProject project,
     AdditionalRoom room,
   ) {
-    final buildingName = (room.buildingIndex >= 0 &&
+    final rawBuildingName = (room.buildingIndex >= 0 &&
             room.buildingIndex < project.config.buildings.length)
         ? project.config.buildings[room.buildingIndex].buildingName
-        : 'Budynek ${room.buildingIndex + 1}';
+        : '${room.buildingIndex + 1}';
+    final buildingName = _displayBuildingName(
+      rawBuildingName,
+      fallbackIndex: room.buildingIndex,
+    );
     final levelLabel = room.levelType == AdditionalRoomLevelType.nadziemna
         ? 'Nadziemna'
         : 'Podziemna';
@@ -978,7 +996,7 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreen>
             .where((u) => u.stairCase == stairCase.stairCaseName)
             .toList();
         final labelPrefix = project.config.buildings.length > 1
-            ? 'B${buildingIndex + 1} · '
+          ? '${_displayBuildingName(building.buildingName, fallbackIndex: buildingIndex)} · '
             : '';
         stairCaseEntries.add({
           'label': '${labelPrefix}Klatka ${stairCase.stairCaseName}',
@@ -1679,7 +1697,7 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreen>
       
       // Wiersz 6: Metadane
       final metaInfo = filteredUnits.isNotEmpty
-          ? 'Nr budynku:${project.config.buildings.isNotEmpty ? project.config.buildings[0].buildingName : "xx"} / Nr klatki schodowej:${filteredUnits.first.stairCase} / Nr piętra:${filteredUnits.first.floor}'
+          ? 'Nr budynku:${project.config.buildings.isNotEmpty ? _displayBuildingName(project.config.buildings[0].buildingName, fallbackIndex: 0) : "xx"} / Nr klatki schodowej:${filteredUnits.first.stairCase} / Nr piętra:${filteredUnits.first.floor}'
           : 'Nr budynku:xx / Nr klatki schodowej:xx / Nr piętra:xx';
       cell = sheet.cell(excel.CellIndex.indexByColumnRow(columnIndex: 0, rowIndex: currentRow));
       cell.value = metaInfo;
