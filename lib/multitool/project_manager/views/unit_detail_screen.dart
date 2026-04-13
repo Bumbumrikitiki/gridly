@@ -171,8 +171,10 @@ class _UnitDetailScreenState extends State<UnitDetailScreen>
                     minHeight: 8,
                   ),
                   const SizedBox(height: 12),
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  Wrap(
+                    alignment: WrapAlignment.spaceBetween,
+                    runSpacing: 4,
+                    spacing: 12,
                     children: [
                       Text(
                         'Ukończonych: ${unit.taskStatuses.values.where((s) => s == TaskStatus.completed).length}',

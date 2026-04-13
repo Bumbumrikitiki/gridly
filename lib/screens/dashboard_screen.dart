@@ -269,26 +269,42 @@ class DashboardScreen extends StatelessWidget {
               ),
             ],
           ),
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Icon(
-                icon,
-                color: GridTheme.deepNavy,
-                size: 32,
-              ),
-              const SizedBox(height: 8),
-              Text(
-                label,
-                textAlign: TextAlign.center,
-                style: Theme.of(context).textTheme.labelSmall?.copyWith(
+          child: LayoutBuilder(
+            builder: (context, constraints) {
+              final isCompact = constraints.maxHeight < 80 || constraints.maxWidth < 110;
+
+              return Padding(
+                padding: EdgeInsets.symmetric(
+                  horizontal: isCompact ? 6 : 10,
+                  vertical: isCompact ? 6 : 10,
+                ),
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(
+                      icon,
                       color: GridTheme.deepNavy,
-                      fontWeight: FontWeight.bold,
+                      size: isCompact ? 24 : 32,
                     ),
-                maxLines: 2,
-                overflow: TextOverflow.ellipsis,
-              ),
-            ],
+                    SizedBox(height: isCompact ? 4 : 8),
+                    Flexible(
+                      child: Text(
+                        label,
+                        textAlign: TextAlign.center,
+                        style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                              color: GridTheme.deepNavy,
+                              fontWeight: FontWeight.bold,
+                              fontSize: isCompact ? 10 : null,
+                            ),
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                  ],
+                ),
+              );
+            },
           ),
         ),
       ),

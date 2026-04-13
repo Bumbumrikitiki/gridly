@@ -1697,6 +1697,10 @@ class _ProjectManagerScreenState extends State<ProjectManagerScreen>
     final sortedFloors = unitsByFloor.keys.toList()
       ..sort((a, b) => b.compareTo(a)); // Od najwyższego
 
+    final screenWidth = MediaQuery.of(context).size.width;
+    final crossAxisCount = screenWidth < 480 ? 2 : screenWidth < 900 ? 3 : 4;
+    final childAspectRatio = screenWidth < 480 ? 1.0 : screenWidth < 900 ? 1.08 : 1.2;
+
     return SingleChildScrollView(
       padding: const EdgeInsets.all(16),
       child: Column(
@@ -1765,9 +1769,9 @@ class _ProjectManagerScreenState extends State<ProjectManagerScreen>
                 GridView.builder(
                   shrinkWrap: true,
                   physics: const NeverScrollableScrollPhysics(),
-                  gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                    crossAxisCount: 4,
-                    childAspectRatio: 1.2,
+                  gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+                    crossAxisCount: crossAxisCount,
+                    childAspectRatio: childAspectRatio,
                     crossAxisSpacing: 8,
                     mainAxisSpacing: 8,
                   ),
@@ -1802,6 +1806,8 @@ class _ProjectManagerScreenState extends State<ProjectManagerScreen>
             targetType: SubcontractorTargetType.unit,
             targetId: _unitTargetId(project, unit),
           );
+    final screenWidth = MediaQuery.of(context).size.width;
+    final isCompact = screenWidth < 480;
 
     Color cardColor;
     if (completion >= 100) {
@@ -1825,19 +1831,25 @@ class _ProjectManagerScreenState extends State<ProjectManagerScreen>
       child: Card(
         color: cardColor,
         child: Padding(
-          padding: const EdgeInsets.all(12),
+          padding: EdgeInsets.all(isCompact ? 8 : 12),
           child: Column(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            mainAxisSize: MainAxisSize.max,
             children: [
               // ID mieszkania
               Row(
                 mainAxisAlignment: MainAxisAlignment.center,
+                mainAxisSize: MainAxisSize.min,
                 children: [
-                  Text(
-                    provider.currentProject?.displayUnitId(unit) ?? unit.unitId,
-                    style: const TextStyle(
-                      fontSize: 16,
-                      fontWeight: FontWeight.bold,
+                  Flexible(
+                    child: Text(
+                      provider.currentProject?.displayUnitId(unit) ?? unit.unitId,
+                      style: TextStyle(
+                        fontSize: isCompact ? 13 : 16,
+                        fontWeight: FontWeight.bold,
+                      ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
                     ),
                   ),
                   if (unit.isAlternateUnit)
@@ -1872,10 +1884,14 @@ class _ProjectManagerScreenState extends State<ProjectManagerScreen>
                     children: assignedSubcontractors
                         .map(
                           (subcontractor) => Chip(
-                            label: Text(subcontractor.companyName),
+                            label: Text(
+                              subcontractor.companyName,
+                              overflow: TextOverflow.ellipsis,
+                            ),
                             visualDensity: VisualDensity.compact,
                             materialTapTargetSize:
                                 MaterialTapTargetSize.shrinkWrap,
+                            labelStyle: TextStyle(fontSize: isCompact ? 10 : 12),
                           ),
                         )
                         .toList(),
@@ -1888,12 +1904,12 @@ class _ProjectManagerScreenState extends State<ProjectManagerScreen>
                   Text(
                     '${completion.toStringAsFixed(0)}%',
                     style: TextStyle(
-                      fontSize: 20,
+                      fontSize: isCompact ? 16 : 20,
                       fontWeight: FontWeight.bold,
                       color: completion >= 100 ? Colors.green : Colors.orange,
                     ),
                   ),
-                  const SizedBox(height: 4),
+                  SizedBox(height: isCompact ? 2 : 4),
                   LinearProgressIndicator(
                     value: completion / 100,
                     backgroundColor: Colors.grey.shade300,
