@@ -117,6 +117,47 @@ void main() {
       expect(tester.takeException(), isNull);
     });
 
+    testWidgets('renders seeded project area tabs', (
+      WidgetTester tester,
+    ) async {
+      final provider = await _seedProvider();
+
+      await _pumpProjectManager(
+        tester,
+        provider,
+        surfaceSize: const Size(412, 915),
+      );
+
+      Future<void> openTab(String label) async {
+        await tester.ensureVisible(find.text(label));
+        await tester.pump();
+        await tester.tap(find.text(label));
+        await tester.pump();
+        await tester.pump(const Duration(milliseconds: 300));
+      }
+
+      await openTab('Klatki');
+      expect(find.text('Klatki schodowe: 1'), findsOneWidget);
+      expect(find.textContaining('Budynek 1 · Klatka A'), findsWidgets);
+
+      await openTab('Windy');
+      expect(find.text('Windy: 1'), findsOneWidget);
+      expect(find.textContaining('Winda 1'), findsOneWidget);
+
+      await openTab('Garaż');
+      expect(find.text('Garaż: 1'), findsOneWidget);
+      expect(find.textContaining('Budynek 1 · Garaż'), findsOneWidget);
+
+      await openTab('Dach');
+      expect(find.text('Dach: 1'), findsOneWidget);
+      expect(find.textContaining('Budynek 1 · Dach'), findsOneWidget);
+
+      await openTab('Teren zewn.');
+      expect(find.text('Teren zewnętrzny: 1'), findsOneWidget);
+      expect(find.textContaining('Budynek 1 · Teren zewnętrzny'), findsOneWidget);
+      expect(tester.takeException(), isNull);
+    });
+
     testWidgets('renders seeded unit detail screen', (
       WidgetTester tester,
     ) async {
